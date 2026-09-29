@@ -200,7 +200,7 @@ function dragPayload(piece: Piece): DragPayload {
 /* Used (absent) rings — faint ghost */
 .stack-ring--used {
   opacity: 0.08;
-  border-color: #fff;
+  border-color: var(--ghost-piece);
   pointer-events: none;
   cursor: default;
 }

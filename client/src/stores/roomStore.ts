@@ -13,12 +13,20 @@ export const useRoomStore = defineStore('room', () => {
   const scores       = ref<Record<number, number>>({})
   const roundNumber  = ref(0)
   const opponentLeft = ref(false)
+  const disconnectedPlayer = ref<{ username: string; slot: PlayerSlot } | null>(null)
+  const isSpectator = ref(false)
   const error        = ref<string | null>(null)
 
   function setFromAck(ackRoomId: string, slot: PlayerSlot) {
     roomId.value = ackRoomId
     mySlot.value = slot
+    isSpectator.value = false
     error.value  = null
+  }
+
+  function setSpectating(value: boolean) {
+    isSpectator.value = value
+    if (value) mySlot.value = null
   }
 
   function setRoomState(snapshot: RoomStateSnapshot) {
@@ -30,6 +38,10 @@ export const useRoomStore = defineStore('room', () => {
     playerCount.value = snapshot.playerCount
     scores.value      = snapshot.scores
     roundNumber.value = snapshot.roundNumber
+    if (snapshot.phase !== 'finished') {
+      opponentLeft.value = false
+      disconnectedPlayer.value = null
+    }
   }
 
   function setPhase(p: typeof phase.value) {
@@ -42,8 +54,9 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
-  function setOpponentLeft() {
+  function setOpponentLeft(info: { username: string; slot: PlayerSlot }) {
     opponentLeft.value = true
+    disconnectedPlayer.value = info
     phase.value = 'finished'
   }
 
@@ -62,12 +75,14 @@ export const useRoomStore = defineStore('room', () => {
     scores.value       = {}
     roundNumber.value  = 0
     opponentLeft.value = false
+    disconnectedPlayer.value = null
+    isSpectator.value = false
     error.value        = null
   }
 
   return {
     roomId, name, isPrivate, phase, mySlot, players, playerCount,
-    scores, roundNumber, opponentLeft, error,
-    setFromAck, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
+    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, error,
+    setFromAck, setSpectating, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
   }
 })

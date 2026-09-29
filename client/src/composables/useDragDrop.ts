@@ -16,7 +16,13 @@ export function useDragDrop(row: number, col: number) {
     e.preventDefault()
     const raw = e.dataTransfer?.getData('application/json')
     if (!raw) return
-    const payload: DragPayload = JSON.parse(raw)
+    let payload: DragPayload
+    try {
+      payload = JSON.parse(raw) as DragPayload
+    } catch {
+      return
+    }
+    if (!payload || typeof payload.pieceId !== 'string' || payload.source !== 'inventory') return
     store.placePiece({
       pieceId: payload.pieceId,
       targetRow: row,

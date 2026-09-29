@@ -27,8 +27,10 @@ function buildInventory(slot: PlayerSlot): Piece[] {
   return pieces
 }
 
-export function buildInitialGameState(playerCount: number, startingPlayer: PlayerSlot = 1): RoomGameState {
-  const players = Array.from({ length: playerCount }, (_, i) => (i + 1) as PlayerSlot)
+export function buildInitialGameState(playerCount: number | PlayerSlot[], startingPlayer: PlayerSlot = 1): RoomGameState {
+  const players = Array.isArray(playerCount)
+    ? [...playerCount]
+    : Array.from({ length: playerCount }, (_, i) => (i + 1) as PlayerSlot)
   const inventories = Object.fromEntries(
     players.map(slot => [slot, buildInventory(slot)])
   ) as Record<PlayerSlot, Piece[]>
@@ -36,7 +38,7 @@ export function buildInitialGameState(playerCount: number, startingPlayer: Playe
   return {
     board:         emptyBoard() as Board,
     inventories,
-    currentPlayer: startingPlayer,
+    currentPlayer: players.includes(startingPlayer) ? startingPlayer : (players[0] ?? 1),
     moveNumber:    0,
     winResult:     null,
     isDraw:        false,
@@ -61,10 +63,17 @@ export function validateMove(
 
   const { targetRow, targetCol, targetSize, pieceId } = move
 
-  if (targetRow < 0 || targetRow > 2 || targetCol < 0 || targetCol > 2)
+  if (!Number.isInteger(targetRow) || !Number.isInteger(targetCol) ||
+      targetRow < 0 || targetRow > 2 || targetCol < 0 || targetCol > 2)
     return { valid: false, reason: 'Out of bounds' }
 
+  if (!SIZE_ORDER.includes(targetSize) || typeof pieceId !== 'string' || !pieceId)
+    return { valid: false, reason: 'Invalid move' }
+
   const inv = state.inventories[actingSlot]
+  if (!inv)
+    return { valid: false, reason: 'Player is not in this game' }
+
   const piece = inv.find(p => p.id === pieceId)
   if (!piece)
     return { valid: false, reason: 'Piece not in inventory' }

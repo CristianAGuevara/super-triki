@@ -1,15 +1,17 @@
 import { onMounted, onUnmounted } from 'vue'
-import { getSocket } from '@/services/socket'
+import { getSocket, waitForSocketConnection } from '@/services/socket'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
-import type { GameMovePayload, RoomJoinAck } from '@/types/socket'
+import { useAudioStore } from '@/stores/audioStore'
+import type { GameMovePayload, RoomJoinAck, SpectateJoinAck } from '@/types/socket'
 
 export function useSocket() {
   const socket     = getSocket()
   const roomStore  = useRoomStore()
   const gameStore  = useGameStore()
   const lobbyStore = useLobbyStore()
+  const audioStore = useAudioStore()
 
   function registerListeners() {
     socket.on('rooms:list', rooms => {
@@ -32,10 +34,12 @@ export function useSocket() {
 
     socket.on('player:joined', payload => {
       roomStore.addPlayer({ ...payload, socketId: '' })
+      audioStore.playSfx('join')
     })
 
-    socket.on('player:left', () => {
-      roomStore.setOpponentLeft()
+    socket.on('player:left', payload => {
+      if (!roomStore.isSpectator) roomStore.setOpponentLeft(payload)
+      audioStore.playSfx('leave')
     })
 
     socket.on('error', payload => {
@@ -58,9 +62,43 @@ export function useSocket() {
 
   // ── Typed emit helpers ───────────────────────────────────────
 
-  function emitJoinRoom(roomId: string, username: string, password?: string): Promise<RoomJoinAck> {
+  async function emitJoinRoom(roomId: string, username: string, password?: string): Promise<RoomJoinAck> {
+    if (!await waitForSocketConnection()) {
+      return { ok: false, error: 'No se pudo conectar con el servidor' }
+    }
     return new Promise(resolve => {
-      socket.emit('room:join', { roomId, username, password }, resolve)
+      let settled = false
+      const timeout = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        resolve({ ok: false, error: 'El servidor no respondió' })
+      }, 8_000)
+      socket.emit('room:join', { roomId, username, password }, result => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(result)
+      })
+    })
+  }
+
+  async function emitJoinSpectator(roomId: string): Promise<SpectateJoinAck> {
+    if (!await waitForSocketConnection()) {
+      return { ok: false, error: 'No se pudo conectar con el servidor' }
+    }
+    return new Promise(resolve => {
+      let settled = false
+      const timeout = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        resolve({ ok: false, error: 'El servidor no respondió' })
+      }, 8_000)
+      socket.emit('spectate:join', { roomId }, result => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(result)
+      })
     })
   }
 
@@ -78,5 +116,5 @@ export function useSocket() {
     socket.emit('game:start', { roomId })
   }
 
-  return { emitJoinRoom, emitMove, emitRematch, emitStart }
+  return { emitJoinRoom, emitJoinSpectator, emitMove, emitRematch, emitStart }
 }

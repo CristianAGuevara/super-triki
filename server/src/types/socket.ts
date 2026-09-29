@@ -28,6 +28,13 @@ export interface RoomJoinAck {
   error?: string
 }
 
+export interface SpectateJoinAck {
+  ok: boolean
+  roomId?: string
+  roomState?: RoomStateSnapshot
+  error?: string
+}
+
 export interface GameMovePayload {
   roomId:     string
   pieceId:    string
@@ -43,6 +50,7 @@ export interface GameStartPayload { roomId: string }
 export interface ClientToServerEvents {
   'room:create': (payload: RoomCreatePayload, ack: (res: RoomCreateAck) => void) => void
   'room:join':   (payload: RoomJoinPayload,   ack: (res: RoomJoinAck)   => void) => void
+  'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
   'game:move':   (payload: GameMovePayload,   ack: (res: GameMoveAck)   => void) => void
   'game:rematch':(payload: RematchPayload) => void
   'game:start':  (payload: GameStartPayload) => void

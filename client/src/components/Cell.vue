@@ -105,12 +105,12 @@ function handleDrop(e: DragEvent) {
 }
 
 .cell--can-drop {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--drop-border);
 }
 
 .cell--hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
+  border-color: var(--drop-border-strong);
+  box-shadow: var(--shadow-glow);
 }
 
 /* Stack: all rings share the same center */
@@ -144,14 +144,14 @@ function handleDrop(e: DragEvent) {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 2px dashed rgba(255, 255, 255, 0.07);
+  border: 2px dashed var(--placeholder-border);
   box-sizing: border-box;
 }
 
 /* Hover: highlight the ring matching the dragged size */
 .cell__ring--hover .cell__ring-empty {
-  border: 2px dashed rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.04);
+  border: 2px dashed var(--drop-border-strong);
+  background: var(--placeholder-hover);
 }
 
 /* Win highlight */

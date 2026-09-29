@@ -18,6 +18,8 @@ export interface RoomState {
 
 const rooms = new Map<string, RoomState>()
 const socketToRoom = new Map<string, string>()
+const socketToSpectatorRoom = new Map<string, string>()
+const RECONNECT_GRACE_MS = 60_000
 
 export const RoomManager = {
   createRoom(
@@ -55,10 +57,26 @@ export const RoomManager = {
   ): { ok: true; room: RoomState } | { ok: false; error: string } {
     const room = rooms.get(roomId)
     if (!room)                         return { ok: false, error: 'Sala no encontrada' }
-    if (room.phase !== 'waiting')      return { ok: false, error: room.phase === 'finished' ? 'La sala ha terminado' : 'La partida ya comenzó' }
-    if (room.players.length >= 4)      return { ok: false, error: 'Sala llena' }
     if (room.isPrivate && room.password && room.password !== password)
-                                       return { ok: false, error: 'Contraseña incorrecta' }
+                                        return { ok: false, error: 'Contraseña incorrecta' }
+
+    // A refresh creates a new socket id. Keep a disconnected player briefly so
+    // they can reclaim their slot instead of permanently ending the room.
+    const disconnectedPlayer = room.players.find(p =>
+      !p.socketId && p.username.toLowerCase() === username.toLowerCase()
+    )
+    if (disconnectedPlayer) {
+      disconnectedPlayer.socketId = socketId
+      socketToRoom.set(socketId, roomId)
+      if (room.game && !room.game.winResult && !room.game.isDraw) {
+        room.phase = 'playing'
+      }
+      return { ok: true, room }
+    }
+
+    if (room.phase !== 'waiting')
+      return { ok: false, error: room.phase === 'finished' ? 'La sala ha terminado' : 'La partida ya comenzó' }
+    if (room.players.length >= 4)      return { ok: false, error: 'Sala llena' }
 
     const slot = (room.players.length + 1) as PlayerSlot
     room.players.push({ slot, username, socketId })
@@ -75,30 +93,70 @@ export const RoomManager = {
     return roomId ? rooms.get(roomId) : undefined
   },
 
-  getSlotBySocket(socketId: string): PlayerSlot | null {
+  getSlotBySocket(socketId: string, roomId?: string): PlayerSlot | null {
     const room = this.getRoomBySocket(socketId)
     if (!room) return null
+    if (roomId && room.roomId !== roomId) return null
     return room.players.find(p => p.socketId === socketId)?.slot ?? null
   },
 
-  removePlayer(socketId: string): { room: RoomState; slot: PlayerSlot } | null {
+  removePlayer(socketId: string): { room: RoomState; slot: PlayerSlot; player: PlayerInfo } | null {
     const room = this.getRoomBySocket(socketId)
     if (!room) return null
 
     const player = room.players.find(p => p.socketId === socketId)
     if (!player) return null
 
-    room.players = room.players.filter(p => p.socketId !== socketId)
+    const disconnectedPlayer = { ...player }
+    player.socketId = ''
     socketToRoom.delete(socketId)
 
     room.phase = 'finished'
     setTimeout(() => {
-      if (rooms.get(room.roomId)?.players.length === 0) {
+      const currentRoom = rooms.get(room.roomId)
+      const currentPlayer = currentRoom?.players.find(p => p.slot === player.slot)
+      if (currentRoom && currentPlayer?.socketId === '') {
+        currentRoom.players = currentRoom.players.filter(p => p.slot !== player.slot)
+      }
+      if (currentRoom?.players.length === 0 && !this.hasSpectators(room.roomId)) {
         rooms.delete(room.roomId)
       }
-    }, 60_000)
+    }, RECONNECT_GRACE_MS)
 
-    return { room, slot: player.slot }
+    return { room, slot: player.slot, player: disconnectedPlayer }
+  },
+
+  removeDisconnectedPlayers(roomId: string): void {
+    const room = rooms.get(roomId)
+    if (!room) return
+    room.players = room.players.filter(player => player.socketId !== '')
+  },
+
+  joinSpectator(roomId: string, socketId: string): RoomState | undefined {
+    const room = rooms.get(roomId)
+    if (!room) return undefined
+    socketToSpectatorRoom.set(socketId, roomId)
+    return room
+  },
+
+  getSpectatorRoom(socketId: string): RoomState | undefined {
+    const roomId = socketToSpectatorRoom.get(socketId)
+    return roomId ? rooms.get(roomId) : undefined
+  },
+
+  removeSpectator(socketId: string): void {
+    const roomId = socketToSpectatorRoom.get(socketId)
+    socketToSpectatorRoom.delete(socketId)
+    if (roomId && rooms.get(roomId)?.players.length === 0 && !this.hasSpectators(roomId)) {
+      rooms.delete(roomId)
+    }
+  },
+
+  hasSpectators(roomId: string): boolean {
+    for (const spectatorRoomId of socketToSpectatorRoom.values()) {
+      if (spectatorRoomId === roomId) return true
+    }
+    return false
   },
 
   setGame(roomId: string, game: RoomGameState): void {

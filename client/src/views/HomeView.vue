@@ -15,6 +15,19 @@
       />
     </div>
 
+    <section class="home__hero">
+      <div>
+        <span class="home__eyebrow">TABLETOP STRATEGY / ONLINE</span>
+        <h1>Arma tu línea. <em>Rompe el patrón.</em></h1>
+        <p>Combina tamaños, lee el tablero y encuentra una victoria que nadie vio venir.</p>
+      </div>
+      <div class="home__hero-mark" role="img" aria-label="Tablero de 3 por 3 por 3, 27 posiciones">
+        <strong>3×3×3</strong>
+        <span>STACK ARENA</span>
+        <small>27 SLOTS</small>
+      </div>
+    </section>
+
     <div class="home__body">
 
       <!-- ── Left: public room list ── -->
@@ -165,6 +178,37 @@
           </button>
         </div>
 
+        <!-- Spectator mode -->
+        <div class="home__card home__card--spectator">
+          <div class="home__spectator-heading">
+            <h3 class="home__card-title">Modo espectador</h3>
+            <span class="home__live-badge">LIVE</span>
+          </div>
+          <p class="home__card-sub">Muestra una partida en una pantalla grande</p>
+
+          <div class="home__field">
+            <label class="home__label">Código de sala</label>
+            <input
+              v-model="spectatorCodeInput"
+              class="home__input home__input--code"
+              type="text"
+              placeholder="XK7F2A"
+              maxlength="6"
+              autocomplete="off"
+              @input="spectatorCodeInput = spectatorCodeInput.toUpperCase()"
+              @keydown.enter="handleSpectate"
+            />
+          </div>
+
+          <button
+            class="home__btn home__btn--spectator"
+            :disabled="!canSpectate"
+            @click="handleSpectate"
+          >
+            Ver partida en directo
+          </button>
+        </div>
+
         <p v-if="!canProceed" class="home__hint">Escribe tu nombre para continuar</p>
         <p v-if="errorMsg" class="home__error">{{ errorMsg }}</p>
       </section>
@@ -179,17 +223,20 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
-import { connectSocket, getSocket } from '@/services/socket'
+import { useAudioStore } from '@/stores/audioStore'
+import { connectSocket, getSocket, waitForSocketConnection } from '@/services/socket'
 
 const router     = useRouter()
 const route      = useRoute()
 const userStore  = useUserStore()
 const roomStore  = useRoomStore()
 const lobbyStore = useLobbyStore()
+const audioStore = useAudioStore()
 
 const usernameInput       = ref(userStore.username ?? '')
 const roomNameInput       = ref('')
 const roomCodeInput       = ref((route.query.code as string) ?? '')
+const spectatorCodeInput  = ref('')
 const createPasswordInput = ref('')
 const joinPasswordInput   = ref('')
 const createIsPrivate     = ref(false)
@@ -201,6 +248,7 @@ const errorMsg            = ref<string | null>(null)
 const publicRooms = computed(() => lobbyStore.publicRooms)
 const canProceed  = computed(() => usernameInput.value.trim().length >= 2)
 const canJoin     = computed(() => canProceed.value && roomCodeInput.value.trim().length === 6)
+const canSpectate = computed(() => spectatorCodeInput.value.trim().length === 6)
 
 onMounted(() => {
   connectSocket()
@@ -218,20 +266,20 @@ onUnmounted(() => {
   getSocket().off('rooms:list')
 })
 
-async function waitForSocket() {
-  const socket = getSocket()
-  if (socket.connected) return
-  await new Promise<void>(resolve => socket.once('connect', resolve))
-}
-
 async function handleCreate() {
   if (!canProceed.value) return
+  audioStore.playSfx('click')
   userStore.setUsername(usernameInput.value)
   loading.value  = true
   action.value   = 'create'
   errorMsg.value = null
 
-  await waitForSocket()
+  if (!await waitForSocketConnection()) {
+    loading.value = false
+    action.value = null
+    errorMsg.value = 'No se pudo conectar con el servidor'
+    return
+  }
   const socket = getSocket()
   const name = roomNameInput.value.trim() || `Sala de ${usernameInput.value.trim()}`
 
@@ -253,13 +301,19 @@ async function handleCreate() {
 
 async function handleJoinPublic(roomId: string) {
   if (!canProceed.value) return
+  audioStore.playSfx('click')
   userStore.setUsername(usernameInput.value)
   loading.value       = true
   loadingRoomId.value = roomId
   action.value        = 'join'
   errorMsg.value      = null
 
-  await waitForSocket()
+  if (!await waitForSocketConnection()) {
+    loading.value = false
+    action.value = null
+    errorMsg.value = 'No se pudo conectar con el servidor'
+    return
+  }
   const socket = getSocket()
 
   socket.emit('room:join', { roomId, username: usernameInput.value.trim() }, res => {
@@ -277,12 +331,18 @@ async function handleJoinPublic(roomId: string) {
 
 async function handleJoinPrivate() {
   if (!canJoin.value) return
+  audioStore.playSfx('click')
   userStore.setUsername(usernameInput.value)
   loading.value  = true
   action.value   = 'join'
   errorMsg.value = null
 
-  await waitForSocket()
+  if (!await waitForSocketConnection()) {
+    loading.value = false
+    action.value = null
+    errorMsg.value = 'No se pudo conectar con el servidor'
+    return
+  }
   const socket = getSocket()
   const code = roomCodeInput.value.trim().toUpperCase()
 
@@ -300,6 +360,12 @@ async function handleJoinPrivate() {
     if (res.roomState) roomStore.setRoomState(res.roomState)
     router.push(`/room/${res.roomId}`)
   })
+}
+
+function handleSpectate() {
+  if (!canSpectate.value) return
+  audioStore.playSfx('click')
+  router.push(`/spectate/${spectatorCodeInput.value.trim().toUpperCase()}`)
 }
 </script>
 
@@ -327,7 +393,7 @@ async function handleJoinPrivate() {
 
 .home__username-label {
   font-size: 12px;
-  color: #666;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -343,7 +409,62 @@ async function handleJoinPrivate() {
   font-weight: 600;
 }
 
-.home__username-input::placeholder { color: #444; }
+.home__username-input::placeholder { color: var(--text-faint); }
+
+/* ── Hero ── */
+.home__hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 10px 4px 2px;
+}
+
+.home__eyebrow {
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.home__hero h1 {
+  max-width: 680px;
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: clamp(30px, 5vw, 52px);
+  line-height: 0.98;
+  letter-spacing: -2px;
+}
+
+.home__hero h1 em {
+  color: var(--accent-secondary);
+  font-style: normal;
+}
+
+.home__hero p {
+  max-width: 510px;
+  margin-top: 14px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.home__hero-mark {
+  display: grid;
+  place-items: center;
+  min-width: 86px;
+  min-height: 86px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 22px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-glow);
+  color: var(--accent-primary);
+  transform: rotate(4deg);
+}
+
+.home__hero-mark strong { font-size: 24px; line-height: 1; letter-spacing: -1px; }
+.home__hero-mark span { font-size: 8px; font-weight: 900; letter-spacing: 1.5px; }
+.home__hero-mark small { color: var(--text-muted); font-size: 7px; font-weight: 800; letter-spacing: 1px; }
 
 /* ── Body columns ── */
 .home__body {
@@ -379,7 +500,7 @@ async function handleJoinPrivate() {
 
 .home__section-count {
   font-size: 12px;
-  color: #555;
+  color: var(--text-muted);
 }
 
 /* ── Room list ── */
@@ -407,7 +528,7 @@ async function handleJoinPrivate() {
 }
 
 .room-card:not(.room-card--playing):hover {
-  border-color: rgba(255,255,255,0.15);
+  border-color: var(--drop-border);
 }
 
 .room-card--playing { opacity: 0.5; }
@@ -433,7 +554,7 @@ async function handleJoinPrivate() {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .room-card__dots { display: flex; gap: 3px; }
@@ -446,15 +567,15 @@ async function handleJoinPrivate() {
   transition: background 0.2s;
 }
 
-.room-card__dot--filled { background: #457b9d; }
-.room-card__phase { color: #555; }
+.room-card__dot--filled { background: var(--player-2-color); }
+.room-card__phase { color: var(--text-muted); }
 
 .room-card__btn {
   padding: 7px 16px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--player-2-color), #1d3557);
-  color: #fff;
+  background: var(--gradient-secondary);
+  color: var(--text-on-accent);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -474,15 +595,15 @@ async function handleJoinPrivate() {
   justify-content: center;
   gap: 6px;
   min-height: 200px;
-  color: #444;
+  color: var(--text-muted);
   font-size: 14px;
   text-align: center;
   border: 1.5px dashed var(--cell-border);
   border-radius: 12px;
 }
 
-.home__empty-icon { font-size: 36px; color: #2a2a3e; line-height: 1; }
-.home__empty-sub  { font-size: 12px; color: #333; }
+.home__empty-icon { font-size: 36px; color: var(--text-faint); line-height: 1; }
+.home__empty-sub  { font-size: 12px; color: var(--text-secondary); }
 
 /* ── Right side cards ── */
 .home__section--actions { gap: 12px; }
@@ -498,7 +619,29 @@ async function handleJoinPrivate() {
 }
 
 .home__card--secondary {
-  background: rgba(255,255,255,0.02);
+  background: var(--surface-muted);
+}
+
+.home__card--spectator {
+  border-color: color-mix(in srgb, var(--accent-primary) 38%, var(--cell-border));
+  background: linear-gradient(145deg, var(--surface), var(--surface-raised));
+}
+
+.home__spectator-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home__live-badge {
+  padding: 4px 7px;
+  border: 1px solid var(--accent-danger);
+  border-radius: 6px;
+  color: var(--accent-danger);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
 }
 
 .home__card-title {
@@ -510,7 +653,7 @@ async function handleJoinPrivate() {
 
 .home__card-sub {
   font-size: 12px;
-  color: #555;
+  color: var(--text-muted);
   margin-top: -6px;
 }
 
@@ -519,15 +662,15 @@ async function handleJoinPrivate() {
 
 .home__label {
   font-size: 11px;
-  color: #666;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.home__label-opt { text-transform: none; font-size: 10px; color: #444; }
+.home__label-opt { text-transform: none; font-size: 10px; color: var(--text-faint); }
 
 .home__input {
-  background: rgba(255,255,255,0.04);
+  background: var(--control-bg);
   border: 1.5px solid var(--cell-border);
   border-radius: 8px;
   padding: 9px 12px;
@@ -539,13 +682,13 @@ async function handleJoinPrivate() {
   box-sizing: border-box;
 }
 
-.home__input:focus { border-color: rgba(255,255,255,0.2); }
+.home__input:focus { border-color: var(--accent-primary); }
 .home__input--code { text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
 
 /* ── Toggle ── */
 .home__toggle-row {
   display: flex;
-  background: rgba(255,255,255,0.03);
+  background: var(--control-bg);
   border: 1.5px solid var(--cell-border);
   border-radius: 8px;
   overflow: hidden;
@@ -556,7 +699,7 @@ async function handleJoinPrivate() {
   padding: 8px;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -564,7 +707,7 @@ async function handleJoinPrivate() {
 }
 
 .home__toggle-btn--active {
-  background: rgba(255,255,255,0.08);
+  background: var(--control-hover);
   color: var(--text-primary);
 }
 
@@ -583,18 +726,18 @@ async function handleJoinPrivate() {
 .home__btn:not(:disabled):hover { transform: scale(1.02); }
 
 .home__btn--primary {
-  background: linear-gradient(135deg, var(--player-1-color), #c1121f);
-  color: #fff;
+  background: var(--gradient-primary);
+  color: var(--text-on-accent);
 }
 
 .home__btn--secondary {
-  background: linear-gradient(135deg, var(--player-2-color), #1d3557);
-  color: #fff;
+  background: var(--gradient-secondary);
+  color: var(--text-on-accent);
 }
 
 /* ── Hints ── */
-.home__hint  { font-size: 12px; color: #555; text-align: center; }
-.home__error { font-size: 13px; color: #e63946; text-align: center; }
+.home__hint  { font-size: 12px; color: var(--text-muted); text-align: center; }
+.home__error { font-size: 13px; color: var(--accent-danger); text-align: center; }
 
 /* ── Slide transition ── */
 .slide-enter-active, .slide-leave-active {
@@ -609,4 +752,21 @@ async function handleJoinPrivate() {
 .room-list-leave-active { transition: all 0.2s ease; position: absolute; width: 100%; }
 .room-list-enter-from   { opacity: 0; transform: translateY(-6px); }
 .room-list-leave-to     { opacity: 0; transform: translateY(4px); }
+
+@media (max-width: 520px) {
+  .home__hero { align-items: flex-start; }
+  .home__hero-mark { min-width: 66px; min-height: 66px; border-radius: 18px; }
+  .home__hero-mark strong { font-size: 18px; }
+  .home__hero-mark span { font-size: 7px; }
+}
+
+.home__btn--spectator {
+  border: 1px solid var(--accent-primary);
+  background: transparent;
+  color: var(--accent-primary);
+}
+
+.home__btn--spectator:not(:disabled):hover {
+  background: var(--control-hover);
+}
 </style>

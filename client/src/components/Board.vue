@@ -21,6 +21,6 @@ const store = useGameStore()
   padding: 16px;
   background: var(--board-bg);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
 }
 </style>

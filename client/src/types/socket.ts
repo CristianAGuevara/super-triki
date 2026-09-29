@@ -19,6 +19,13 @@ export interface RoomJoinAck {
   error?: string
 }
 
+export interface SpectateJoinAck {
+  ok: boolean
+  roomId?: string
+  roomState?: RoomStateSnapshot
+  error?: string
+}
+
 export interface GameMovePayload {
   roomId:     string
   pieceId:    string
@@ -32,6 +39,7 @@ export interface GameMoveAck { ok: boolean; error?: string }
 export interface ClientToServerEvents {
   'room:create': (payload: { username: string; name: string; isPrivate: boolean; password?: string }, ack: (res: RoomCreateAck) => void) => void
   'room:join':   (payload: { roomId: string; username: string; password?: string }, ack: (res: RoomJoinAck) => void) => void
+  'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
   'game:move':   (payload: GameMovePayload, ack: (res: GameMoveAck) => void) => void
   'game:rematch':(payload: { roomId: string }) => void
   'game:start':  (payload: { roomId: string }) => void

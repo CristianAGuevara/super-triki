@@ -7,6 +7,7 @@ import { getAllLines, emptyBoard } from '@/utils/boardUtils'
 import { detectWin, detectDraw } from '@/composables/useWinDetection'
 import { getSocket } from '@/services/socket'
 import { useRoomStore } from '@/stores/roomStore'
+import { useAudioStore } from '@/stores/audioStore'
 
 const PIECES_PER_SIZE = 3
 
@@ -26,6 +27,9 @@ export const useGameStore = defineStore('game', () => {
   const winResult = ref<WinResult | null>(null)
   const isDraw = ref(false)
   const dragState = ref<DragPayload | null>(null)
+  const moveNumber = ref(0)
+  const hasServerState = ref(false)
+  const audioStore = useAudioStore()
 
   const lines = computed(() => getAllLines(3))
 
@@ -74,6 +78,8 @@ export const useGameStore = defineStore('game', () => {
     winResult.value = null
     isDraw.value = false
     dragState.value = null
+    moveNumber.value = 0
+    hasServerState.value = false
   }
 
   function resetGame() {
@@ -87,15 +93,23 @@ export const useGameStore = defineStore('game', () => {
     targetSize: Size
   }): boolean {
     const roomStore = useRoomStore()
+    const { pieceId, targetRow, targetCol, targetSize } = payload
+
+    if (isGameOver.value) return false
+    if (!Number.isInteger(targetRow) || !Number.isInteger(targetCol) ||
+        targetRow < 0 || targetRow >= board.value.length ||
+        targetCol < 0 || targetCol >= board.value[targetRow].length ||
+        !SIZE_ORDER.includes(targetSize)) return false
+    if (board.value[targetRow][targetCol][targetSize] !== null) return false
 
     // ── Multiplayer path: emit to server, server broadcasts back ──
     if (roomStore.roomId) {
       getSocket().emit('game:move', {
         roomId:     roomStore.roomId,
-        pieceId:    payload.pieceId,
-        targetRow:  payload.targetRow,
-        targetCol:  payload.targetCol,
-        targetSize: payload.targetSize,
+        pieceId,
+        targetRow,
+        targetCol,
+        targetSize,
       }, res => {
         if (!res.ok) roomStore.setError(res.error ?? 'Move rejected')
       })
@@ -103,11 +117,6 @@ export const useGameStore = defineStore('game', () => {
     }
 
     // ── Solo path: original local logic ──────────────────────────
-    const { pieceId, targetRow, targetCol, targetSize } = payload
-
-    if (isGameOver.value) return false
-    if (board.value[targetRow][targetCol][targetSize] !== null) return false
-
     const inv = inventories.value[currentPlayer.value]
     const idx = inv.findIndex(p => p.id === pieceId)
     if (idx === -1) return false
@@ -117,15 +126,19 @@ export const useGameStore = defineStore('game', () => {
 
     inv.splice(idx, 1)
     board.value[targetRow][targetCol][targetSize] = piece
+    moveNumber.value++
+    audioStore.playSfx('move')
 
     const win = detectWin(board.value, lines.value, players.value)
     if (win) {
       winResult.value = win
+      audioStore.playSfx('win')
       return true
     }
 
     if (detectDraw(board.value)) {
       isDraw.value = true
+      audioStore.playSfx('draw')
       return true
     }
 
@@ -136,9 +149,14 @@ export const useGameStore = defineStore('game', () => {
   // ── Server state application ─────────────────────────────────
 
   function applyServerState(state: GameStateSnapshot): void {
+    if (hasServerState.value && state.moveNumber > moveNumber.value) {
+      audioStore.playSfx('move')
+    }
     board.value         = state.board
     inventories.value   = state.inventories as Record<Player, Piece[]>
     currentPlayer.value = state.currentPlayer
+    moveNumber.value    = state.moveNumber
+    hasServerState.value = true
     if (state.players) players.value = state.players as Player[]
     winResult.value     = null
     isDraw.value        = false
@@ -148,8 +166,10 @@ export const useGameStore = defineStore('game', () => {
     applyServerState(result.finalState)
     if (result.winResult) {
       winResult.value = result.winResult
+      audioStore.playSfx('win')
     } else {
       isDraw.value = true
+      audioStore.playSfx('draw')
     }
   }
 

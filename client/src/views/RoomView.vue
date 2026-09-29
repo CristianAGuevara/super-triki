@@ -8,9 +8,14 @@
 
       <div class="lobby__code">{{ roomId }}</div>
 
-      <button class="lobby__copy-btn" @click="copyLink">
-        {{ copied ? 'Enlace copiado!' : 'Copiar enlace' }}
-      </button>
+       <div class="lobby__copy-actions">
+         <button class="lobby__copy-btn" @click="copyPlayerLink">
+           {{ copied === 'player' ? '¡Copiado!' : 'Enlace para jugadores' }}
+         </button>
+         <button class="lobby__copy-btn lobby__copy-btn--spectator" @click="copySpectatorLink">
+           {{ copied === 'spectator' ? '¡Copiado!' : 'Enlace espectador' }}
+         </button>
+       </div>
 
       <div class="lobby__players">
         <span
@@ -74,9 +79,19 @@
       <div v-if="roomStore.opponentLeft" class="disconnect-overlay">
         <div class="disconnect-card">
           <p class="disconnect-icon">⚠</p>
-          <h2>Oponente desconectado</h2>
-          <p class="disconnect-sub">Tu oponente abandonó la partida</p>
-          <button class="disconnect-btn" @click="goHome">Volver al inicio</button>
+          <span class="disconnect-eyebrow">Partida en pausa</span>
+          <h2>{{ disconnectedName }} se desconectó</h2>
+          <p class="disconnect-sub">Esperando a que vuelva a la sala.</p>
+
+          <template v-if="canRestartAfterDisconnect">
+            <p class="disconnect-host-note">Como host, puedes comenzar una nueva partida con los jugadores conectados.</p>
+            <button class="disconnect-btn" @click="handleRestartAfterDisconnect">Reiniciar partida</button>
+          </template>
+          <p v-else class="disconnect-waiting">
+            Esperando al host para decidir cómo continuar…
+          </p>
+
+          <button class="disconnect-btn disconnect-btn--secondary" @click="goHome">Salir de la sala</button>
         </div>
       </div>
     </Transition>
@@ -90,6 +105,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
+import { useAudioStore } from '@/stores/audioStore'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket, disconnectSocket } from '@/services/socket'
 import Board from '@/components/Board.vue'
@@ -102,10 +118,17 @@ const router    = useRouter()
 const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
+const audioStore = useAudioStore()
 const { emitJoinRoom, emitRematch, emitStart } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
-const copied = ref(false)
+const copied = ref<'player' | 'spectator' | null>(null)
+
+const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
+const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
+const canRestartAfterDisconnect = computed(() =>
+  roomStore.mySlot === 1 && connectedPlayerCount.value >= 2
+)
 
 const turnColor = computed(() => {
   const meta = gameStore.playerMeta[gameStore.currentPlayer]
@@ -143,18 +166,50 @@ onUnmounted(() => {
   disconnectSocket()
 })
 
-function copyLink() {
-  navigator.clipboard.writeText(window.location.href)
-  copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
+async function copyLink(url: string, type: 'player' | 'spectator') {
+  try {
+    await navigator.clipboard.writeText(url)
+  } catch {
+    const input = document.createElement('textarea')
+    input.value = url
+    input.style.position = 'fixed'
+    input.style.opacity = '0'
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    input.remove()
+  }
+  copied.value = type
+  setTimeout(() => { copied.value = null }, 2000)
+}
+
+function copyPlayerLink() {
+  void copyLink(window.location.href, 'player')
+}
+
+function copySpectatorLink() {
+  void copyLink(`${window.location.origin}/spectate/${roomId.value}`, 'spectator')
 }
 
 function handleRematch() {
-  if (roomStore.roomId) emitRematch(roomStore.roomId)
+  if (roomStore.roomId) {
+    audioStore.playSfx('click')
+    emitRematch(roomStore.roomId)
+  }
+}
+
+function handleRestartAfterDisconnect() {
+  if (roomStore.roomId) {
+    audioStore.playSfx('click')
+    emitRematch(roomStore.roomId)
+  }
 }
 
 function handleStart() {
-  if (roomStore.roomId) emitStart(roomStore.roomId)
+  if (roomStore.roomId) {
+    audioStore.playSfx('click')
+    emitStart(roomStore.roomId)
+  }
 }
 
 function goHome() {
@@ -188,7 +243,7 @@ function goHome() {
 }
 
 .lobby__hint {
-  color: #777;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -217,8 +272,8 @@ function goHome() {
   transition: border-color 0.2s, background 0.2s;
 }
 .lobby__copy-btn:hover {
-  border-color: rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.05);
+  border-color: var(--accent-primary);
+  background: var(--control-hover);
 }
 
 .lobby__players {
@@ -233,18 +288,18 @@ function goHome() {
   border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  color: var(--text-on-accent);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 
 .lobby__player-chip--empty {
   background: var(--cell-border) !important;
-  color: #555;
+  color: var(--text-muted);
   text-shadow: none;
 }
 
 .lobby__count {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 13px;
   margin: 0;
 }
@@ -253,8 +308,8 @@ function goHome() {
   padding: 12px 36px;
   border: none;
   border-radius: 30px;
-  background: linear-gradient(135deg, #457b9d, #e63946);
-  color: #fff;
+  background: var(--gradient-brand);
+  color: var(--text-on-accent);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -270,7 +325,7 @@ function goHome() {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #888;
+  color: var(--text-secondary);
   font-size: 14px;
   margin-top: 8px;
 }
@@ -293,11 +348,11 @@ function goHome() {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .room__code { font-weight: 600; }
-.room__id   { font-weight: 400; color: #555; font-size: 11px; letter-spacing: 1px; }
+.room__id   { font-weight: 400; color: var(--text-muted); font-size: 11px; letter-spacing: 1px; }
 
 .room__main {
   display: flex;
@@ -324,7 +379,7 @@ function goHome() {
 .disconnect-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.75);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -342,16 +397,46 @@ function goHome() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  width: min(440px, calc(100vw - 32px));
+}
+
+.lobby__copy-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lobby__copy-btn--spectator {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .disconnect-icon { font-size: 40px; }
+
+.disconnect-eyebrow {
+  color: var(--accent-secondary);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+}
 
 .disconnect-card h2 {
   font-size: 24px;
   color: var(--text-primary);
 }
 
-.disconnect-sub { color: #777; font-size: 14px; }
+.disconnect-sub { color: var(--text-secondary); font-size: 14px; }
+
+.disconnect-host-note,
+.disconnect-waiting {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 330px;
+  text-align: center;
+}
 
 .disconnect-btn {
   margin-top: 8px;
@@ -359,13 +444,21 @@ function goHome() {
   border: none;
   border-radius: 30px;
   background: var(--player-1-color);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.15s;
 }
 .disconnect-btn:hover { transform: scale(1.04); }
+
+.disconnect-btn--secondary {
+  margin-top: 0;
+  background: transparent;
+  border: 1px solid var(--cell-border);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
 
 .overlay-enter-active, .overlay-leave-active { transition: opacity 0.3s; }
 .overlay-enter-from, .overlay-leave-to { opacity: 0; }

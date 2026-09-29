@@ -33,5 +33,5 @@ export interface DragPayload {
   pieceId: string
   player: Player
   size: Size
-  source: 'inventory'
+  source: 'inventory' | 'board'
 }

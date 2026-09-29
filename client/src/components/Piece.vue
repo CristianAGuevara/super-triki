@@ -21,7 +21,7 @@ const dragPayload = computed<DragPayload>(() => ({
   pieceId: props.piece.id,
   player: props.piece.player,
   size: props.piece.size,
-  source: 'inventory',
+  source: props.inInventory === false ? 'board' : 'inventory',
 }))
 
 const sizeName = computed(() => {

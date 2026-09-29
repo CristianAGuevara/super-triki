@@ -69,14 +69,14 @@ const sortedEntries = computed(() => {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #666;
+  color: var(--text-muted);
   font-weight: 700;
 }
 
 .scoreboard__round {
   font-size: 11px;
-  color: #555;
-  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  background: var(--control-bg);
   padding: 2px 8px;
   border-radius: 20px;
   border: 1px solid var(--cell-border);
@@ -100,12 +100,12 @@ const sortedEntries = computed(() => {
 
 .scoreboard__row--leader {
   border-color: var(--accent);
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-muted);
 }
 
 .scoreboard__rank {
   font-size: 11px;
-  color: #555;
+  color: var(--text-muted);
   width: 12px;
   text-align: center;
   flex-shrink: 0;
@@ -131,7 +131,7 @@ const sortedEntries = computed(() => {
 
 .scoreboard__you {
   font-weight: 400;
-  color: #666;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -145,13 +145,13 @@ const sortedEntries = computed(() => {
 
 .scoreboard__label {
   font-size: 10px;
-  color: #555;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .scoreboard__empty {
   font-size: 12px;
-  color: #444;
+  color: var(--text-faint);
   text-align: center;
   padding: 8px 0;
 }
