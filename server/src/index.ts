@@ -7,14 +7,17 @@ import { registerGameHandler } from './handlers/gameHandler.js'
 
 const PORT = process.env.PORT ?? 3001
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173'
+const API_PREFIX = process.env.API_PREFIX ?? (process.env.VERCEL ? '/api' : '')
+const SOCKET_PATH = `${API_PREFIX}/socket.io` || '/socket.io'
 
 const app = express()
 app.use(cors({ origin: FRONTEND_URL }))
-app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
+app.get(`${API_PREFIX}/health` || '/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
 
 const httpServer = createServer(app)
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
+  path: SOCKET_PATH,
   cors: { origin: FRONTEND_URL, methods: ['GET', 'POST'] },
 })
 

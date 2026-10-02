@@ -7,9 +7,18 @@ let _socket: AppSocket | null = null
 
 export function getSocket(): AppSocket {
   if (!_socket) {
-    _socket = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:3001', {
+    const serverUrl = import.meta.env.VITE_SERVER_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001')
+    const socketPath = import.meta.env.VITE_SOCKET_PATH ||
+      (import.meta.env.VITE_SERVER_URL || typeof window === 'undefined' ||
+       window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? '/socket.io'
+        : '/api/socket.io')
+
+    _socket = io(serverUrl, {
       autoConnect: false,
       transports: ['websocket'],
+      path: socketPath,
     })
   }
   return _socket
