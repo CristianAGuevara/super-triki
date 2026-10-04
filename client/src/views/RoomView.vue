@@ -86,12 +86,11 @@
           <div class="rules-grid">
             <section class="rules-step">
               <div class="rules-visual rules-visual--turn" aria-hidden="true">
-                <span class="rules-ring rules-ring--large" />
-                <span class="rules-ring rules-ring--medium" />
-                <span class="rules-ring rules-ring--small" />
+                <i /><i /><i /><i />
+                <span class="rules-move-arrow">↘</span>
               </div>
-              <strong>1. Coloca por turnos</strong>
-              <p>Elige una pieza grande, mediana o pequeña y ocupa un espacio libre de ese tamaño.</p>
+              <strong>1. Un movimiento por turno</strong>
+              <p>Elige una pieza y colócala en un espacio libre del mismo tamaño.</p>
             </section>
 
             <section class="rules-step">
@@ -99,7 +98,7 @@
                 <i /><i /><i />
               </div>
               <strong>2. Forma una línea</strong>
-              <p>Gana con tres piezas del mismo tamaño o con una secuencia ordenada en línea.</p>
+              <p>Gana con tres fichas del mismo tamaño o en orden: Grande → Mediana → Pequeña, también al revés.</p>
             </section>
 
             <section class="rules-step">
@@ -109,7 +108,7 @@
                 <span class="rules-ring rules-ring--small" />
               </div>
               <strong>3. Completa una casilla</strong>
-              <p>También ganas si reúnes tus tres tamaños dentro de la misma casilla.</p>
+              <p>También ganas si reúnes tus tres tamaños dentro de una casilla, todos del mismo jugador.</p>
             </section>
           </div>
 
@@ -566,6 +565,38 @@ function closeRules() {
   height: 70px;
 }
 
+.rules-visual--turn {
+  grid-template-columns: repeat(2, 22px);
+  grid-template-rows: repeat(2, 22px);
+  gap: 5px;
+  border: 1px solid var(--cell-border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.rules-visual--turn i {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--text-faint);
+  border-radius: 6px;
+}
+
+.rules-visual--turn i:first-child {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+.rules-move-arrow {
+  position: absolute;
+  right: -15px;
+  bottom: -8px;
+  color: var(--accent-secondary);
+  font-size: 28px;
+  font-weight: 900;
+  transform: rotate(-12deg);
+}
+
 .rules-ring {
   position: absolute;
   display: block;
@@ -584,9 +615,12 @@ function closeRules() {
   position: absolute;
   left: 13px;
   right: 13px;
+  top: 34px;
+  z-index: 2;
   height: 3px;
   border-radius: 5px;
-  background: var(--accent-secondary);
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 55%, transparent);
 }
 
 .rules-visual--line i {
@@ -594,13 +628,13 @@ function closeRules() {
   display: block;
   width: 18px;
   height: 18px;
-  border: 4px solid var(--accent-secondary);
+  border: 4px solid var(--accent-primary);
   border-radius: 50%;
   background: var(--cell-bg);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 35%, transparent);
 }
 
-.rules-visual--line i:nth-child(2) { border-color: var(--accent-primary); }
-.rules-visual--line i:nth-child(3) { border-color: var(--player-3-color); }
+.rules-visual--cell .rules-ring { border-color: var(--accent-primary); }
 
 .rules-visual--cell {
   border: 2px solid var(--accent-secondary);
