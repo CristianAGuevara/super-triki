@@ -3,12 +3,6 @@
 
     <!-- ── Lobby: waiting for players ── -->
     <div v-if="roomStore.phase === 'waiting'" class="lobby">
-      <div class="lobby__toolbar">
-        <button class="lobby__spectator-btn" @click="goSpectator">
-          <span aria-hidden="true">◉</span>
-          Modo espectador
-        </button>
-      </div>
       <h2 class="lobby__title">Sala creada</h2>
       <p class="lobby__hint">Comparte el código con tus amigos</p>
 
@@ -222,10 +216,6 @@ function goHome() {
   router.push('/')
 }
 
-function goSpectator() {
-  audioStore.playSfx('click')
-  router.push(`/spectate/${roomId.value}`)
-}
 </script>
 
 <style scoped>
@@ -248,33 +238,6 @@ function goSpectator() {
   margin-top: 80px;
 }
 
-.lobby__toolbar {
-  display: flex;
-  justify-content: flex-end;
-  width: 100%;
-  margin-bottom: -8px;
-}
-
-.lobby__spectator-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  border: 1px solid var(--accent-primary);
-  border-radius: 10px;
-  background: var(--surface-muted);
-  color: var(--accent-primary);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
-}
-
-.lobby__spectator-btn:hover {
-  background: var(--control-hover);
-  transform: translateY(-1px);
-}
 
 .lobby__title {
   font-size: 28px;

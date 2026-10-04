@@ -60,13 +60,22 @@
                   <span class="room-card__phase">{{ room.phase === 'playing' ? '· En juego' : '· Esperando' }}</span>
                 </span>
               </div>
-              <button
-                class="room-card__btn"
-                :disabled="!canProceed || room.phase === 'playing' || loading"
-                @click="handleJoinPublic(room.roomId)"
-              >
-                {{ loadingRoomId === room.roomId ? '...' : 'Unirse' }}
-              </button>
+              <div class="room-card__actions">
+                <button
+                  class="room-card__btn"
+                  :disabled="!canProceed || room.phase === 'playing' || loading"
+                  @click="handleJoinPublic(room.roomId)"
+                >
+                  {{ loadingRoomId === room.roomId ? '...' : 'Unirse' }}
+                </button>
+                <button
+                  class="room-card__spectator-btn"
+                  :disabled="loading"
+                  @click="handleSpectatePublic(room.roomId)"
+                >
+                  Espectar
+                </button>
+              </div>
             </div>
           </TransitionGroup>
 
@@ -367,6 +376,11 @@ function handleSpectate() {
   audioStore.playSfx('click')
   router.push(`/spectate/${spectatorCodeInput.value.trim().toUpperCase()}`)
 }
+
+function handleSpectatePublic(roomId: string) {
+  audioStore.playSfx('click')
+  router.push(`/spectate/${roomId}`)
+}
 </script>
 
 <style scoped>
@@ -583,6 +597,33 @@ function handleSpectate() {
   flex-shrink: 0;
   transition: transform 0.15s, opacity 0.15s;
 }
+
+.room-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.room-card__spectator-btn {
+  padding: 7px 10px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, transform 0.15s, opacity 0.15s;
+}
+
+.room-card__spectator-btn:not(:disabled):hover {
+  background: var(--control-hover);
+  transform: translateY(-1px);
+}
+
+.room-card__spectator-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .room-card__btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .room-card__btn:not(:disabled):hover { transform: scale(1.04); }
