@@ -74,6 +74,50 @@
       <GameStatus @rematch="handleRematch" />
     </template>
 
+    <!-- ── Rules shown when the game starts ── -->
+    <Transition name="rules-modal">
+      <div v-if="showRules" class="rules-overlay" @click.self="closeRules">
+        <article class="rules-card" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+          <button class="rules-card__close" aria-label="Cerrar reglas" @click="closeRules">×</button>
+          <span class="rules-card__eyebrow">Antes de jugar</span>
+          <h2 id="rules-title">Cómo ganar en <strong>3×3×3</strong></h2>
+          <p class="rules-card__intro">Coloca tus piezas con estrategia. Cada turno puede cambiar toda la partida.</p>
+
+          <div class="rules-grid">
+            <section class="rules-step">
+              <div class="rules-visual rules-visual--turn" aria-hidden="true">
+                <span class="rules-ring rules-ring--large" />
+                <span class="rules-ring rules-ring--medium" />
+                <span class="rules-ring rules-ring--small" />
+              </div>
+              <strong>1. Coloca por turnos</strong>
+              <p>Elige una pieza grande, mediana o pequeña y ocupa un espacio libre de ese tamaño.</p>
+            </section>
+
+            <section class="rules-step">
+              <div class="rules-visual rules-visual--line" aria-hidden="true">
+                <i /><i /><i />
+              </div>
+              <strong>2. Forma una línea</strong>
+              <p>Gana con tres piezas del mismo tamaño o con una secuencia ordenada en línea.</p>
+            </section>
+
+            <section class="rules-step">
+              <div class="rules-visual rules-visual--cell" aria-hidden="true">
+                <span class="rules-ring rules-ring--large" />
+                <span class="rules-ring rules-ring--medium" />
+                <span class="rules-ring rules-ring--small" />
+              </div>
+              <strong>3. Completa una casilla</strong>
+              <p>También ganas si reúnes tus tres tamaños dentro de la misma casilla.</p>
+            </section>
+          </div>
+
+          <button class="rules-card__button" @click="closeRules">Entendido, jugar</button>
+        </article>
+      </div>
+    </Transition>
+
     <!-- ── Opponent disconnected overlay ── -->
     <Transition name="overlay">
       <div v-if="roomStore.opponentLeft" class="disconnect-overlay">
@@ -100,7 +144,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -123,12 +167,37 @@ const { emitJoinRoom, emitRematch, emitStart } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
 const copied = ref<'player' | 'spectator' | null>(null)
+const showRules = ref(false)
+const RULES_STORAGE_KEY = 'st_rules_seen'
+const RULES_DISPLAY_LIMIT = 2
+
+function getRulesShownCount(): number {
+  try {
+    const value = Number(window.localStorage.getItem(RULES_STORAGE_KEY) ?? 0)
+    return Number.isFinite(value) ? Math.max(0, value) : 0
+  } catch {
+    return 0
+  }
+}
+
+const rulesShownCount = ref(getRulesShownCount())
 
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
 const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
 const canRestartAfterDisconnect = computed(() =>
   roomStore.mySlot === 1 && connectedPlayerCount.value >= 2
 )
+
+watch(() => roomStore.phase, phase => {
+  if (phase !== 'playing' || rulesShownCount.value >= RULES_DISPLAY_LIMIT) return
+  rulesShownCount.value++
+  try {
+    window.localStorage.setItem(RULES_STORAGE_KEY, String(rulesShownCount.value))
+  } catch {
+    // The modal can still be shown if storage is unavailable.
+  }
+  showRules.value = true
+}, { immediate: true })
 
 const turnColor = computed(() => {
   const meta = gameStore.playerMeta[gameStore.currentPlayer]
@@ -214,6 +283,10 @@ function handleStart() {
 
 function goHome() {
   router.push('/')
+}
+
+function closeRules() {
+  showRules.value = false
 }
 
 </script>
@@ -378,6 +451,180 @@ function goHome() {
   gap: 16px;
 }
 
+/* ── Rules modal ── */
+.rules-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(8px);
+}
+
+.rules-card {
+  position: relative;
+  width: min(700px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  padding: 30px clamp(20px, 5vw, 44px) 34px;
+  border: 1px solid var(--cell-border);
+  border-radius: 24px;
+  background: var(--cell-bg);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  text-align: center;
+}
+
+.rules-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 3px;
+  border-radius: 0 0 10px 10px;
+  background: var(--gradient-brand);
+}
+
+.rules-card__close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.rules-card__eyebrow {
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.rules-card h2 {
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: clamp(24px, 4vw, 36px);
+  letter-spacing: -1px;
+}
+
+.rules-card h2 strong { color: var(--accent-secondary); }
+
+.rules-card__intro {
+  max-width: 480px;
+  margin: 10px auto 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.rules-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 16px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface-muted);
+}
+
+.rules-step strong {
+  margin-top: 14px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.rules-step p {
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.rules-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 70px;
+}
+
+.rules-ring {
+  position: absolute;
+  display: block;
+  border: 5px solid var(--accent-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary) 38%, transparent);
+}
+
+.rules-ring--large { width: 64px; height: 64px; border-color: var(--player-1-color); }
+.rules-ring--medium { width: 42px; height: 42px; border-color: var(--player-2-color); }
+.rules-ring--small { width: 22px; height: 22px; border-color: var(--player-3-color); border-width: 4px; }
+
+.rules-visual--line { gap: 8px; grid-template-columns: repeat(3, 18px); }
+.rules-visual--line::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  height: 3px;
+  border-radius: 5px;
+  background: var(--accent-secondary);
+}
+
+.rules-visual--line i {
+  z-index: 1;
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 4px solid var(--accent-secondary);
+  border-radius: 50%;
+  background: var(--cell-bg);
+}
+
+.rules-visual--line i:nth-child(2) { border-color: var(--accent-primary); }
+.rules-visual--line i:nth-child(3) { border-color: var(--player-3-color); }
+
+.rules-visual--cell {
+  border: 2px solid var(--accent-secondary);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-glow);
+}
+
+.rules-card__button {
+  width: min(300px, 100%);
+  margin-top: 24px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--gradient-brand);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.rules-modal-enter-active, .rules-modal-leave-active { transition: opacity 0.2s ease; }
+.rules-modal-enter-from, .rules-modal-leave-to { opacity: 0; }
+
 /* ── Disconnect overlay ── */
 .disconnect-overlay {
   position: fixed;
@@ -465,4 +712,12 @@ function goHome() {
 
 .overlay-enter-active, .overlay-leave-active { transition: opacity 0.3s; }
 .overlay-enter-from, .overlay-leave-to { opacity: 0; }
+
+@media (max-width: 620px) {
+  .rules-grid { grid-template-columns: 1fr; }
+  .rules-step { display: grid; grid-template-columns: 82px 1fr; gap: 0 12px; text-align: left; }
+  .rules-step strong { margin-top: 0; align-self: end; }
+  .rules-step p { margin-top: 4px; grid-column: 2; }
+  .rules-visual { grid-row: 1 / span 2; }
+}
 </style>

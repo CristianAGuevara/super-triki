@@ -1,5 +1,11 @@
 <template>
   <div class="home">
+    <Transition name="toast">
+      <div v-if="notice" class="home__notice" role="status">
+        <span class="home__notice-icon" aria-hidden="true">!</span>
+        {{ notice }}
+      </div>
+    </Transition>
 
     <!-- ── Username bar ── -->
     <div class="home__username-bar">
@@ -63,7 +69,7 @@
               <div class="room-card__actions">
                 <button
                   class="room-card__btn"
-                  :disabled="!canProceed || room.phase === 'playing' || loading"
+                  :disabled="room.phase === 'playing' || loading"
                   :title="room.phase === 'playing' ? 'La partida ya comenzó; usa Espectar' : !canProceed ? 'Escribe tu nombre para unirte' : 'Unirse a la sala'"
                   @click="handleJoinPublic(room.roomId)"
                 >
@@ -254,6 +260,8 @@ const loading             = ref(false)
 const loadingRoomId       = ref<string | null>(null)
 const action              = ref<'create' | 'join' | null>(null)
 const errorMsg            = ref<string | null>(null)
+const notice              = ref<string | null>(null)
+let noticeTimer: number | undefined
 
 const publicRooms = computed(() => lobbyStore.publicRooms)
 const canProceed  = computed(() => usernameInput.value.trim().length >= 2)
@@ -310,7 +318,10 @@ async function handleCreate() {
 }
 
 async function handleJoinPublic(roomId: string) {
-  if (!canProceed.value) return
+  if (!canProceed.value) {
+    showNotice('Escribe tu nombre antes de unirte a una sala')
+    return
+  }
   audioStore.playSfx('click')
   userStore.setUsername(usernameInput.value)
   loading.value       = true
@@ -382,6 +393,15 @@ function handleSpectatePublic(roomId: string) {
   audioStore.playSfx('click')
   router.push(`/spectate/${roomId}`)
 }
+
+function showNotice(message: string) {
+  notice.value = message
+  if (noticeTimer) window.clearTimeout(noticeTimer)
+  noticeTimer = window.setTimeout(() => {
+    notice.value = null
+    noticeTimer = undefined
+  }, 3_200)
+}
 </script>
 
 <style scoped>
@@ -394,6 +414,41 @@ function handleSpectatePublic(roomId: string) {
   max-width: 960px;
   margin: 0 auto;
 }
+
+.home__notice {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: calc(100vw - 32px);
+  padding: 11px 16px 11px 12px;
+  border: 1px solid var(--accent-secondary);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  transform: translateX(-50%);
+}
+
+.home__notice-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  color: var(--text-on-accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.toast-enter-active, .toast-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, -10px); }
 
 /* ── Username bar ── */
 .home__username-bar {
