@@ -85,20 +85,19 @@
 
           <div class="rules-grid">
             <section class="rules-step">
-              <div class="rules-visual rules-visual--turn" aria-hidden="true">
-                <i /><i /><i /><i />
-                <span class="rules-move-arrow">↘</span>
+              <div class="rules-visual rules-visual--line rules-visual--same-line" aria-hidden="true">
+                <i /><i /><i />
               </div>
-              <strong>1. Un movimiento por turno</strong>
-              <p>Elige una pieza y colócala en un espacio libre del mismo tamaño.</p>
+              <strong>1. Mismo tamaño en línea</strong>
+              <p>Coloca tres fichas del mismo tamaño en una fila, columna o diagonal.</p>
             </section>
 
             <section class="rules-step">
-              <div class="rules-visual rules-visual--line" aria-hidden="true">
+              <div class="rules-visual rules-visual--line rules-visual--ordered-line" aria-hidden="true">
                 <i /><i /><i />
               </div>
-              <strong>2. Forma una línea</strong>
-              <p>Gana con tres fichas del mismo tamaño o en orden: Grande → Mediana → Pequeña, también al revés.</p>
+              <strong>2. Tamaños en orden</strong>
+              <p>Forma una línea con Grande → Mediana → Pequeña, o en orden inverso.</p>
             </section>
 
             <section class="rules-step">
@@ -107,8 +106,8 @@
                 <span class="rules-ring rules-ring--medium" />
                 <span class="rules-ring rules-ring--small" />
               </div>
-              <strong>3. Completa una casilla</strong>
-              <p>También ganas si reúnes tus tres tamaños dentro de una casilla, todos del mismo jugador.</p>
+              <strong>3. Casilla completa</strong>
+              <p>Reúne tus tres tamaños dentro de una misma casilla para ganar.</p>
             </section>
           </div>
 
@@ -609,7 +608,26 @@ function closeRules() {
 .rules-ring--medium { width: 42px; height: 42px; border-color: var(--player-2-color); }
 .rules-ring--small { width: 22px; height: 22px; border-color: var(--player-3-color); border-width: 4px; }
 
-.rules-visual--line { gap: 8px; grid-template-columns: repeat(3, 18px); }
+.rules-visual--line {
+  gap: 8px;
+  grid-template-columns: repeat(3, 18px);
+}
+
+.rules-visual--same-line {
+  --rule-piece: var(--player-1-color);
+  --rule-line: var(--accent-primary);
+}
+
+.rules-visual--ordered-line {
+  --rule-piece: var(--player-2-color);
+  --rule-line: var(--accent-secondary);
+}
+
+.rules-visual--cell {
+  --rule-piece: var(--player-3-color);
+  --rule-line: var(--accent-secondary);
+}
+
 .rules-visual--line::before {
   content: '';
   position: absolute;
@@ -619,8 +637,8 @@ function closeRules() {
   z-index: 2;
   height: 3px;
   border-radius: 5px;
-  background: var(--accent-primary);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  background: var(--rule-line);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--rule-line) 55%, transparent);
 }
 
 .rules-visual--line i {
@@ -628,19 +646,26 @@ function closeRules() {
   display: block;
   width: 18px;
   height: 18px;
-  border: 4px solid var(--accent-primary);
+  border: 4px solid var(--rule-piece);
   border-radius: 50%;
   background: var(--cell-bg);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--rule-piece) 35%, transparent);
 }
 
-.rules-visual--cell .rules-ring { border-color: var(--accent-primary); }
+.rules-visual--ordered-line i:nth-child(1) { width: 22px; height: 22px; }
+.rules-visual--ordered-line i:nth-child(2) { width: 17px; height: 17px; }
+.rules-visual--ordered-line i:nth-child(3) { width: 12px; height: 12px; border-width: 3px; }
 
 .rules-visual--cell {
-  border: 2px solid var(--accent-secondary);
+  border: 2px solid var(--rule-line);
   border-radius: 14px;
   background: var(--surface-raised);
   box-shadow: var(--shadow-glow);
+}
+
+.rules-visual--cell .rules-ring {
+  border-color: var(--rule-piece);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rule-piece) 38%, transparent);
 }
 
 .rules-card__button {
