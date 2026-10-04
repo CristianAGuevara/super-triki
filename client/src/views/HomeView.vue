@@ -64,9 +64,10 @@
                 <button
                   class="room-card__btn"
                   :disabled="!canProceed || room.phase === 'playing' || loading"
+                  :title="room.phase === 'playing' ? 'La partida ya comenzó; usa Espectar' : !canProceed ? 'Escribe tu nombre para unirte' : 'Unirse a la sala'"
                   @click="handleJoinPublic(room.roomId)"
                 >
-                  {{ loadingRoomId === room.roomId ? '...' : 'Unirse' }}
+                  {{ loadingRoomId === room.roomId ? '...' : room.phase === 'playing' ? 'En juego' : 'Unirse' }}
                 </button>
                 <button
                   class="room-card__spectator-btn"
