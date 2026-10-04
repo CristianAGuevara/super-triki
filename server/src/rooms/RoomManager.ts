@@ -14,6 +14,9 @@ export interface RoomState {
   createdAt:   number
   scores:      Record<number, number>
   roundNumber: number
+  hostSlot:    PlayerSlot
+  lastRoundPlayers: PlayerSlot[] | null
+  lastStartingPlayer: PlayerSlot | null
 }
 
 const rooms = new Map<string, RoomState>()
@@ -43,6 +46,9 @@ export const RoomManager = {
       createdAt:   Date.now(),
       scores:      {},
       roundNumber: 0,
+      hostSlot:    1,
+      lastRoundPlayers: null,
+      lastStartingPlayer: null,
     }
     rooms.set(roomId, room)
     socketToRoom.set(socketId, roomId)
@@ -78,7 +84,9 @@ export const RoomManager = {
       return { ok: false, error: room.phase === 'finished' ? 'La sala ha terminado' : 'La partida ya comenzó' }
     if (room.players.length >= 4)      return { ok: false, error: 'Sala llena' }
 
-    const slot = (room.players.length + 1) as PlayerSlot
+    const usedSlots = new Set(room.players.map(player => player.slot))
+    const slot = ([1, 2, 3, 4] as PlayerSlot[]).find(candidate => !usedSlots.has(candidate))
+    if (!slot) return { ok: false, error: 'Sala llena' }
     room.players.push({ slot, username, socketId })
     socketToRoom.set(socketId, roomId)
     return { ok: true, room }
@@ -100,6 +108,10 @@ export const RoomManager = {
     return room.players.find(p => p.socketId === socketId)?.slot ?? null
   },
 
+  getHostSlot(roomId: string): PlayerSlot | null {
+    return rooms.get(roomId)?.hostSlot ?? null
+  },
+
   removePlayer(socketId: string): { room: RoomState; slot: PlayerSlot; player: PlayerInfo } | null {
     const room = this.getRoomBySocket(socketId)
     if (!room) return null
@@ -108,6 +120,19 @@ export const RoomManager = {
     if (!player) return null
 
     const disconnectedPlayer = { ...player }
+
+    if (!room.game && room.phase === 'waiting') {
+      room.players = room.players.filter(p => p.socketId !== socketId)
+      socketToRoom.delete(socketId)
+      if (room.hostSlot === player.slot) {
+        room.hostSlot = room.players[0]?.slot ?? 1
+      }
+      if (room.players.length === 0 && !this.hasSpectators(room.roomId)) {
+        rooms.delete(room.roomId)
+      }
+      return { room, slot: player.slot, player: disconnectedPlayer }
+    }
+
     player.socketId = ''
     socketToRoom.delete(socketId)
 
@@ -182,8 +207,21 @@ export const RoomManager = {
   nextRound(roomId: string): PlayerSlot | null {
     const room = rooms.get(roomId)
     if (!room || room.players.length === 0) return null
-    room.roundNumber++
-    return room.players[room.roundNumber % room.players.length].slot
+
+    const slots = room.players.map(player => player.slot)
+    const samePlayers = room.lastRoundPlayers !== null &&
+      room.lastRoundPlayers.length === slots.length &&
+      room.lastRoundPlayers.every(slot => slots.includes(slot))
+
+    if (room.lastStartingPlayer !== null) room.roundNumber++
+
+    const startingPlayer = samePlayers && room.lastStartingPlayer !== null
+      ? slots[(slots.indexOf(room.lastStartingPlayer) + 1) % slots.length]
+      : slots[Math.floor(Math.random() * slots.length)]
+
+    room.lastRoundPlayers = slots
+    room.lastStartingPlayer = startingPlayer
+    return startingPlayer
   },
 
   getPublicRooms(): PublicRoomInfo[] {
@@ -207,6 +245,7 @@ export const RoomManager = {
       playerCount: room.players.length,
       scores:      room.scores,
       roundNumber: room.roundNumber,
+      hostSlot:    room.hostSlot,
     }
   },
 }

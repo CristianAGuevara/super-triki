@@ -46,7 +46,7 @@ const store     = useGameStore()
 const roomStore = useRoomStore()
 const emit = defineEmits<{ rematch: [] }>()
 
-const canRematch = computed(() => !roomStore.roomId || roomStore.mySlot === 1)
+const canRematch = computed(() => !roomStore.roomId || roomStore.mySlot === roomStore.hostSlot)
 
 const hostName = computed(() =>
   roomStore.players.find(player => player.slot === 1)?.username ?? 'el creador'

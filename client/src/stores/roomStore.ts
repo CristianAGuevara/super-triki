@@ -8,6 +8,7 @@ export const useRoomStore = defineStore('room', () => {
   const isPrivate    = ref(false)
   const phase        = ref<'idle' | 'waiting' | 'playing' | 'finished'>('idle')
   const mySlot       = ref<PlayerSlot | null>(null)
+  const hostSlot     = ref<PlayerSlot>(1)
   const players      = ref<PlayerInfo[]>([])
   const playerCount  = ref(0)
   const scores       = ref<Record<number, number>>({})
@@ -34,6 +35,7 @@ export const useRoomStore = defineStore('room', () => {
     name.value        = snapshot.name
     isPrivate.value   = snapshot.isPrivate
     phase.value       = snapshot.phase
+    hostSlot.value    = snapshot.hostSlot
     players.value     = snapshot.players
     playerCount.value = snapshot.playerCount
     scores.value      = snapshot.scores
@@ -70,6 +72,7 @@ export const useRoomStore = defineStore('room', () => {
     isPrivate.value    = false
     phase.value        = 'idle'
     mySlot.value       = null
+    hostSlot.value     = 1
     players.value      = []
     playerCount.value  = 0
     scores.value       = {}
@@ -81,7 +84,7 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   return {
-    roomId, name, isPrivate, phase, mySlot, players, playerCount,
+    roomId, name, isPrivate, phase, mySlot, hostSlot, players, playerCount,
     scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, error,
     setFromAck, setSpectating, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
   }

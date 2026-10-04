@@ -63,6 +63,7 @@ export interface RoomStateSnapshot {
   playerCount: number
   scores:      Record<number, number>
   roundNumber: number
+  hostSlot: PlayerSlot
 }
 
 export interface PublicRoomInfo {

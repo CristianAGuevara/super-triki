@@ -34,7 +34,7 @@
       <p class="lobby__count">{{ roomStore.playerCount }}/4 jugadores</p>
 
       <button
-        v-if="roomStore.mySlot === 1 && roomStore.playerCount >= 2"
+         v-if="roomStore.mySlot === roomStore.hostSlot && roomStore.playerCount >= 2"
         class="lobby__start-btn"
         @click="handleStart"
       >
@@ -43,7 +43,7 @@
 
       <div v-else class="lobby__waiting">
         <span class="lobby__dot" />
-        {{ roomStore.mySlot === 1 ? 'Esperando más jugadores...' : 'Esperando que el creador inicie...' }}
+         {{ roomStore.mySlot === roomStore.hostSlot ? 'Esperando más jugadores...' : 'Esperando que el creador inicie...' }}
       </div>
     </div>
 
@@ -183,7 +183,7 @@ const rulesShownCount = ref(getRulesShownCount())
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
 const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
 const canRestartAfterDisconnect = computed(() =>
-  roomStore.mySlot === 1 && connectedPlayerCount.value >= 2
+  roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount.value >= 2
 )
 
 watch(() => roomStore.phase, phase => {

@@ -178,12 +178,14 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (!room || room.phase !== 'waiting') return
 
     const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== 1) return
+    if (actingSlot !== RoomManager.getHostSlot(roomId)) return
     if (room.players.length < 2) return
 
     const slots = room.players.map(p => p.slot)
     RoomManager.initScores(roomId, slots)
-    const game = buildInitialGameState(slots)
+    const startingPlayer = RoomManager.nextRound(roomId)
+    if (!startingPlayer) return
+    const game = buildInitialGameState(slots, startingPlayer)
     RoomManager.setGame(roomId, game)
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
@@ -222,10 +224,11 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(newState))
 
     if (newState.winResult || newState.isDraw) {
-      room.phase = 'finished'
       if (newState.winResult) {
         RoomManager.addScore(normalizedPayload.roomId, newState.winResult.winner as PlayerSlot)
       }
+      room.game = null
+      room.phase = 'waiting'
       io.to(normalizedPayload.roomId).emit('room:state', RoomManager.toSnapshot(room))
       io.to(normalizedPayload.roomId).emit('game:over', {
         winResult:  newState.winResult,
@@ -242,12 +245,13 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const room = RoomManager.getRoom(roomId)
     if (!room || room.phase !== 'finished' || room.players.length < 2) return
     const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== 1) return
+    if (actingSlot !== RoomManager.getHostSlot(roomId)) return
     const connectedPlayers = room.players.filter(player => player.socketId)
     if (connectedPlayers.length < 2) return
     RoomManager.removeDisconnectedPlayers(roomId)
 
-    const startingPlayer = RoomManager.nextRound(roomId) ?? 1
+    const startingPlayer = RoomManager.nextRound(roomId)
+    if (!startingPlayer) return
     const game = buildInitialGameState(room.players.map(player => player.slot), startingPlayer)
     RoomManager.setGame(roomId, game)
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
@@ -262,6 +266,12 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (!result) return
 
     const { room, slot, player } = result
+
+    if (!room.game && room.phase === 'waiting') {
+      io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))
+      broadcastRoomList(io)
+      return
+    }
 
     socket.to(room.roomId).emit('player:left', {
       username:  player.username,

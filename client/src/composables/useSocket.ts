@@ -29,7 +29,7 @@ export function useSocket() {
 
     socket.on('game:over', result => {
       gameStore.applyGameOver(result)
-      roomStore.setPhase('finished')
+      if (roomStore.phase !== 'waiting') roomStore.setPhase('finished')
     })
 
     socket.on('player:joined', payload => {
