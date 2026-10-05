@@ -59,16 +59,16 @@
 
       <main class="room__main" :class="`room__main--${gameStore.players.length}p`">
         <div class="room__side room__side--left">
-          <PlayerPanel :player="gameStore.players[0]" :my-slot="roomStore.mySlot" />
-          <PlayerPanel v-if="gameStore.players[2]" :player="gameStore.players[2]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel :player="orderedPlayers[0]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel v-if="orderedPlayers[2]" :player="orderedPlayers[2]" :my-slot="roomStore.mySlot" />
         </div>
         <div class="room__center">
           <Board />
           <Scoreboard />
         </div>
         <div class="room__side room__side--right">
-          <PlayerPanel v-if="gameStore.players[1]" :player="gameStore.players[1]" :my-slot="roomStore.mySlot" />
-          <PlayerPanel v-if="gameStore.players[3]" :player="gameStore.players[3]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel v-if="orderedPlayers[1]" :player="orderedPlayers[1]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel v-if="orderedPlayers[3]" :player="orderedPlayers[3]" :my-slot="roomStore.mySlot" />
         </div>
       </main>
 
@@ -183,6 +183,13 @@ const rulesShownCount = ref(getRulesShownCount())
 
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
 const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
+const orderedPlayers = computed(() => {
+  if (roomStore.mySlot === null) return gameStore.players
+  return [
+    roomStore.mySlot,
+    ...gameStore.players.filter(player => player !== roomStore.mySlot),
+  ]
+})
 const canRestartAfterDisconnect = computed(() =>
   roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount.value >= 2
 )

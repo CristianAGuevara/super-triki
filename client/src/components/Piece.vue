@@ -1,21 +1,34 @@
 <template>
   <div
+    ref="pieceElement"
     v-draggable="dragPayload"
     class="piece"
-    :class="[`piece--${piece.size}`, `piece--player${piece.player}`, { 'piece--inventory': inInventory }]"
+    :class="[
+      `piece--${piece.size}`,
+      `piece--player${piece.player}`,
+      {
+        'piece--inventory': inInventory,
+        'piece--entry-hidden': entryAnimating,
+      },
+    ]"
     :title="`${sizeName} (J${piece.player})`"
   />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { Piece, DragPayload } from '@/types/game'
+import { computed, onMounted, ref } from 'vue'
+import type { Piece, PieceEntrySource, DragPayload } from '@/types/game'
 import { vDraggable } from '@/directives/vDraggable'
 
 const props = defineProps<{
   piece: Piece
   inInventory?: boolean
+  animateEntry?: boolean
+  entryFrom?: PieceEntrySource | null
 }>()
+
+const pieceElement = ref<HTMLElement | null>(null)
+const entryAnimating = ref(props.animateEntry === true && props.entryFrom !== null && props.entryFrom !== undefined)
 
 const dragPayload = computed<DragPayload>(() => ({
   pieceId: props.piece.id,
@@ -28,6 +41,45 @@ const sizeName = computed(() => {
   const names = { large: 'Grande', medium: 'Mediana', small: 'Pequeña' }
   return names[props.piece.size]
 })
+
+onMounted(() => {
+  if (entryAnimating.value) animateFromInventory()
+})
+
+function animateFromInventory() {
+  const target = pieceElement.value
+  const source = props.entryFrom
+  if (!target || !source) {
+    entryAnimating.value = false
+    return
+  }
+
+  const targetRect = target.getBoundingClientRect()
+  const ghost = target.cloneNode(true) as HTMLElement
+  ghost.classList.remove('piece--entry-hidden', 'piece--last-move')
+  ghost.classList.add('piece--flight')
+  ghost.style.left = `${source.left + source.width / 2}px`
+  ghost.style.top = `${source.top + source.height / 2}px`
+  ghost.style.width = `${source.width}px`
+  ghost.style.height = `${source.height}px`
+  document.body.appendChild(ghost)
+
+  let finished = false
+  const finish = () => {
+    if (finished) return
+    finished = true
+    ghost.remove()
+    entryAnimating.value = false
+  }
+
+  ghost.addEventListener('transitionend', finish, { once: true })
+  window.setTimeout(finish, 700)
+  requestAnimationFrame(() => {
+    ghost.style.left = `${targetRect.left + targetRect.width / 2}px`
+    ghost.style.top = `${targetRect.top + targetRect.height / 2}px`
+    ghost.style.transform = 'translate(-50%, -50%) scale(1) rotate(0)'
+  })
+}
 </script>
 
 <style scoped>
@@ -50,19 +102,23 @@ const sizeName = computed(() => {
 }
 
 .piece--last-move {
-  animation: piece-arrive 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2) both;
+  animation: none;
 }
 
-@keyframes piece-arrive {
-  from {
-    opacity: 0.1;
-    transform: translateY(-34px) scale(0.35) rotate(-18deg);
-  }
-  70% { transform: translateY(3px) scale(1.08) rotate(3deg); }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1) rotate(0);
-  }
+.piece--entry-hidden {
+  opacity: 0 !important;
+}
+
+.piece--flight {
+  position: fixed !important;
+  z-index: 500;
+  pointer-events: none !important;
+  margin: 0;
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) scale(0.72) rotate(-10deg);
+  transition: left 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2),
+    top 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2),
+    transform 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2);
 }
 
 /* Sizes — hollow ring style. Border widths scale with size */

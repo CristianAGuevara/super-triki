@@ -33,6 +33,8 @@
           :piece="store.pieceAt(row, col, size)!"
           :in-inventory="false"
           :class="{ 'piece--last-move': shouldAnimateLastMove(size) }"
+          :animate-entry="shouldAnimateLastMove(size)"
+          :entry-from="store.lastMoveSource"
         />
         <!-- Empty placeholder circle -->
         <div v-else class="cell__ring-empty" />

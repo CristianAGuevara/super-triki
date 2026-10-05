@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Board, LastMove, Piece, Player, Size, WinResult, DragPayload } from '@/types/game'
+import type { Board, LastMove, Piece, PieceEntrySource, Player, Size, WinResult, DragPayload } from '@/types/game'
 import type { GameStateSnapshot, GameOverPayload } from '@/types/socket'
 import { SIZE_ORDER } from '@/types/game'
 import { getAllLines, emptyBoard } from '@/utils/boardUtils'
@@ -30,6 +30,7 @@ export const useGameStore = defineStore('game', () => {
   const moveNumber = ref(0)
   const hasServerState = ref(false)
   const lastMove = ref<LastMove | null>(null)
+  const lastMoveSource = ref<PieceEntrySource | null>(null)
   const audioStore = useAudioStore()
 
   const lines = computed(() => getAllLines(3))
@@ -82,6 +83,7 @@ export const useGameStore = defineStore('game', () => {
     moveNumber.value = 0
     hasServerState.value = false
     lastMove.value = null
+    lastMoveSource.value = null
   }
 
   function resetGame() {
@@ -170,6 +172,22 @@ export const useGameStore = defineStore('game', () => {
     currentPlayer.value = state.currentPlayer
     moveNumber.value    = state.moveNumber
     lastMove.value      = state.lastMove ?? null
+    lastMoveSource.value = null
+    const roomStore = useRoomStore()
+    const observedMove = state.lastMove
+    if (observedMove && roomStore.roomId && roomStore.mySlot !== observedMove.player) {
+      const sourceElement = Array.from(document.querySelectorAll<HTMLElement>('[data-piece-id]'))
+        .find(element => element.dataset.pieceId === observedMove.pieceId)
+      if (sourceElement) {
+        const rect = sourceElement.getBoundingClientRect()
+        lastMoveSource.value = {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        }
+      }
+    }
     hasServerState.value = true
     if (state.players) players.value = state.players as Player[]
     winResult.value     = null
@@ -209,6 +227,7 @@ export const useGameStore = defineStore('game', () => {
     isDraw,
     dragState,
     lastMove,
+    lastMoveSource,
     isGameOver,
     highlightedSlots,
     canDrop,

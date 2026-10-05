@@ -22,6 +22,7 @@
         <div
           v-if="pieceOfSet('large', i)"
           v-draggable="dragPayload(pieceOfSet('large', i)!)"
+          :data-piece-id="pieceOfSet('large', i)!.id"
           class="stack-ring stack-ring--large"
           :class="[`stack-ring--player${player}`, { 'stack-ring--locked': !canDrag }]"
           :title="`Grande (J${player})`"
@@ -32,6 +33,7 @@
         <div
           v-if="pieceOfSet('medium', i)"
           v-draggable="dragPayload(pieceOfSet('medium', i)!)"
+          :data-piece-id="pieceOfSet('medium', i)!.id"
           class="stack-ring stack-ring--medium"
           :class="[`stack-ring--player${player}`, { 'stack-ring--locked': !canDrag }]"
           :title="`Mediana (J${player})`"
@@ -42,6 +44,7 @@
         <div
           v-if="pieceOfSet('small', i)"
           v-draggable="dragPayload(pieceOfSet('small', i)!)"
+          :data-piece-id="pieceOfSet('small', i)!.id"
           class="stack-ring stack-ring--small"
           :class="[`stack-ring--player${player}`, { 'stack-ring--locked': !canDrag }]"
           :title="`Pequeña (J${player})`"

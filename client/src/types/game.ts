@@ -19,6 +19,13 @@ export interface LastMove {
   size: Size
 }
 
+export interface PieceEntrySource {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
 export interface Cell {
   large: Piece | null
   medium: Piece | null
