@@ -367,7 +367,110 @@ function goHome() {
 @keyframes spectator-spin { to { transform: rotate(360deg); } }
 @keyframes spectator-pulse { from { opacity: 0.45; } to { opacity: 1; } }
 
-@media (max-width: 980px) {
+/* Wide displays: keep the complete board in the viewport and surround it
+   with the player cards instead of stacking everything on the left. */
+@media (orientation: landscape) and (min-width: 700px) {
+  .spectator {
+    height: calc(100vh - 53px);
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px clamp(16px, 3vw, 48px);
+  }
+
+  .spectator__header {
+    height: 44px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+
+  .spectator h1 {
+    display: inline-block;
+    max-width: 45vw;
+    margin: 0 8px 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    font-size: clamp(18px, 2.4vw, 30px);
+    letter-spacing: -0.8px;
+    white-space: nowrap;
+  }
+
+  .spectator__eyebrow { display: inline-flex; font-size: 8px; letter-spacing: 1.5px; }
+  .spectator__room-id { font-size: 9px; }
+  .spectator__status { padding: 6px 10px; font-size: 9px; }
+
+  .spectator__stage {
+    display: grid;
+    grid-template-columns: minmax(165px, 200px) minmax(300px, 1fr) minmax(165px, 200px);
+    grid-template-rows: minmax(64px, auto) minmax(0, 1fr) minmax(64px, auto);
+    grid-template-areas:
+      "top top score"
+      "left center right"
+      "bottom bottom .";
+    gap: 8px 10px;
+    height: calc(100vh - 115px);
+    min-height: 0;
+    align-items: center;
+  }
+
+  .spectator__players { display: contents; }
+  .spectator__players :deep(.player-panel) {
+    align-self: center;
+    width: 100%;
+    max-width: 200px;
+    padding: 8px 6px;
+  }
+  .spectator__players :deep(.player-panel:nth-child(1)) { grid-area: top; justify-self: center; }
+  .spectator__players :deep(.player-panel:nth-child(2)) { grid-area: right; }
+  .spectator__players :deep(.player-panel:nth-child(3)) { grid-area: bottom; justify-self: center; }
+  .spectator__players :deep(.player-panel:nth-child(4)) { grid-area: left; }
+  .spectator__players :deep(.player-panel__header) { margin-bottom: 6px; }
+  .spectator__players :deep(.player-panel__sets) { gap: 4px; }
+  .spectator__players :deep(.player-panel__stack) { width: 48px; height: 48px; }
+  .spectator__players :deep(.stack-ring--large) { width: 48px; height: 48px; border-width: 4px; }
+  .spectator__players :deep(.stack-ring--medium) { width: 31px; height: 31px; border-width: 3px; }
+  .spectator__players :deep(.stack-ring--small) { width: 17px; height: 17px; border-width: 3px; }
+
+  .spectator__center {
+    grid-area: center;
+    min-width: 0;
+    min-height: 0;
+    gap: 4px;
+  }
+
+  .spectator__turn { padding: 5px 11px; }
+  .spectator__turn-label { font-size: 8px; }
+  .spectator__turn strong { font-size: 12px; }
+
+  .spectator__board-wrap {
+    width: 386px;
+    height: 386px;
+    margin: 0;
+    filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.2));
+    transform: scale(clamp(0.65, 10vh, 1));
+    transform-origin: center;
+  }
+
+  .spectator__result { font-size: 8px; }
+  .spectator__result strong { font-size: 16px; }
+  .spectator__paused { font-size: 8px; }
+
+  .spectator__scoreboard {
+    grid-area: score;
+    align-self: start;
+    width: 100%;
+    max-width: 200px;
+    gap: 6px;
+  }
+
+  .spectator__scoreboard :deep(.scoreboard) { padding: 8px; }
+  .spectator__scoreboard :deep(.scoreboard__header) { margin-bottom: 5px; }
+  .spectator__scoreboard :deep(.scoreboard__row) { padding: 3px 4px; gap: 4px; }
+  .spectator__scoreboard :deep(.scoreboard__label) { display: none; }
+  .spectator__rules { padding: 6px 9px; font-size: 13px; }
+}
+
+@media (max-width: 980px) and (orientation: portrait) {
   .spectator__stage {
     grid-template-columns: 1fr 1fr;
     min-height: auto;
