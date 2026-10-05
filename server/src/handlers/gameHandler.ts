@@ -33,12 +33,14 @@ function isValidMovePayload(value: unknown): value is GameMovePayload {
 }
 
 function emitCurrentGame(socket: TypedSocket, room: ReturnType<typeof RoomManager.getRoom>): void {
-  if (!room?.game) return
-  socket.emit('game:state', toSnapshot(room.game))
-  if (room.game.winResult || room.game.isDraw) {
+  const game = room?.game ?? room?.lastGame
+  if (!game) return
+
+  if (room?.game) socket.emit('game:state', toSnapshot(game))
+  if (game.winResult || game.isDraw) {
     socket.emit('game:over', {
-      winResult: room.game.winResult,
-      finalState: toSnapshot(room.game),
+      winResult: game.winResult,
+      finalState: toSnapshot(game),
     })
   }
 }
@@ -229,6 +231,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       if (newState.winResult) {
         RoomManager.addScore(normalizedPayload.roomId, newState.winResult.winner as PlayerSlot)
       }
+      room.lastGame = newState
       room.game = null
       room.phase = 'waiting'
       io.to(normalizedPayload.roomId).emit('room:state', RoomManager.toSnapshot(room))

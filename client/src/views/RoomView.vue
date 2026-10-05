@@ -44,8 +44,19 @@
 
       <div v-else class="lobby__waiting">
         <span class="lobby__dot" />
-         {{ roomStore.mySlot === roomStore.hostSlot ? 'Esperando más jugadores...' : 'Esperando que el creador inicie...' }}
+        {{ roomStore.mySlot === roomStore.hostSlot ? 'Esperando más jugadores...' : 'Esperando que el creador inicie...' }}
       </div>
+
+      <section v-if="gameStore.isGameOver" class="lobby__last-game">
+        <div class="lobby__last-game-heading">
+          <span>Última partida</span>
+          <strong>{{ lastGameResult }}</strong>
+        </div>
+        <div class="lobby__board-wrap">
+          <Board />
+        </div>
+        <p class="lobby__last-game-hint">Las fichas resaltadas forman la jugada ganadora.</p>
+      </section>
     </div>
 
     <!-- ── Game ── -->
@@ -193,6 +204,13 @@ const orderedPlayers = computed(() => {
 const canRestartAfterDisconnect = computed(() =>
   roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount.value >= 2
 )
+
+const lastGameResult = computed(() => {
+  if (gameStore.isDraw) return 'Empate'
+  const winner = gameStore.winResult?.winner
+  return roomStore.players.find(player => player.slot === winner)?.username
+    ?? (winner ? `Jugador ${winner}` : 'Partida terminada')
+})
 
 watch(() => roomStore.phase, phase => {
   if (phase !== 'playing' || rulesShownCount.value >= RULES_DISPLAY_LIMIT) return
@@ -468,6 +486,58 @@ function closeRules() {
   padding: 18px;
   background: var(--overlay-bg);
   backdrop-filter: blur(8px);
+}
+
+.lobby__last-game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 430px);
+  margin-top: 8px;
+  padding: 16px 14px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: var(--surface-muted);
+}
+
+.lobby__last-game-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.lobby__last-game-heading strong {
+  color: var(--accent-secondary);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.lobby__board-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 310px;
+  height: 312px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.lobby__board-wrap :deep(.board) {
+  transform: scale(0.78);
+  transform-origin: top center;
+}
+
+.lobby__last-game-hint {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
 }
 
 .rules-card {

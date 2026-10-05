@@ -11,6 +11,7 @@ export interface RoomState {
   players:     PlayerInfo[]
   phase:       'waiting' | 'playing' | 'finished'
   game:        RoomGameState | null
+  lastGame:    RoomGameState | null
   createdAt:   number
   scores:      Record<number, number>
   roundNumber: number
@@ -43,6 +44,7 @@ export const RoomManager = {
       players:     [{ slot: 1, username, socketId }],
       phase:       'waiting',
       game:        null,
+      lastGame:    null,
       createdAt:   Date.now(),
       scores:      {},
       roundNumber: 0,
