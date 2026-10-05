@@ -1,6 +1,9 @@
 <template>
   <div
     class="cell"
+    data-board-cell
+    :data-row="row"
+    :data-col="col"
     :class="{
       'cell--can-drop': canDropAny,
       'cell--hover': isHovered,
