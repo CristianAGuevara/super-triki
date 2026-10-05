@@ -1,4 +1,4 @@
-import type { Board, Piece, PlayerSlot } from '../types/game.js'
+import type { Board, LastMove, Piece, PlayerSlot } from '../types/game.js'
 import type { GameMovePayload } from '../types/socket.js'
 import { SIZE_ORDER } from '../types/game.js'
 import { emptyBoard, getAllLines } from './boardUtils.js'
@@ -15,6 +15,7 @@ export interface RoomGameState {
   winResult:     ReturnType<typeof detectWin>
   isDraw:        boolean
   players:       PlayerSlot[]
+  lastMove:      LastMove | null
 }
 
 function buildInventory(slot: PlayerSlot): Piece[] {
@@ -43,6 +44,7 @@ export function buildInitialGameState(playerCount: number | PlayerSlot[], starti
     winResult:     null,
     isDraw:        false,
     players,
+    lastMove:      null,
   }
 }
 
@@ -124,6 +126,13 @@ export function applyMove(
     winResult,
     isDraw,
     players:       state.players,
+    lastMove: {
+      pieceId,
+      player: piece.player,
+      row: targetRow,
+      col: targetCol,
+      size: targetSize,
+    },
   }
 }
 
@@ -134,5 +143,6 @@ export function toSnapshot(state: RoomGameState) {
     currentPlayer: state.currentPlayer,
     moveNumber:    state.moveNumber,
     players:       state.players,
+    lastMove:      state.lastMove,
   }
 }

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Board, Piece, Player, Size, WinResult, DragPayload } from '@/types/game'
+import type { Board, LastMove, Piece, Player, Size, WinResult, DragPayload } from '@/types/game'
 import type { GameStateSnapshot, GameOverPayload } from '@/types/socket'
 import { SIZE_ORDER } from '@/types/game'
 import { getAllLines, emptyBoard } from '@/utils/boardUtils'
@@ -29,6 +29,7 @@ export const useGameStore = defineStore('game', () => {
   const dragState = ref<DragPayload | null>(null)
   const moveNumber = ref(0)
   const hasServerState = ref(false)
+  const lastMove = ref<LastMove | null>(null)
   const audioStore = useAudioStore()
 
   const lines = computed(() => getAllLines(3))
@@ -80,6 +81,7 @@ export const useGameStore = defineStore('game', () => {
     dragState.value = null
     moveNumber.value = 0
     hasServerState.value = false
+    lastMove.value = null
   }
 
   function resetGame() {
@@ -130,6 +132,13 @@ export const useGameStore = defineStore('game', () => {
 
     inv.splice(idx, 1)
     board.value[targetRow][targetCol][targetSize] = piece
+    lastMove.value = {
+      pieceId,
+      player: piece.player,
+      row: targetRow,
+      col: targetCol,
+      size: targetSize,
+    }
     moveNumber.value++
     audioStore.playSfx('move')
 
@@ -160,6 +169,7 @@ export const useGameStore = defineStore('game', () => {
     inventories.value   = state.inventories as Record<Player, Piece[]>
     currentPlayer.value = state.currentPlayer
     moveNumber.value    = state.moveNumber
+    lastMove.value      = state.lastMove ?? null
     hasServerState.value = true
     if (state.players) players.value = state.players as Player[]
     winResult.value     = null
@@ -198,6 +208,7 @@ export const useGameStore = defineStore('game', () => {
     winResult,
     isDraw,
     dragState,
+    lastMove,
     isGameOver,
     highlightedSlots,
     canDrop,

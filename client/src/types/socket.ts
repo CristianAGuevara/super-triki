@@ -1,4 +1,4 @@
-import type { Board, Piece, Size, WinResult } from '@/types/game'
+import type { Board, LastMove, Piece, Size, WinResult } from '@/types/game'
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
@@ -79,6 +79,7 @@ export interface GameStateSnapshot {
   currentPlayer: PlayerSlot
   moveNumber:    number
   players:       PlayerSlot[]
+  lastMove?: LastMove | null
 }
 
 export interface GameOverPayload {

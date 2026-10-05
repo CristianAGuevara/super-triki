@@ -12,6 +12,14 @@ export interface Piece {
   size: Size
 }
 
+export interface LastMove {
+  pieceId: string
+  player: Player
+  row: number
+  col: number
+  size: Size
+}
+
 export interface Cell {
   large: Piece | null
   medium: Piece | null

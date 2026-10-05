@@ -1,4 +1,4 @@
-import type { Board, Piece, Size, WinResult, PlayerSlot } from './game.js'
+import type { Board, LastMove, Piece, Size, WinResult, PlayerSlot } from './game.js'
 
 // ── Client → Server ──────────────────────────────────────────────
 
@@ -90,6 +90,7 @@ export interface GameStateSnapshot {
   currentPlayer: PlayerSlot
   moveNumber:    number
   players:       PlayerSlot[]
+  lastMove:      LastMove | null
 }
 
 export interface GameOverPayload {
