@@ -104,6 +104,10 @@ export const useGameStore = defineStore('game', () => {
 
     // ── Multiplayer path: emit to server, server broadcasts back ──
     if (roomStore.roomId) {
+      if (!roomStore.connected) {
+        roomStore.setError('Reconectando con la sala…')
+        return false
+      }
       getSocket().emit('game:move', {
         roomId:     roomStore.roomId,
         pieceId,

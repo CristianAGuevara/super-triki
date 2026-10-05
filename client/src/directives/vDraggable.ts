@@ -10,6 +10,7 @@ function isDragAllowed(payload: DragPayload): boolean {
   if (store.isGameOver) return false
   // In multiplayer: piece must be mine AND it must be my turn
   if (roomStore.roomId) {
+    if (!roomStore.connected) return false
     return roomStore.mySlot === payload.player && store.currentPlayer === payload.player
   }
   // Solo: only current player can drag their own pieces

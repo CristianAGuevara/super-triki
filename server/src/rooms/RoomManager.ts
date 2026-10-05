@@ -122,14 +122,20 @@ export const RoomManager = {
     const disconnectedPlayer = { ...player }
 
     if (!room.game && room.phase === 'waiting') {
-      room.players = room.players.filter(p => p.socketId !== socketId)
+      player.socketId = ''
       socketToRoom.delete(socketId)
-      if (room.hostSlot === player.slot) {
-        room.hostSlot = room.players[0]?.slot ?? 1
-      }
-      if (room.players.length === 0 && !this.hasSpectators(room.roomId)) {
-        rooms.delete(room.roomId)
-      }
+      setTimeout(() => {
+        const currentRoom = rooms.get(room.roomId)
+        const currentPlayer = currentRoom?.players.find(p => p.slot === player.slot)
+        if (!currentRoom || currentPlayer?.socketId !== '') return
+        currentRoom.players = currentRoom.players.filter(p => p.slot !== player.slot)
+        if (currentRoom.hostSlot === player.slot) {
+          currentRoom.hostSlot = currentRoom.players[0]?.slot ?? 1
+        }
+        if (currentRoom.players.length === 0 && !this.hasSpectators(room.roomId)) {
+          rooms.delete(room.roomId)
+        }
+      }, RECONNECT_GRACE_MS)
       return { room, slot: player.slot, player: disconnectedPlayer }
     }
 

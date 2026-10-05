@@ -4,6 +4,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useUserStore } from '@/stores/userStore'
 import type { GameMovePayload, RoomJoinAck, SpectateJoinAck } from '@/types/socket'
 
 export function useSocket() {
@@ -12,8 +13,32 @@ export function useSocket() {
   const gameStore  = useGameStore()
   const lobbyStore = useLobbyStore()
   const audioStore = useAudioStore()
+  const userStore = useUserStore()
+
+  async function resyncRoomAfterReconnect() {
+    roomStore.setConnection(true)
+    if (!roomStore.roomId) return
+
+    if (roomStore.isSpectator) {
+      const result = await emitJoinSpectator(roomStore.roomId)
+      if (result.ok && result.roomState) roomStore.setRoomState(result.roomState)
+      return
+    }
+
+    if (!userStore.username) return
+    const result = await emitJoinRoom(roomStore.roomId, userStore.username)
+    if (!result.ok) {
+      roomStore.setError(result.error ?? 'No se pudo recuperar la sala')
+      return
+    }
+    if (result.roomState) roomStore.setRoomState(result.roomState)
+  }
 
   function registerListeners() {
+    roomStore.setConnection(socket.connected)
+    socket.on('connect', resyncRoomAfterReconnect)
+    socket.on('disconnect', () => roomStore.setConnection(false))
+
     socket.on('rooms:list', rooms => {
       lobbyStore.setRooms(rooms)
     })
@@ -48,6 +73,8 @@ export function useSocket() {
   }
 
   function removeListeners() {
+    socket.off('connect', resyncRoomAfterReconnect)
+    socket.off('disconnect')
     socket.off('rooms:list')
     socket.off('room:state')
     socket.off('game:state')

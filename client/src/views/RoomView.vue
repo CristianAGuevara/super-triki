@@ -34,11 +34,12 @@
       <p class="lobby__count">{{ roomStore.playerCount }}/4 jugadores</p>
 
       <button
-         v-if="roomStore.mySlot === roomStore.hostSlot && roomStore.playerCount >= 2"
+         v-if="roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount >= 2"
         class="lobby__start-btn"
+        :disabled="!roomStore.connected"
         @click="handleStart"
       >
-        Iniciar partida
+        {{ roomStore.connected ? 'Iniciar partida' : 'Reconectando…' }}
       </button>
 
       <div v-else class="lobby__waiting">

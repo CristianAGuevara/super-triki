@@ -179,7 +179,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
     if (actingSlot !== RoomManager.getHostSlot(roomId)) return
-    if (room.players.length < 2) return
+    if (room.players.filter(player => player.socketId).length < 2) return
+
+    RoomManager.removeDisconnectedPlayers(roomId)
 
     const slots = room.players.map(p => p.slot)
     RoomManager.initScores(roomId, slots)

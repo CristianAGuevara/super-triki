@@ -16,6 +16,7 @@ export const useRoomStore = defineStore('room', () => {
   const opponentLeft = ref(false)
   const disconnectedPlayer = ref<{ username: string; slot: PlayerSlot } | null>(null)
   const isSpectator = ref(false)
+  const connected = ref(false)
   const error        = ref<string | null>(null)
 
   function setFromAck(ackRoomId: string, slot: PlayerSlot) {
@@ -28,6 +29,10 @@ export const useRoomStore = defineStore('room', () => {
   function setSpectating(value: boolean) {
     isSpectator.value = value
     if (value) mySlot.value = null
+  }
+
+  function setConnection(value: boolean) {
+    connected.value = value
   }
 
   function setRoomState(snapshot: RoomStateSnapshot) {
@@ -80,12 +85,13 @@ export const useRoomStore = defineStore('room', () => {
     opponentLeft.value = false
     disconnectedPlayer.value = null
     isSpectator.value = false
+    connected.value = false
     error.value        = null
   }
 
   return {
     roomId, name, isPrivate, phase, mySlot, hostSlot, players, playerCount,
-    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, error,
-    setFromAck, setSpectating, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
+    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, error,
+    setFromAck, setSpectating, setConnection, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
   }
 })
