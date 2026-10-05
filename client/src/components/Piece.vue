@@ -49,6 +49,22 @@ const sizeName = computed(() => {
   cursor: grabbing;
 }
 
+.piece--last-move {
+  animation: piece-arrive 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2) both;
+}
+
+@keyframes piece-arrive {
+  from {
+    opacity: 0.1;
+    transform: translateY(-34px) scale(0.35) rotate(-18deg);
+  }
+  70% { transform: translateY(3px) scale(1.08) rotate(3deg); }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0);
+  }
+}
+
 /* Sizes — hollow ring style. Border widths scale with size */
 .piece--large  { width: var(--size-large);  height: var(--size-large);  border-width: 7px; }
 .piece--medium { width: var(--size-medium); height: var(--size-medium); border-width: 5px; }

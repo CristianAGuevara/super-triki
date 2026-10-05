@@ -32,6 +32,7 @@
           v-if="store.pieceAt(row, col, size)"
           :piece="store.pieceAt(row, col, size)!"
           :in-inventory="false"
+          :class="{ 'piece--last-move': shouldAnimateLastMove(size) }"
         />
         <!-- Empty placeholder circle -->
         <div v-else class="cell__ring-empty" />
@@ -45,6 +46,7 @@ import { computed, ref } from 'vue'
 import type { Size } from '@/types/game'
 import { SIZE_ORDER } from '@/types/game'
 import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
 import { useDragDrop } from '@/composables/useDragDrop'
 import Piece from './Piece.vue'
 
@@ -54,6 +56,7 @@ const props = defineProps<{
 }>()
 
 const store = useGameStore()
+const roomStore = useRoomStore()
 const { onDragOver, onDrop } = useDragDrop(props.row, props.col)
 
 const isHovered = ref(false)
@@ -72,6 +75,14 @@ function isHighlighted(size: Size) {
 function isLastMove(size: Size) {
   const move = store.lastMove
   return move?.row === props.row && move.col === props.col && move.size === size
+}
+
+function shouldAnimateLastMove(size: Size) {
+  const move = store.lastMove
+  if (!move || move.row !== props.row || move.col !== props.col || move.size !== size) return false
+  // The player who placed it already saw their gesture. Opponents and
+  // spectators get the arrival animation.
+  return roomStore.roomId !== null && roomStore.mySlot !== move.player
 }
 
 function handleDragEnter(e: DragEvent) {
@@ -167,7 +178,7 @@ function handleDrop(e: DragEvent) {
 .cell__ring--last-move::after {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: -3px;
   border: 2px dashed var(--accent-primary);
   border-radius: 50%;
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary) 55%, transparent);
