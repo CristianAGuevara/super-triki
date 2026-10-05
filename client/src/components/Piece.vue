@@ -62,6 +62,7 @@ function animateFromInventory() {
   ghost.style.top = `${source.top + source.height / 2}px`
   ghost.style.width = `${source.width}px`
   ghost.style.height = `${source.height}px`
+  ghost.style.willChange = 'left, top, transform, opacity'
   document.body.appendChild(ghost)
 
   let finished = false
@@ -72,13 +73,35 @@ function animateFromInventory() {
     entryAnimating.value = false
   }
 
-  ghost.addEventListener('transitionend', finish, { once: true })
-  window.setTimeout(finish, 700)
-  requestAnimationFrame(() => {
-    ghost.style.left = `${targetRect.left + targetRect.width / 2}px`
-    ghost.style.top = `${targetRect.top + targetRect.height / 2}px`
-    ghost.style.transform = 'translate(-50%, -50%) scale(1) rotate(0)'
-  })
+  // Force the initial position to be painted before starting the flight.
+  void ghost.offsetWidth
+  const from = {
+    left: `${source.left + source.width / 2}px`,
+    top: `${source.top + source.height / 2}px`,
+    transform: 'translate(-50%, -50%) scale(0.72) rotate(-10deg)',
+  }
+  const to = {
+    left: `${targetRect.left + targetRect.width / 2}px`,
+    top: `${targetRect.top + targetRect.height / 2}px`,
+    transform: 'translate(-50%, -50%) scale(1) rotate(0)',
+  }
+
+  if (typeof ghost.animate === 'function') {
+    const animation = ghost.animate([from, to], {
+      duration: 550,
+      easing: 'cubic-bezier(0.2, 0.85, 0.3, 1.2)',
+      fill: 'forwards',
+    })
+    animation.addEventListener('finish', finish, { once: true })
+  } else {
+    ghost.addEventListener('transitionend', finish, { once: true })
+    requestAnimationFrame(() => {
+      ghost.style.left = to.left
+      ghost.style.top = to.top
+      ghost.style.transform = to.transform
+    })
+  }
+  window.setTimeout(finish, 750)
 }
 </script>
 
