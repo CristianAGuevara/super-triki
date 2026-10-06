@@ -29,13 +29,9 @@
     </div>
 
     <main v-else class="spectator__stage">
-      <section class="spectator__players">
-        <PlayerPanel
-          v-for="player in roomStore.players"
-          :key="player.slot"
-          :player="player.slot"
-          :my-slot="null"
-        />
+      <section class="spectator__side spectator__side--left">
+        <PlayerPanel v-if="roomStore.players[0]" :player="roomStore.players[0].slot" :my-slot="null" />
+        <PlayerPanel v-if="roomStore.players[2]" :player="roomStore.players[2].slot" :my-slot="null" />
       </section>
 
       <section class="spectator__center">
@@ -55,15 +51,19 @@
         <div v-else-if="roomStore.phase === 'finished'" class="spectator__paused">
           PARTIDA EN PAUSA · ESPERANDO AL HOST
         </div>
+        <div class="spectator__scoreboard">
+          <Scoreboard />
+        </div>
       </section>
 
-      <aside class="spectator__scoreboard">
-        <Scoreboard />
+      <section class="spectator__side spectator__side--right">
+        <PlayerPanel v-if="roomStore.players[1]" :player="roomStore.players[1].slot" :my-slot="null" />
+        <PlayerPanel v-if="roomStore.players[3]" :player="roomStore.players[3].slot" :my-slot="null" />
         <div class="spectator__rules">
           <span>3×3×3</span>
           <small>STACK ARENA</small>
         </div>
-      </aside>
+      </section>
     </main>
   </div>
 </template>
@@ -543,5 +543,111 @@ function goHome() {
   .spectator__players { order: 2; width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }
   .spectator__scoreboard { order: 3; width: min(100%, 300px); }
   .spectator__board-wrap { transform: scale(0.82); margin: 4px 0; }
+}
+
+/* Final spectator composition: the same left / board / right arrangement as
+   the game room, with a board size derived from the viewport height. */
+.spectator__side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.spectator__side :deep(.player-panel) { width: 100%; min-width: 0; }
+
+@media (orientation: landscape) and (min-width: 700px) {
+  .spectator__stage {
+    display: grid;
+    grid-template-columns: minmax(150px, 250px) minmax(0, 1fr) minmax(150px, 250px);
+    grid-template-areas: "left center right";
+    align-items: center;
+    gap: clamp(10px, 2vw, 28px);
+    height: calc(100vh - 115px);
+    min-height: 0;
+  }
+
+  .spectator__side--left { grid-area: left; }
+  .spectator__side--right { grid-area: right; }
+
+  .spectator__center {
+    grid-area: center;
+    min-width: 0;
+    min-height: 0;
+    gap: 5px;
+  }
+
+  .spectator__board-wrap {
+    --spectator-cell: clamp(62px, 10vh, 110px);
+    --spectator-gap: calc(var(--spectator-cell) * 0.11);
+    --spectator-padding: calc(var(--spectator-cell) * 0.145);
+    width: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
+    height: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
+    margin: 0 auto;
+    transform: none;
+  }
+
+  .spectator__board-wrap :deep(.board) {
+    gap: var(--spectator-gap);
+    padding: var(--spectator-padding);
+  }
+
+  .spectator__board-wrap :deep(.cell) {
+    width: var(--spectator-cell);
+    height: var(--spectator-cell);
+  }
+
+  .spectator__board-wrap :deep(.cell__stack) {
+    width: calc(var(--spectator-cell) * 0.76);
+    height: calc(var(--spectator-cell) * 0.76);
+  }
+
+  .spectator__board-wrap :deep(.cell__ring--large) {
+    width: calc(var(--spectator-cell) * 0.76);
+    height: calc(var(--spectator-cell) * 0.76);
+  }
+
+  .spectator__board-wrap :deep(.cell__ring--medium) {
+    width: calc(var(--spectator-cell) * 0.51);
+    height: calc(var(--spectator-cell) * 0.51);
+  }
+
+  .spectator__board-wrap :deep(.cell__ring--small) {
+    width: calc(var(--spectator-cell) * 0.255);
+    height: calc(var(--spectator-cell) * 0.255);
+  }
+
+  .spectator__board-wrap :deep(.piece--large) {
+    width: calc(var(--spectator-cell) * 0.69);
+    height: calc(var(--spectator-cell) * 0.69);
+  }
+
+  .spectator__board-wrap :deep(.piece--medium) {
+    width: calc(var(--spectator-cell) * 0.44);
+    height: calc(var(--spectator-cell) * 0.44);
+  }
+
+  .spectator__board-wrap :deep(.piece--small) {
+    width: calc(var(--spectator-cell) * 0.2);
+    height: calc(var(--spectator-cell) * 0.2);
+  }
+
+  .spectator__scoreboard {
+    width: min(100%, 220px);
+    margin: 0 auto;
+  }
+
+  .spectator__scoreboard :deep(.scoreboard) {
+    min-width: 0;
+    padding: 8px;
+  }
+}
+
+@media (orientation: portrait) {
+  .spectator__stage { display: flex; flex-direction: column; min-height: auto; }
+  .spectator__center { order: 1; width: 100%; }
+  .spectator__side--left { order: 2; width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .spectator__side--right { order: 3; width: min(100%, 300px); }
 }
 </style>
