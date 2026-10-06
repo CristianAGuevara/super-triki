@@ -315,6 +315,35 @@ function goHome() {
 @keyframes spectator-spin { to { transform: rotate(360deg); } }
 @keyframes spectator-pulse { from { opacity: .45; } to { opacity: 1; } }
 
+@media (orientation: landscape) and (min-width: 700px) {
+  .spectator {
+    height: calc(100vh - 42px);
+    min-height: 0;
+    overflow: hidden;
+    padding: 8px 24px;
+  }
+
+  .spectator__header {
+    width: min(1100px, 100%);
+    height: 34px;
+    margin-bottom: 7px;
+  }
+
+  .spectator h1 { font-size: clamp(18px, 2.2vw, 28px); }
+  .spectator__eyebrow { font-size: 8px; }
+  .spectator__status { padding: 5px 10px; font-size: 8px; }
+
+  .spectator__main {
+    grid-template-columns: 250px minmax(0, 1fr) 250px;
+    gap: 24px;
+    width: min(1100px, 100%);
+    height: calc(100vh - 92px);
+    margin: 0 auto;
+  }
+
+  .spectator__board { --spectator-cell: clamp(72px, 18vh, 110px); }
+}
+
 @media (max-width: 700px), (orientation: portrait) {
   .spectator { padding: 16px; }
   .spectator__header { align-items: flex-start; }
