@@ -70,16 +70,16 @@
 
       <main class="room__main" :class="`room__main--${gameStore.players.length}p`">
         <div class="room__side room__side--left">
-          <PlayerPanel :player="orderedPlayers[0]" :my-slot="roomStore.mySlot" />
-          <PlayerPanel v-if="orderedPlayers[2]" :player="orderedPlayers[2]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel class="room__player room__player--mine" :player="orderedPlayers[0]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel v-if="orderedPlayers[2]" class="room__player" :player="orderedPlayers[2]" :my-slot="roomStore.mySlot" />
         </div>
         <div class="room__center">
           <Board />
           <Scoreboard />
         </div>
         <div class="room__side room__side--right">
-          <PlayerPanel v-if="orderedPlayers[1]" :player="orderedPlayers[1]" :my-slot="roomStore.mySlot" />
-          <PlayerPanel v-if="orderedPlayers[3]" :player="orderedPlayers[3]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel v-if="orderedPlayers[1]" class="room__player" :player="orderedPlayers[1]" :my-slot="roomStore.mySlot" />
+          <PlayerPanel v-if="orderedPlayers[3]" class="room__player" :player="orderedPlayers[3]" :my-slot="roomStore.mySlot" />
         </div>
       </main>
 
@@ -473,6 +473,38 @@ function closeRules() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+@media (max-width: 700px) {
+  .room__main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .room__side,
+  .room__center { display: contents; }
+
+  .room__center > :deep(.board) {
+    order: 1;
+    transform: scale(0.8);
+    transform-origin: top center;
+    margin-bottom: -78px;
+  }
+
+  .room__player {
+    width: min(100%, 300px);
+    order: 3;
+  }
+
+  .room__player--mine { order: 2; }
+
+  .room__center > :deep(.scoreboard) {
+    order: 4;
+    width: min(100%, 300px);
+  }
 }
 
 /* ── Rules modal ── */

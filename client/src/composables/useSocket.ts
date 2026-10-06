@@ -34,10 +34,16 @@ export function useSocket() {
     if (result.roomState) roomStore.setRoomState(result.roomState)
   }
 
+  function resumeSocketWhenVisible() {
+    if (!document.hidden && roomStore.roomId && !socket.connected) socket.connect()
+  }
+
   function registerListeners() {
     roomStore.setConnection(socket.connected)
     socket.on('connect', resyncRoomAfterReconnect)
     socket.on('disconnect', () => roomStore.setConnection(false))
+    document.addEventListener('visibilitychange', resumeSocketWhenVisible)
+    window.addEventListener('online', resumeSocketWhenVisible)
 
     socket.on('rooms:list', rooms => {
       lobbyStore.setRooms(rooms)
@@ -75,6 +81,8 @@ export function useSocket() {
   function removeListeners() {
     socket.off('connect', resyncRoomAfterReconnect)
     socket.off('disconnect')
+    document.removeEventListener('visibilitychange', resumeSocketWhenVisible)
+    window.removeEventListener('online', resumeSocketWhenVisible)
     socket.off('rooms:list')
     socket.off('room:state')
     socket.off('game:state')

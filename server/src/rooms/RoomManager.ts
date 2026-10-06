@@ -23,7 +23,8 @@ export interface RoomState {
 const rooms = new Map<string, RoomState>()
 const socketToRoom = new Map<string, string>()
 const socketToSpectatorRoom = new Map<string, string>()
-const RECONNECT_GRACE_MS = 60_000
+const PLAYER_RECONNECT_GRACE_MS = 90_000
+const HOST_RECONNECT_GRACE_MS = 180_000
 
 export const RoomManager = {
   createRoom(
@@ -137,7 +138,7 @@ export const RoomManager = {
         if (currentRoom.players.length === 0 && !this.hasSpectators(room.roomId)) {
           rooms.delete(room.roomId)
         }
-      }, RECONNECT_GRACE_MS)
+      }, room.hostSlot === player.slot ? HOST_RECONNECT_GRACE_MS : PLAYER_RECONNECT_GRACE_MS)
       return { room, slot: player.slot, player: disconnectedPlayer }
     }
 
@@ -154,7 +155,7 @@ export const RoomManager = {
       if (currentRoom?.players.length === 0 && !this.hasSpectators(room.roomId)) {
         rooms.delete(room.roomId)
       }
-    }, RECONNECT_GRACE_MS)
+    }, room.hostSlot === player.slot ? HOST_RECONNECT_GRACE_MS : PLAYER_RECONNECT_GRACE_MS)
 
     return { room, slot: player.slot, player: disconnectedPlayer }
   },

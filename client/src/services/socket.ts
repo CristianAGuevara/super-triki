@@ -17,6 +17,10 @@ export function getSocket(): AppSocket {
 
     _socket = io(serverUrl, {
       autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 5_000,
       transports: ['websocket'],
       path: socketPath,
     })
