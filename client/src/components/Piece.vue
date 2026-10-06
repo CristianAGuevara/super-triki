@@ -9,6 +9,7 @@
       {
         'piece--inventory': inInventory,
         'piece--entry-hidden': entryAnimating,
+        'piece--last-move-pulse': lastMoveActive,
       },
     ]"
     :title="`${sizeName} (J${piece.player})`"
@@ -25,10 +26,12 @@ const props = defineProps<{
   inInventory?: boolean
   animateEntry?: boolean
   entryFrom?: PieceEntrySource | null
+  highlightLastMove?: boolean
 }>()
 
 const pieceElement = ref<HTMLElement | null>(null)
 const entryAnimating = ref(props.animateEntry === true && props.entryFrom !== null && props.entryFrom !== undefined)
+const lastMoveActive = ref(false)
 
 const dragPayload = computed<DragPayload>(() => ({
   pieceId: props.piece.id,
@@ -44,6 +47,7 @@ const sizeName = computed(() => {
 
 onMounted(() => {
   if (entryAnimating.value) animateFromInventory()
+  else if (props.highlightLastMove) lastMoveActive.value = true
 })
 
 function animateFromInventory() {
@@ -51,6 +55,7 @@ function animateFromInventory() {
   const source = props.entryFrom
   if (!target || !source) {
     entryAnimating.value = false
+    lastMoveActive.value = true
     return
   }
 
@@ -71,6 +76,7 @@ function animateFromInventory() {
     finished = true
     ghost.remove()
     entryAnimating.value = false
+    lastMoveActive.value = true
   }
 
   // Force the initial position to be painted before starting the flight.
@@ -124,12 +130,18 @@ function animateFromInventory() {
   cursor: grabbing;
 }
 
-.piece--last-move {
-  animation: none;
-}
-
 .piece--entry-hidden {
   opacity: 0 !important;
+}
+
+.piece--last-move-pulse {
+  animation: last-move-pulse 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes last-move-pulse {
+  0% { opacity: 0.45; transform: scale(0.84); }
+  60% { opacity: 1; transform: scale(1.14); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 .piece--flight {

@@ -23,7 +23,6 @@
           `cell__ring--${size}`,
           {
             'cell__ring--win':   isHighlighted(size),
-            'cell__ring--last-move': isLastMove(size),
             'cell__ring--hover': isHovered && hoveredSize === size && !store.pieceAt(row, col, size),
           }
         ]"
@@ -32,7 +31,7 @@
           v-if="store.pieceAt(row, col, size)"
           :piece="store.pieceAt(row, col, size)!"
           :in-inventory="false"
-          :class="{ 'piece--last-move': shouldAnimateLastMove(size) }"
+          :highlight-last-move="isLastMove(size)"
           :animate-entry="shouldAnimateLastMove(size)"
           :entry-from="store.lastMoveSource"
         />
@@ -176,17 +175,6 @@ function handleDrop(e: DragEvent) {
   background: var(--placeholder-hover);
 }
 
-/* Last move marker: a pulsing dashed halo around the exact size slot. */
-.cell__ring--last-move::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border: 2px dashed var(--accent-primary);
-  border-radius: 50%;
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary) 55%, transparent);
-  animation: pulse-last-move 1.1s ease-in-out infinite alternate;
-}
-
 /* Win highlight */
 .cell__ring--win .piece--large,
 .cell__ring--win .piece--medium,
@@ -200,8 +188,4 @@ function handleDrop(e: DragEvent) {
   to   { filter: drop-shadow(0 0 14px gold) brightness(1.3); }
 }
 
-@keyframes pulse-last-move {
-  from { opacity: 0.45; transform: scale(0.94); }
-  to { opacity: 1; transform: scale(1.06); }
-}
 </style>

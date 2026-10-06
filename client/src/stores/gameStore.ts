@@ -12,10 +12,10 @@ import { useAudioStore } from '@/stores/audioStore'
 const PIECES_PER_SIZE = 3
 
 const DEFAULT_META: Record<number, { color: string; label: string; cssVar: string }> = {
-  1: { color: '#e63946', label: 'Jugador 1', cssVar: '--player-1-color' },
-  2: { color: '#457b9d', label: 'Jugador 2', cssVar: '--player-2-color' },
-  3: { color: '#2a9d8f', label: 'Jugador 3', cssVar: '--player-3-color' },
-  4: { color: '#e9c46a', label: 'Jugador 4', cssVar: '--player-4-color' },
+  1: { color: '#ff2d55', label: 'Jugador 1', cssVar: '--player-1-color' },
+  2: { color: '#00d9ff', label: 'Jugador 2', cssVar: '--player-2-color' },
+  3: { color: '#ff2fb3', label: 'Jugador 3', cssVar: '--player-3-color' },
+  4: { color: '#ffd21f', label: 'Jugador 4', cssVar: '--player-4-color' },
 }
 
 export const useGameStore = defineStore('game', () => {
