@@ -206,11 +206,16 @@ function goHome() {
 .spectator__turn-inline strong { font-weight: 900; }
 
 .spectator__main {
+  --spectator-cell: clamp(64px, 10vh, 110px);
+  --spectator-gap: calc(var(--spectator-cell) * 0.11);
+  --spectator-padding: calc(var(--spectator-cell) * 0.145);
+  --spectator-side-width: clamp(150px, 20vw, 270px);
   display: grid;
-  grid-template-columns: minmax(180px, 250px) minmax(0, 1fr) minmax(180px, 250px);
+  grid-template-columns: var(--spectator-side-width) auto var(--spectator-side-width);
   align-items: start;
   gap: clamp(12px, 2.5vw, 32px);
-  width: min(1440px, 100%);
+  width: fit-content;
+  max-width: 100%;
   height: calc(100vh - 150px);
   min-height: 0;
   margin: 0 auto;
@@ -230,6 +235,33 @@ function goHome() {
   padding: 16px;
 }
 
+.spectator__side :deep(.player-panel__sets) {
+  gap: calc(var(--spectator-cell) * 0.045);
+}
+
+.spectator__side :deep(.player-panel__stack) {
+  width: calc(var(--spectator-cell) * 0.69);
+  height: calc(var(--spectator-cell) * 0.69);
+}
+
+.spectator__side :deep(.stack-ring--large) {
+  width: calc(var(--spectator-cell) * 0.69);
+  height: calc(var(--spectator-cell) * 0.69);
+  border-width: calc(var(--spectator-cell) * 0.064);
+}
+
+.spectator__side :deep(.stack-ring--medium) {
+  width: calc(var(--spectator-cell) * 0.44);
+  height: calc(var(--spectator-cell) * 0.44);
+  border-width: calc(var(--spectator-cell) * 0.045);
+}
+
+.spectator__side :deep(.stack-ring--small) {
+  width: calc(var(--spectator-cell) * 0.2);
+  height: calc(var(--spectator-cell) * 0.2);
+  border-width: calc(var(--spectator-cell) * 0.036);
+}
+
 .spectator__center {
   display: flex;
   flex-direction: column;
@@ -241,9 +273,6 @@ function goHome() {
 }
 
 .spectator__board {
-  --spectator-cell: clamp(72px, 12vh, 110px);
-  --spectator-gap: calc(var(--spectator-cell) * 0.11);
-  --spectator-padding: calc(var(--spectator-cell) * 0.145);
   width: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
   height: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
   filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.2));
@@ -322,14 +351,16 @@ function goHome() {
   .spectator__status { padding: 5px 10px; font-size: 8px; }
 
   .spectator__main {
-    grid-template-columns: 250px minmax(0, 1fr) 250px;
+    --spectator-cell: clamp(72px, 18vh, 110px);
+    --spectator-side-width: clamp(165px, 20vw, 270px);
+    grid-template-columns: var(--spectator-side-width) auto var(--spectator-side-width);
     gap: 24px;
-    width: min(1100px, 100%);
+    width: fit-content;
+    max-width: 100%;
     height: calc(100vh - 92px);
     margin: 0 auto;
   }
 
-  .spectator__board { --spectator-cell: clamp(72px, 18vh, 110px); }
 }
 
 @media (max-width: 700px), (orientation: portrait) {
