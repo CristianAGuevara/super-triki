@@ -44,8 +44,6 @@
           <Board />
         </div>
 
-        <Scoreboard />
-
         <div v-if="gameStore.isGameOver" class="spectator__result">
           <span>{{ gameStore.isDraw ? 'EMPATE' : 'GANADOR' }}</span>
           <strong>{{ resultLabel }}</strong>
@@ -58,6 +56,9 @@
       <aside class="spectator__side spectator__side--right">
         <PlayerPanel v-if="roomStore.players[1]" :player="roomStore.players[1].slot" :my-slot="null" />
         <PlayerPanel v-if="roomStore.players[3]" :player="roomStore.players[3].slot" :my-slot="null" />
+        <div class="spectator__scoreboard">
+          <Scoreboard />
+        </div>
       </aside>
     </main>
   </div>
@@ -251,7 +252,7 @@ function goHome() {
 .spectator__turn strong { font-size: 13px; }
 
 .spectator__board {
-  --spectator-cell: clamp(62px, 10vh, 110px);
+  --spectator-cell: clamp(72px, 12vh, 110px);
   --spectator-gap: calc(var(--spectator-cell) * 0.11);
   --spectator-padding: calc(var(--spectator-cell) * 0.145);
   width: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
@@ -269,10 +270,11 @@ function goHome() {
 .spectator__board :deep(.piece--medium) { width: calc(var(--spectator-cell) * .44); height: calc(var(--spectator-cell) * .44); }
 .spectator__board :deep(.piece--small) { width: calc(var(--spectator-cell) * .2); height: calc(var(--spectator-cell) * .2); }
 
-.spectator__center :deep(.scoreboard) { width: min(100%, 220px); min-width: 0; padding: 8px; }
-.spectator__center :deep(.scoreboard__header) { margin-bottom: 5px; }
-.spectator__center :deep(.scoreboard__row) { padding: 3px 5px; gap: 5px; }
-.spectator__center :deep(.scoreboard__label) { display: none; }
+.spectator__scoreboard { width: 100%; }
+.spectator__scoreboard :deep(.scoreboard) { width: 100%; min-width: 0; padding: 8px; }
+.spectator__scoreboard :deep(.scoreboard__header) { margin-bottom: 5px; }
+.spectator__scoreboard :deep(.scoreboard__row) { padding: 3px 5px; gap: 5px; }
+.spectator__scoreboard :deep(.scoreboard__label) { display: none; }
 
 .spectator__result,
 .spectator__paused {

@@ -1,5 +1,5 @@
 <template>
-  <header class="app-header">
+  <header class="app-header" :class="{ 'app-header--spectator': isSpectatorRoute }">
     <RouterLink to="/" class="app-logo">
       <img src="/favicon.svg" alt="Super Triki" class="app-logo__img" />
       <span>
@@ -51,13 +51,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-import { RouterView, RouterLink } from 'vue-router'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAudioStore } from '@/stores/audioStore'
 
 const themeStore = useThemeStore()
 const audioStore = useAudioStore()
+const route = useRoute()
+const isSpectatorRoute = computed(() => route.name === 'spectate')
 
 function selectTheme(theme: 'neon' | 'sunset') {
   audioStore.playSfx('click')
@@ -111,6 +113,15 @@ body {
   border-bottom: 1px solid var(--line-soft);
   transition: background 0.35s ease, border-color 0.35s ease;
 }
+
+.app-header--spectator {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.app-header--spectator .app-logo__img { width: 22px; height: 22px; }
+.app-header--spectator .app-logo__tagline { display: none; }
+.app-header--spectator .audio-control { transform: scale(0.9); transform-origin: right center; }
 
 .app-logo {
   display: flex;
