@@ -404,9 +404,9 @@ function goHome() {
     grid-template-columns: minmax(165px, 200px) minmax(300px, 1fr) minmax(165px, 200px);
     grid-template-rows: minmax(64px, auto) minmax(0, 1fr) minmax(64px, auto);
     grid-template-areas:
-      "top top score"
+      ". top score"
       "left center right"
-      "bottom bottom .";
+      ". bottom .";
     gap: 8px 10px;
     height: calc(100vh - 115px);
     min-height: 0;
@@ -424,6 +424,10 @@ function goHome() {
   .spectator__players :deep(.player-panel:nth-child(2)) { grid-area: right; }
   .spectator__players :deep(.player-panel:nth-child(3)) { grid-area: bottom; justify-self: center; }
   .spectator__players :deep(.player-panel:nth-child(4)) { grid-area: left; }
+  .spectator__players :deep(.player-panel:nth-child(2) .player-panel__sets),
+  .spectator__players :deep(.player-panel:nth-child(4) .player-panel__sets) {
+    flex-direction: column;
+  }
   .spectator__players :deep(.player-panel__header) { margin-bottom: 6px; }
   .spectator__players :deep(.player-panel__sets) { gap: 4px; }
   .spectator__players :deep(.player-panel__stack) { width: 48px; height: 48px; }
