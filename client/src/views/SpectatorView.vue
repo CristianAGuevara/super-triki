@@ -2,13 +2,15 @@
   <div class="spectator">
     <header class="spectator__header">
       <div class="spectator__identity">
-        <span class="spectator__eyebrow"><span class="spectator__live-dot" /> ESPECTADOR / EN DIRECTO</span>
-        <h1>{{ roomStore.name || 'Sala en directo' }}</h1>
+        <span class="spectator__room-name">{{ roomStore.name || 'Sala en directo' }}</span>
         <span class="spectator__room-id">#{{ roomId }}</span>
       </div>
-      <span class="spectator__status" :class="`spectator__status--${roomStore.phase}`">
-        {{ statusLabel }}
-      </span>
+      <div class="spectator__header-right">
+        <span class="spectator__turn-inline">
+          Turno: <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
+        </span>
+        <span class="spectator__status" :class="`spectator__status--${roomStore.phase}`">{{ statusLabel }}</span>
+      </div>
     </header>
 
     <div v-if="joining" class="spectator__message">
@@ -35,14 +37,11 @@
       </aside>
 
       <section class="spectator__center">
-        <div class="spectator__turn">
-          <span>Turno actual</span>
-          <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
-        </div>
-
         <div class="spectator__board">
           <Board />
         </div>
+
+        <Scoreboard />
 
         <div v-if="gameStore.isGameOver" class="spectator__result">
           <span>{{ gameStore.isDraw ? 'EMPATE' : 'GANADOR' }}</span>
@@ -56,9 +55,6 @@
       <aside class="spectator__side spectator__side--right">
         <PlayerPanel v-if="roomStore.players[1]" :player="roomStore.players[1].slot" :my-slot="null" />
         <PlayerPanel v-if="roomStore.players[3]" :player="roomStore.players[3].slot" :my-slot="null" />
-        <div class="spectator__scoreboard">
-          <Scoreboard />
-        </div>
       </aside>
     </main>
   </div>
@@ -139,14 +135,20 @@ function goHome() {
 
 .spectator__header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 18px;
-  width: min(1440px, 100%);
-  margin: 0 auto clamp(14px, 2vw, 24px);
+  width: min(700px, 100%);
+  margin: 0 auto 14px;
 }
 
 .spectator__identity { min-width: 0; }
+
+.spectator__room-name {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
 
 .spectator__eyebrow {
   display: flex;
@@ -165,17 +167,6 @@ function goHome() {
   background: var(--accent-danger);
   box-shadow: 0 0 10px var(--accent-danger);
   animation: spectator-pulse 1.2s ease-in-out infinite alternate;
-}
-
-.spectator h1 {
-  max-width: min(52vw, 580px);
-  margin: 5px 0 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: clamp(20px, 3vw, 32px);
-  letter-spacing: -1px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .spectator__room-id {
@@ -200,10 +191,24 @@ function goHome() {
 .spectator__status--playing { color: var(--accent-primary); border-color: var(--accent-primary); }
 .spectator__status--finished { color: var(--accent-secondary); }
 
+.spectator__header-right {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.spectator__turn-inline {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.spectator__turn-inline strong { font-weight: 900; }
+
 .spectator__main {
   display: grid;
   grid-template-columns: minmax(180px, 250px) minmax(0, 1fr) minmax(180px, 250px);
-  align-items: center;
+  align-items: start;
   gap: clamp(12px, 2.5vw, 32px);
   width: min(1440px, 100%);
   height: calc(100vh - 150px);
@@ -214,12 +219,16 @@ function goHome() {
 .spectator__side {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 16px;
   min-width: 0;
 }
 
-.spectator__side :deep(.player-panel) { width: 100%; min-width: 0; }
+.spectator__side :deep(.player-panel) {
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+}
 
 .spectator__center {
   display: flex;
@@ -230,26 +239,6 @@ function goHome() {
   min-width: 0;
   min-height: 0;
 }
-
-.spectator__turn {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  padding: 6px 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background: var(--surface-muted);
-}
-
-.spectator__turn span {
-  color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.spectator__turn strong { font-size: 13px; }
 
 .spectator__board {
   --spectator-cell: clamp(72px, 12vh, 110px);
@@ -270,11 +259,10 @@ function goHome() {
 .spectator__board :deep(.piece--medium) { width: calc(var(--spectator-cell) * .44); height: calc(var(--spectator-cell) * .44); }
 .spectator__board :deep(.piece--small) { width: calc(var(--spectator-cell) * .2); height: calc(var(--spectator-cell) * .2); }
 
-.spectator__scoreboard { width: 100%; }
-.spectator__scoreboard :deep(.scoreboard) { width: 100%; min-width: 0; padding: 8px; }
-.spectator__scoreboard :deep(.scoreboard__header) { margin-bottom: 5px; }
-.spectator__scoreboard :deep(.scoreboard__row) { padding: 3px 5px; gap: 5px; }
-.spectator__scoreboard :deep(.scoreboard__label) { display: none; }
+.spectator__center > :deep(.scoreboard) { width: min(100%, 220px); min-width: 0; padding: 8px; }
+.spectator__center > :deep(.scoreboard__header) { margin-bottom: 5px; }
+.spectator__center > :deep(.scoreboard__row) { padding: 3px 5px; gap: 5px; }
+.spectator__center > :deep(.scoreboard__label) { display: none; }
 
 .spectator__result,
 .spectator__paused {
@@ -324,7 +312,7 @@ function goHome() {
   }
 
   .spectator__header {
-    width: min(1100px, 100%);
+    width: min(700px, 100%);
     height: 34px;
     margin-bottom: 7px;
   }
