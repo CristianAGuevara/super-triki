@@ -24,7 +24,7 @@
       <button class="spectator__back" @click="goHome">Volver al inicio</button>
     </div>
 
-    <div v-else-if="roomStore.phase === 'waiting'" class="spectator__message">
+    <div v-else-if="roomStore.phase === 'waiting' && !gameStore.isGameOver" class="spectator__message">
       <span class="spectator__waiting-mark">◌</span>
       <strong>La partida aún no comienza</strong>
       <span>Esta pantalla se actualizará cuando el host inicie la ronda.</span>
@@ -43,9 +43,12 @@
 
         <Scoreboard />
 
-        <div v-if="gameStore.isGameOver" class="spectator__result">
-          <span>{{ gameStore.isDraw ? 'EMPATE' : 'GANADOR' }}</span>
-          <strong>{{ resultLabel }}</strong>
+        <div v-if="gameStore.isGameOver" class="spectator__last-game">
+          <div>
+            <span>Última partida</span>
+            <strong>{{ gameStore.isDraw ? 'Empate' : resultLabel }}</strong>
+          </div>
+          <small>{{ gameStore.isDraw ? 'No quedan movimientos posibles.' : 'Las fichas resaltadas forman la jugada ganadora.' }}</small>
         </div>
         <div v-else-if="roomStore.phase === 'finished'" class="spectator__paused">
           PARTIDA EN PAUSA · ESPERANDO AL HOST
@@ -82,6 +85,7 @@ const joining = ref(true)
 const errorMessage = ref<string | null>(null)
 
 const statusLabel = computed(() => {
+  if (gameStore.isGameOver) return 'PARTIDA FINALIZADA'
   if (roomStore.phase === 'playing') return 'EN DIRECTO'
   if (roomStore.phase === 'finished') return 'PAUSA'
   return 'SALA ABIERTA'
@@ -293,7 +297,6 @@ function goHome() {
 .spectator__center > :deep(.scoreboard__row) { padding: 3px 5px; gap: 5px; }
 .spectator__center > :deep(.scoreboard__label) { display: none; }
 
-.spectator__result,
 .spectator__paused {
   display: flex;
   flex-direction: column;
@@ -306,8 +309,34 @@ function goHome() {
   text-align: center;
 }
 
-.spectator__result strong { color: var(--text-primary); font-size: 18px; letter-spacing: 0; }
 .spectator__paused { color: var(--text-muted); }
+
+.spectator__last-game {
+  width: min(100%, 320px);
+  padding: 10px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  text-align: center;
+}
+
+.spectator__last-game div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.spectator__last-game span {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.spectator__last-game strong { color: var(--text-primary); font-size: 16px; }
+.spectator__last-game small { display: block; margin-top: 5px; color: var(--text-secondary); font-size: 10px; }
 
 .spectator__rules {
   padding: 10px 12px;
