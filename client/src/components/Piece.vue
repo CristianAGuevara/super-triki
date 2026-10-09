@@ -158,8 +158,8 @@ function animateFromInventory() {
 }
 
 /* Sizes — hollow ring style. Border widths scale with size */
-.piece--large  { width: var(--size-large);  height: var(--size-large);  border-width: 5px; }
-.piece--medium { width: var(--size-medium); height: var(--size-medium); border-width: 3px; }
+.piece--large  { --light-inset: -2.5px; width: var(--size-large);  height: var(--size-large);  border-width: 5px; }
+.piece--medium { --light-inset: -1.5px; width: var(--size-medium); height: var(--size-medium); border-width: 3px; }
 .piece--small  { width: var(--size-small);  height: var(--size-small);  border-width: 0; }
 
 /* Player colors */
@@ -177,11 +177,13 @@ function animateFromInventory() {
 .piece--medium::after {
   content: '';
   position: absolute;
-  inset: 1px;
-  border: 1.5px solid color-mix(in srgb, var(--piece-color) 58%, white);
+  inset: var(--light-inset);
+  border: 2.5px solid color-mix(in srgb, var(--piece-color) 72%, white);
   border-radius: inherit;
-  box-shadow: 0 0 4px 1px color-mix(in srgb, var(--piece-color) 48%, transparent);
-  filter: blur(0.4px);
+  box-shadow:
+    0 0 4px 2px color-mix(in srgb, var(--piece-color) 62%, white),
+    0 0 11px 4px color-mix(in srgb, var(--piece-color) 52%, transparent);
+  filter: blur(0.7px);
   pointer-events: none;
 }
 

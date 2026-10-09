@@ -196,8 +196,8 @@ function dragPayload(piece: Piece): DragPayload {
 }
 
 /* z-index: large behind, small in front so each hits the right donut area */
-.stack-ring--large  { width: 76px; height: 76px; border-width: 5px; z-index: 1; }
-.stack-ring--medium { width: 48px; height: 48px; border-width: 3px; z-index: 2; }
+.stack-ring--large  { --light-inset: -2.5px; width: 76px; height: 76px; border-width: 5px; z-index: 1; }
+.stack-ring--medium { --light-inset: -1.5px; width: 48px; height: 48px; border-width: 3px; z-index: 2; }
 .stack-ring--small  { width: 22px; height: 22px; border-width: 0; z-index: 3; }
 
 /* Used (absent) rings — faint ghost */
@@ -225,11 +225,13 @@ function dragPayload(piece: Piece): DragPayload {
 .stack-ring--medium:not(.stack-ring--used)::after {
   content: '';
   position: absolute;
-  inset: 1px;
-  border: 1.5px solid color-mix(in srgb, var(--piece-color) 58%, white);
+  inset: var(--light-inset);
+  border: 2.5px solid color-mix(in srgb, var(--piece-color) 72%, white);
   border-radius: inherit;
-  box-shadow: 0 0 4px 1px color-mix(in srgb, var(--piece-color) 48%, transparent);
-  filter: blur(0.4px);
+  box-shadow:
+    0 0 4px 2px color-mix(in srgb, var(--piece-color) 62%, white),
+    0 0 11px 4px color-mix(in srgb, var(--piece-color) 52%, transparent);
+  filter: blur(0.7px);
   pointer-events: none;
 }
 

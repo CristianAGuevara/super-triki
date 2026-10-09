@@ -249,12 +249,14 @@ function goHome() {
 }
 
 .spectator__side :deep(.stack-ring--large) {
+  --light-inset: calc(var(--spectator-cell) * -0.025);
   width: calc(var(--spectator-cell) * 0.69);
   height: calc(var(--spectator-cell) * 0.69);
   border-width: calc(var(--spectator-cell) * 0.05);
 }
 
 .spectator__side :deep(.stack-ring--medium) {
+  --light-inset: calc(var(--spectator-cell) * -0.02);
   width: calc(var(--spectator-cell) * 0.44);
   height: calc(var(--spectator-cell) * 0.44);
   border-width: calc(var(--spectator-cell) * 0.03);
