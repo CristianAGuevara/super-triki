@@ -113,6 +113,7 @@ function animateFromInventory() {
 
 <style scoped>
 .piece {
+  position: relative;
   border-radius: 50%;
   border-style: solid;
   cursor: grab;
@@ -171,4 +172,21 @@ function animateFromInventory() {
 .piece--small.piece--player2 { background: var(--player-2-color); }
 .piece--small.piece--player3 { background: var(--player-3-color); }
 .piece--small.piece--player4 { background: var(--player-4-color); }
+
+.piece--large::after,
+.piece--medium::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border: 1.5px solid color-mix(in srgb, var(--piece-color) 58%, white);
+  border-radius: inherit;
+  box-shadow: 0 0 4px 1px color-mix(in srgb, var(--piece-color) 48%, transparent);
+  filter: blur(0.4px);
+  pointer-events: none;
+}
+
+.piece--player1 { --piece-color: var(--player-1-color); }
+.piece--player2 { --piece-color: var(--player-2-color); }
+.piece--player3 { --piece-color: var(--player-3-color); }
+.piece--player4 { --piece-color: var(--player-4-color); }
 </style>

@@ -216,6 +216,23 @@ function dragPayload(piece: Piece): DragPayload {
 .stack-ring--player3 { border-color: var(--player-3-color); box-shadow: 0 0 5px var(--player-3-color); }
 .stack-ring--player4 { border-color: var(--player-4-color); box-shadow: 0 0 5px var(--player-4-color); }
 
+.stack-ring--player1 { --piece-color: var(--player-1-color); }
+.stack-ring--player2 { --piece-color: var(--player-2-color); }
+.stack-ring--player3 { --piece-color: var(--player-3-color); }
+.stack-ring--player4 { --piece-color: var(--player-4-color); }
+
+.stack-ring--large:not(.stack-ring--used)::after,
+.stack-ring--medium:not(.stack-ring--used)::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border: 1.5px solid color-mix(in srgb, var(--piece-color) 58%, white);
+  border-radius: inherit;
+  box-shadow: 0 0 4px 1px color-mix(in srgb, var(--piece-color) 48%, transparent);
+  filter: blur(0.4px);
+  pointer-events: none;
+}
+
 .stack-ring--small.stack-ring--player1 { background: var(--player-1-color); }
 .stack-ring--small.stack-ring--player2 { background: var(--player-2-color); }
 .stack-ring--small.stack-ring--player3 { background: var(--player-3-color); }
