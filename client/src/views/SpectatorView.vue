@@ -251,20 +251,25 @@ function goHome() {
 .spectator__side :deep(.stack-ring--large) {
   width: calc(var(--spectator-cell) * 0.69);
   height: calc(var(--spectator-cell) * 0.69);
-  border-width: calc(var(--spectator-cell) * 0.064);
+  border-width: calc(var(--spectator-cell) * 0.05);
 }
 
 .spectator__side :deep(.stack-ring--medium) {
   width: calc(var(--spectator-cell) * 0.44);
   height: calc(var(--spectator-cell) * 0.44);
-  border-width: calc(var(--spectator-cell) * 0.045);
+  border-width: calc(var(--spectator-cell) * 0.03);
 }
 
 .spectator__side :deep(.stack-ring--small) {
   width: calc(var(--spectator-cell) * 0.2);
   height: calc(var(--spectator-cell) * 0.2);
-  border-width: calc(var(--spectator-cell) * 0.036);
+  border-width: 0;
 }
+
+.spectator__side :deep(.stack-ring--small.stack-ring--player1) { background: var(--player-1-color); }
+.spectator__side :deep(.stack-ring--small.stack-ring--player2) { background: var(--player-2-color); }
+.spectator__side :deep(.stack-ring--small.stack-ring--player3) { background: var(--player-3-color); }
+.spectator__side :deep(.stack-ring--small.stack-ring--player4) { background: var(--player-4-color); }
 
 .spectator__center {
   display: flex;

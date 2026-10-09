@@ -157,13 +157,18 @@ function animateFromInventory() {
 }
 
 /* Sizes — hollow ring style. Border widths scale with size */
-.piece--large  { width: var(--size-large);  height: var(--size-large);  border-width: 7px; }
-.piece--medium { width: var(--size-medium); height: var(--size-medium); border-width: 5px; }
-.piece--small  { width: var(--size-small);  height: var(--size-small);  border-width: 4px; }
+.piece--large  { width: var(--size-large);  height: var(--size-large);  border-width: 5px; }
+.piece--medium { width: var(--size-medium); height: var(--size-medium); border-width: 3px; }
+.piece--small  { width: var(--size-small);  height: var(--size-small);  border-width: 0; }
 
 /* Player colors */
 .piece--player1 { border-color: var(--player-1-color); box-shadow: 0 0 6px var(--player-1-color); }
 .piece--player2 { border-color: var(--player-2-color); box-shadow: 0 0 6px var(--player-2-color); }
 .piece--player3 { border-color: var(--player-3-color); box-shadow: 0 0 6px var(--player-3-color); }
 .piece--player4 { border-color: var(--player-4-color); box-shadow: 0 0 6px var(--player-4-color); }
+
+.piece--small.piece--player1 { background: var(--player-1-color); }
+.piece--small.piece--player2 { background: var(--player-2-color); }
+.piece--small.piece--player3 { background: var(--player-3-color); }
+.piece--small.piece--player4 { background: var(--player-4-color); }
 </style>

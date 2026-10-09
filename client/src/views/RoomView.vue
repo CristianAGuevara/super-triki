@@ -714,9 +714,9 @@ function closeRules() {
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary) 38%, transparent);
 }
 
-.rules-ring--large { width: 64px; height: 64px; border-color: var(--player-1-color); }
-.rules-ring--medium { width: 42px; height: 42px; border-color: var(--player-2-color); }
-.rules-ring--small { width: 22px; height: 22px; border-color: var(--player-3-color); border-width: 4px; }
+.rules-ring--large { width: 64px; height: 64px; border-color: var(--player-1-color); border-width: 5px; }
+.rules-ring--medium { width: 42px; height: 42px; border-color: var(--player-2-color); border-width: 3px; }
+.rules-ring--small { width: 22px; height: 22px; border: 0; background: var(--player-3-color); }
 
 .rules-visual--line {
   gap: 8px;

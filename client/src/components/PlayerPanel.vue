@@ -196,9 +196,9 @@ function dragPayload(piece: Piece): DragPayload {
 }
 
 /* z-index: large behind, small in front so each hits the right donut area */
-.stack-ring--large  { width: 76px; height: 76px; border-width: 7px; z-index: 1; }
-.stack-ring--medium { width: 48px; height: 48px; border-width: 5px; z-index: 2; }
-.stack-ring--small  { width: 22px; height: 22px; border-width: 4px; z-index: 3; }
+.stack-ring--large  { width: 76px; height: 76px; border-width: 5px; z-index: 1; }
+.stack-ring--medium { width: 48px; height: 48px; border-width: 3px; z-index: 2; }
+.stack-ring--small  { width: 22px; height: 22px; border-width: 0; z-index: 3; }
 
 /* Used (absent) rings — faint ghost */
 .stack-ring--used {
@@ -208,11 +208,18 @@ function dragPayload(piece: Piece): DragPayload {
   cursor: default;
 }
 
+.stack-ring--used.stack-ring--small { background: var(--ghost-piece); }
+
 /* Player colors */
 .stack-ring--player1 { border-color: var(--player-1-color); box-shadow: 0 0 5px var(--player-1-color); }
 .stack-ring--player2 { border-color: var(--player-2-color); box-shadow: 0 0 5px var(--player-2-color); }
 .stack-ring--player3 { border-color: var(--player-3-color); box-shadow: 0 0 5px var(--player-3-color); }
 .stack-ring--player4 { border-color: var(--player-4-color); box-shadow: 0 0 5px var(--player-4-color); }
+
+.stack-ring--small.stack-ring--player1 { background: var(--player-1-color); }
+.stack-ring--small.stack-ring--player2 { background: var(--player-2-color); }
+.stack-ring--small.stack-ring--player3 { background: var(--player-3-color); }
+.stack-ring--small.stack-ring--player4 { background: var(--player-4-color); }
 
 /* Locked: not your turn or not your pieces */
 .stack-ring--locked {
