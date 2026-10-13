@@ -71,6 +71,7 @@
         <span class="room__code">{{ roomStore.name || roomId }} <span class="room__id">#{{ roomId }}</span></span>
         <span class="room__turn" v-if="!gameStore.isGameOver">
           Turno: <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
+          <span class="room__turn-timer" :class="{ 'room__turn-timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
         </span>
       </header>
 
@@ -166,6 +167,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useTurnClock } from '@/composables/useTurnClock'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket, disconnectSocket } from '@/services/socket'
 import Board from '@/components/Board.vue'
@@ -179,6 +181,7 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
 const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
@@ -501,6 +504,21 @@ function closeRules() {
 
 .room__code { font-weight: 600; }
 .room__id   { font-weight: 400; color: var(--text-muted); font-size: 11px; letter-spacing: 1px; }
+
+.room__turn-timer {
+  display: inline-flex;
+  min-width: 42px;
+  justify-content: center;
+  margin-left: 7px;
+  padding: 3px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.room__turn-timer--urgent { color: var(--accent-danger); border-color: var(--accent-danger); }
 
 .room__main {
   display: flex;

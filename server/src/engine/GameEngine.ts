@@ -6,12 +6,15 @@ import { detectWin, detectDraw } from './winDetection.js'
 
 const PIECES_PER_SIZE = 3
 const LINES = getAllLines(3)
+export const TURN_DURATION_MS = 90_000
 
 export interface RoomGameState {
   board:         Board
   inventories:   Record<PlayerSlot, Piece[]>
   currentPlayer: PlayerSlot
   moveNumber:    number
+  turnNumber:    number
+  turnStartedAt: number
   winResult:     ReturnType<typeof detectWin>
   isDraw:        boolean
   players:       PlayerSlot[]
@@ -41,6 +44,8 @@ export function buildInitialGameState(playerCount: number | PlayerSlot[], starti
     inventories,
     currentPlayer: players.includes(startingPlayer) ? startingPlayer : (players[0] ?? 1),
     moveNumber:    0,
+    turnNumber:    0,
+    turnStartedAt: Date.now(),
     winResult:     null,
     isDraw:        false,
     players,
@@ -123,6 +128,8 @@ export function applyMove(
     inventories:   newInventories,
     currentPlayer: winResult || isDraw ? actingSlot : nextPlayer,
     moveNumber:    state.moveNumber + 1,
+    turnNumber:    state.turnNumber + 1,
+    turnStartedAt: Date.now(),
     winResult,
     isDraw,
     players:       state.players,
@@ -136,12 +143,25 @@ export function applyMove(
   }
 }
 
+export function skipTurn(state: RoomGameState, now = Date.now()): RoomGameState {
+  if (state.winResult || state.isDraw || state.players.length < 2) return state
+  const currentIdx = state.players.indexOf(state.currentPlayer)
+  return {
+    ...state,
+    currentPlayer: state.players[(currentIdx + 1) % state.players.length],
+    turnNumber: state.turnNumber + 1,
+    turnStartedAt: now,
+  }
+}
+
 export function toSnapshot(state: RoomGameState) {
   return {
     board:         state.board,
     inventories:   state.inventories,
     currentPlayer: state.currentPlayer,
     moveNumber:    state.moveNumber,
+    turnNumber:    state.turnNumber,
+    turnStartedAt: state.turnStartedAt,
     players:       state.players,
     lastMove:      state.lastMove,
   }

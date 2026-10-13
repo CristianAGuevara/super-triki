@@ -28,6 +28,7 @@ export const useGameStore = defineStore('game', () => {
   const isDraw = ref(false)
   const dragState = ref<DragPayload | null>(null)
   const moveNumber = ref(0)
+  const turnStartedAt = ref(Date.now())
   const hasServerState = ref(false)
   const lastMove = ref<LastMove | null>(null)
   const lastMoveSource = ref<PieceEntrySource | null>(null)
@@ -81,6 +82,7 @@ export const useGameStore = defineStore('game', () => {
     isDraw.value = false
     dragState.value = null
     moveNumber.value = 0
+    turnStartedAt.value = Date.now()
     hasServerState.value = false
     lastMove.value = null
     lastMoveSource.value = null
@@ -142,6 +144,7 @@ export const useGameStore = defineStore('game', () => {
       size: targetSize,
     }
     moveNumber.value++
+    turnStartedAt.value = Date.now()
     audioStore.playSfx('move')
 
     const win = detectWin(board.value, lines.value, players.value)
@@ -171,6 +174,7 @@ export const useGameStore = defineStore('game', () => {
     inventories.value   = state.inventories as Record<Player, Piece[]>
     currentPlayer.value = state.currentPlayer
     moveNumber.value    = state.moveNumber
+    turnStartedAt.value = state.turnStartedAt ?? Date.now()
     lastMove.value      = state.lastMove ?? null
     lastMoveSource.value = null
     const roomStore = useRoomStore()
@@ -227,6 +231,7 @@ export const useGameStore = defineStore('game', () => {
     isDraw,
     dragState,
     lastMove,
+    turnStartedAt,
     lastMoveSource,
     isGameOver,
     highlightedSlots,

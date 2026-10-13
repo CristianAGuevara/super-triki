@@ -1,6 +1,6 @@
 import type { PlayerSlot } from '../types/game.js'
 import type { PlayerInfo, PublicRoomInfo, RoomStateSnapshot } from '../types/socket.js'
-import type { RoomGameState } from '../engine/GameEngine.js'
+import { TURN_DURATION_MS, type RoomGameState } from '../engine/GameEngine.js'
 import { generateRoomCode } from './roomUtils.js'
 import { randomUUID } from 'node:crypto'
 
@@ -168,10 +168,22 @@ export const RoomManager = {
 
     if (room.game) room.phase = 'finished'
 
-    const graceMs = room.hostSlot === player.slot
-      ? HOST_RECONNECT_GRACE_MS
-      : PLAYER_RECONNECT_GRACE_MS
+    const graceMs = this.getReconnectGraceMs(room, player.slot)
     return { room, slot: player.slot, player: disconnectedPlayer, graceMs, disconnectEpoch }
+  },
+
+  getReconnectGraceMs(room: RoomState, slot: PlayerSlot): number {
+    if (room.hostSlot === slot) return HOST_RECONNECT_GRACE_MS
+    if (!room.game) return PLAYER_RECONNECT_GRACE_MS
+
+    const playerCount = room.game.players.length
+    const targetIndex = room.game.players.indexOf(slot)
+    const currentIndex = room.game.players.indexOf(room.game.currentPlayer)
+    if (targetIndex < 0 || currentIndex < 0 || playerCount < 2) return PLAYER_RECONNECT_GRACE_MS
+
+    const turnsUntilPlayerIsUp = (targetIndex - currentIndex + playerCount) % playerCount
+    const timeUntilTheirTurn = turnsUntilPlayerIsUp * TURN_DURATION_MS
+    return Math.max(PLAYER_RECONNECT_GRACE_MS, timeUntilTheirTurn + 30_000)
   },
 
   expireDisconnectedPlayer(roomId: string, slot: PlayerSlot, disconnectEpoch: number): RoomState | null {

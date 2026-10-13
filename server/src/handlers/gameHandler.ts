@@ -6,11 +6,43 @@ import {
   buildInitialGameState,
   validateMove,
   applyMove,
+  skipTurn,
+  TURN_DURATION_MS,
   toSnapshot,
 } from '../engine/GameEngine.js'
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>
+const turnTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function clearTurnTimer(roomId: string) {
+  const timer = turnTimers.get(roomId)
+  if (timer) clearTimeout(timer)
+  turnTimers.delete(roomId)
+}
+
+function scheduleTurnTimer(io: TypedServer, roomId: string) {
+  clearTurnTimer(roomId)
+  const room = RoomManager.getRoom(roomId)
+  const game = room?.game
+  if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw) return
+
+  const expectedTurnNumber = game.turnNumber
+  const expectedPlayer = game.currentPlayer
+  const remaining = Math.max(0, game.turnStartedAt + TURN_DURATION_MS - Date.now())
+  const timer = setTimeout(() => {
+    const currentRoom = RoomManager.getRoom(roomId)
+    const currentGame = currentRoom?.game
+    if (!currentRoom || currentRoom.phase !== 'playing' || !currentGame ||
+        currentGame.turnNumber !== expectedTurnNumber || currentGame.currentPlayer !== expectedPlayer) return
+
+    currentRoom.game = skipTurn(currentGame)
+    io.to(roomId).emit('game:turn-timeout', { player: expectedPlayer })
+    io.to(roomId).emit('game:state', toSnapshot(currentRoom.game))
+    scheduleTurnTimer(io, roomId)
+  }, remaining)
+  turnTimers.set(roomId, timer)
+}
 
 function broadcastRoomList(io: TypedServer) {
   io.to('lobby').emit('rooms:list', RoomManager.getPublicRooms())
@@ -143,6 +175,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(result.room))
     emitCurrentGame(socket, result.room)
+    scheduleTurnTimer(io, roomId)
     broadcastRoomList(io)
   })
 
@@ -179,6 +212,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         roomState: RoomManager.toSnapshot(existing),
       })
       emitCurrentGame(socket, existing)
+      scheduleTurnTimer(io, roomId)
       return
     }
 
@@ -213,6 +247,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     socket.to(roomId).emit('player:joined', { username: username.trim(), slot: newSlot })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     emitCurrentGame(socket, room)
+    scheduleTurnTimer(io, roomId)
     broadcastRoomList(io)
   })
 
@@ -257,6 +292,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
+    scheduleTurnTimer(io, roomId)
     broadcastRoomList(io)
   })
 
@@ -279,6 +315,16 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
 
+    if (Date.now() >= room.game.turnStartedAt + TURN_DURATION_MS) {
+      const timedOutPlayer = room.game.currentPlayer
+      room.game = skipTurn(room.game)
+      ack({ ok: false, error: 'Se agotó el tiempo; el turno pasó al siguiente jugador' })
+      io.to(normalizedPayload.roomId).emit('game:turn-timeout', { player: timedOutPlayer })
+      io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(room.game))
+      scheduleTurnTimer(io, normalizedPayload.roomId)
+      return
+    }
+
     const validation = validateMove(room.game, normalizedPayload, actingSlot)
     if (!validation.valid) {
       ack({ ok: false, error: validation.reason })
@@ -292,6 +338,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(newState))
 
     if (newState.winResult || newState.isDraw) {
+      clearTurnTimer(normalizedPayload.roomId)
       if (newState.winResult) {
         RoomManager.addScore(normalizedPayload.roomId, newState.winResult.winner as PlayerSlot)
       }
@@ -304,6 +351,8 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         finalState: toSnapshot(newState),
       })
       broadcastRoomList(io)
+    } else {
+      scheduleTurnTimer(io, normalizedPayload.roomId)
     }
   })
 
@@ -341,6 +390,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
+    scheduleTurnTimer(io, roomId)
     broadcastRoomList(io)
   })
 
@@ -351,6 +401,8 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (!result) return
 
     const { room, slot, player, graceMs, disconnectEpoch } = result
+
+    if (room.game) clearTurnTimer(room.roomId)
 
     if (room.game) {
       socket.to(room.roomId).emit('player:left', {
@@ -365,6 +417,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     setTimeout(() => {
       const updatedRoom = RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
+      if (!updatedRoom) clearTurnTimer(room.roomId)
       if (updatedRoom) io.to(updatedRoom.roomId).emit('room:state', RoomManager.toSnapshot(updatedRoom))
       broadcastRoomList(io)
     }, graceMs)

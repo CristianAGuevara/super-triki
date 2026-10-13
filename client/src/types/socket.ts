@@ -91,6 +91,8 @@ export interface GameStateSnapshot {
   inventories:   Record<PlayerSlot, Piece[]>
   currentPlayer: PlayerSlot
   moveNumber:    number
+  turnNumber?:   number
+  turnStartedAt?: number
   players:       PlayerSlot[]
   lastMove?: LastMove | null
 }
@@ -104,6 +106,7 @@ export interface ServerToClientEvents {
   'room:state':    (state: RoomStateSnapshot)       => void
   'game:state':    (state: GameStateSnapshot)       => void
   'game:over':     (result: GameOverPayload)        => void
+  'game:turn-timeout': (payload: { player: PlayerSlot }) => void
   'rooms:list':    (rooms: PublicRoomInfo[])        => void
   'player:joined': (payload: { username: string; slot: PlayerSlot }) => void
   'player:left':   (payload: { username: string; slot: PlayerSlot; permanent: boolean }) => void
