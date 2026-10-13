@@ -312,7 +312,7 @@ async function handleCreate() {
       errorMsg.value = res.error ?? 'Error al crear sala'
       return
     }
-    roomStore.setFromAck(res.roomId, res.playerSlot)
+    roomStore.setFromAck(res.roomId, res.playerSlot, createIsPrivate.value ? createPasswordInput.value || undefined : undefined)
     router.push(`/room/${res.roomId}`)
   })
 }
@@ -377,7 +377,7 @@ async function handleJoinPrivate() {
       errorMsg.value = res.error ?? 'No se pudo unir a la sala'
       return
     }
-    roomStore.setFromAck(res.roomId, res.playerSlot)
+    roomStore.setFromAck(res.roomId, res.playerSlot, joinPasswordInput.value || undefined)
     if (res.roomState) roomStore.setRoomState(res.roomState)
     router.push(`/room/${res.roomId}`)
   })

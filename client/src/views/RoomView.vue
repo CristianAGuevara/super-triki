@@ -1,5 +1,11 @@
 <template>
   <div class="room">
+    <Transition name="overlay">
+      <div v-if="roomStore.error" class="room__notice" role="alert">
+        <span>{{ roomStore.error }}</span>
+        <button aria-label="Cerrar aviso" @click="roomStore.setError(null)">×</button>
+      </div>
+    </Transition>
 
     <!-- ── Lobby: waiting for players ── -->
     <div v-if="roomStore.phase === 'waiting'" class="lobby">
@@ -333,6 +339,35 @@ function closeRules() {
   align-items: center;
   gap: 20px;
   margin-top: 80px;
+}
+
+.room__notice {
+  position: fixed;
+  z-index: 300;
+  top: 68px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--accent-secondary);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  transform: translateX(-50%);
+}
+
+.room__notice button {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
 }
 
 

@@ -173,24 +173,44 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
   })
 
   // ── game:start ───────────────────────────────────────────────
-  socket.on('game:start', payload => {
-    if (!isRecord(payload) || typeof payload.roomId !== 'string') return
+  socket.on('game:start', (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string') {
+      ack({ ok: false, error: 'Datos de inicio inválidos' })
+      return
+    }
     const roomId = payload.roomId.trim().toUpperCase()
     const room = RoomManager.getRoom(roomId)
-    if (!room || room.phase !== 'waiting') return
+    if (!room) {
+      ack({ ok: false, error: 'Sala no encontrada' })
+      return
+    }
+    if (room.phase !== 'waiting') {
+      ack({ ok: false, error: 'La sala no está esperando para iniciar' })
+      return
+    }
 
     const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== RoomManager.getHostSlot(roomId)) return
-    if (room.players.filter(player => player.socketId).length < 2) return
+    if (actingSlot !== RoomManager.getHostSlot(roomId)) {
+      ack({ ok: false, error: 'Solo el host puede iniciar la partida' })
+      return
+    }
+    if (room.players.filter(player => player.socketId).length < 2) {
+      ack({ ok: false, error: 'Se necesitan al menos dos jugadores conectados' })
+      return
+    }
 
     RoomManager.removeDisconnectedPlayers(roomId)
 
     const slots = room.players.map(p => p.slot)
     RoomManager.initScores(roomId, slots)
     const startingPlayer = RoomManager.nextRound(roomId)
-    if (!startingPlayer) return
+    if (!startingPlayer) {
+      ack({ ok: false, error: 'No se pudo elegir quién comienza' })
+      return
+    }
     const game = buildInitialGameState(slots, startingPlayer)
     RoomManager.setGame(roomId, game)
+    ack({ ok: true })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
     broadcastRoomList(io)
@@ -244,21 +264,37 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
   })
 
   // ── game:rematch ─────────────────────────────────────────────
-  socket.on('game:rematch', payload => {
-    if (!isRecord(payload) || typeof payload.roomId !== 'string') return
+  socket.on('game:rematch', (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string') {
+      ack({ ok: false, error: 'Datos de reinicio inválidos' })
+      return
+    }
     const roomId = payload.roomId.trim().toUpperCase()
     const room = RoomManager.getRoom(roomId)
-    if (!room || room.phase !== 'finished' || room.players.length < 2) return
+    if (!room || room.phase !== 'finished' || room.players.length < 2) {
+      ack({ ok: false, error: 'La partida no está pausada o no hay jugadores suficientes' })
+      return
+    }
     const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== RoomManager.getHostSlot(roomId)) return
+    if (actingSlot !== RoomManager.getHostSlot(roomId)) {
+      ack({ ok: false, error: 'Solo el host puede reiniciar la partida' })
+      return
+    }
     const connectedPlayers = room.players.filter(player => player.socketId)
-    if (connectedPlayers.length < 2) return
+    if (connectedPlayers.length < 2) {
+      ack({ ok: false, error: 'Se necesitan al menos dos jugadores conectados' })
+      return
+    }
     RoomManager.removeDisconnectedPlayers(roomId)
 
     const startingPlayer = RoomManager.nextRound(roomId)
-    if (!startingPlayer) return
+    if (!startingPlayer) {
+      ack({ ok: false, error: 'No se pudo elegir quién comienza' })
+      return
+    }
     const game = buildInitialGameState(room.players.map(player => player.slot), startingPlayer)
     RoomManager.setGame(roomId, game)
+    ack({ ok: true })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
     broadcastRoomList(io)
@@ -270,21 +306,23 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const result = RoomManager.removePlayer(socket.id)
     if (!result) return
 
-    const { room, slot, player } = result
+    const { room, slot, player, graceMs, disconnectEpoch } = result
 
-    if (!room.game && room.phase === 'waiting') {
-      io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))
-      broadcastRoomList(io)
-      return
+    if (room.game) {
+      socket.to(room.roomId).emit('player:left', {
+        username: player.username,
+        slot,
+        permanent: false,
+      })
     }
-
-    socket.to(room.roomId).emit('player:left', {
-      username:  player.username,
-      slot,
-      permanent: false,
-    })
 
     io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))
     broadcastRoomList(io)
+
+    setTimeout(() => {
+      const updatedRoom = RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
+      if (updatedRoom) io.to(updatedRoom.roomId).emit('room:state', RoomManager.toSnapshot(updatedRoom))
+      broadcastRoomList(io)
+    }, graceMs)
   })
 }

@@ -16,22 +16,33 @@ export function useSocket() {
   const userStore = useUserStore()
 
   async function resyncRoomAfterReconnect() {
-    roomStore.setConnection(true)
-    if (!roomStore.roomId) return
+    if (!roomStore.roomId) {
+      roomStore.setConnection(true)
+      return
+    }
 
     if (roomStore.isSpectator) {
       const result = await emitJoinSpectator(roomStore.roomId)
-      if (result.ok && result.roomState) roomStore.setRoomState(result.roomState)
+      if (result.ok && result.roomState) {
+        roomStore.setRoomState(result.roomState)
+        roomStore.setConnection(true)
+      } else {
+        roomStore.setConnection(false)
+        if (result.error) roomStore.setError(result.error)
+      }
       return
     }
 
     if (!userStore.username) return
-    const result = await emitJoinRoom(roomStore.roomId, userStore.username)
+    const result = await emitJoinRoom(roomStore.roomId, userStore.username, roomStore.roomPassword)
     if (!result.ok) {
+      roomStore.setConnection(false)
       roomStore.setError(result.error ?? 'No se pudo recuperar la sala')
       return
     }
     if (result.roomState) roomStore.setRoomState(result.roomState)
+    if (result.playerSlot) roomStore.mySlot = result.playerSlot
+    roomStore.setConnection(true)
   }
 
   function resumeSocketWhenVisible() {
@@ -144,11 +155,15 @@ export function useSocket() {
   }
 
   function emitRematch(roomId: string): void {
-    socket.emit('game:rematch', { roomId })
+    socket.emit('game:rematch', { roomId }, result => {
+      if (!result.ok) roomStore.setError(result.error ?? 'No se pudo iniciar la siguiente partida')
+    })
   }
 
   function emitStart(roomId: string): void {
-    socket.emit('game:start', { roomId })
+    socket.emit('game:start', { roomId }, result => {
+      if (!result.ok) roomStore.setError(result.error ?? 'No se pudo iniciar la partida')
+    })
   }
 
   return { emitJoinRoom, emitJoinSpectator, emitMove, emitRematch, emitStart }

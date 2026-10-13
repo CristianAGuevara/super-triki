@@ -43,6 +43,7 @@ export interface GameMovePayload {
   targetSize: Size
 }
 export interface GameMoveAck { ok: boolean; error?: string }
+export interface GameControlAck { ok: boolean; error?: string }
 
 export interface RematchPayload  { roomId: string }
 export interface GameStartPayload { roomId: string }
@@ -52,8 +53,8 @@ export interface ClientToServerEvents {
   'room:join':   (payload: RoomJoinPayload,   ack: (res: RoomJoinAck)   => void) => void
   'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
   'game:move':   (payload: GameMovePayload,   ack: (res: GameMoveAck)   => void) => void
-  'game:rematch':(payload: RematchPayload) => void
-  'game:start':  (payload: GameStartPayload) => void
+  'game:rematch':(payload: RematchPayload, ack: (res: GameControlAck) => void) => void
+  'game:start':  (payload: GameStartPayload, ack: (res: GameControlAck) => void) => void
   'rooms:get':   (ack: (rooms: PublicRoomInfo[]) => void) => void
 }
 

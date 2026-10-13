@@ -18,6 +18,7 @@ export interface RoomState {
   hostSlot:    PlayerSlot
   lastRoundPlayers: PlayerSlot[] | null
   lastStartingPlayer: PlayerSlot | null
+  disconnectEpoch: Partial<Record<PlayerSlot, number>>
 }
 
 const rooms = new Map<string, RoomState>()
@@ -52,6 +53,7 @@ export const RoomManager = {
       hostSlot:    1,
       lastRoundPlayers: null,
       lastStartingPlayer: null,
+      disconnectEpoch: {},
     }
     rooms.set(roomId, room)
     socketToRoom.set(socketId, roomId)
@@ -75,6 +77,7 @@ export const RoomManager = {
       !p.socketId && p.username.toLowerCase() === username.toLowerCase()
     )
     if (disconnectedPlayer) {
+      room.disconnectEpoch[disconnectedPlayer.slot] = (room.disconnectEpoch[disconnectedPlayer.slot] ?? 0) + 1
       disconnectedPlayer.socketId = socketId
       socketToRoom.set(socketId, roomId)
       if (room.game && !room.game.winResult && !room.game.isDraw) {
@@ -91,6 +94,8 @@ export const RoomManager = {
     const slot = ([1, 2, 3, 4] as PlayerSlot[]).find(candidate => !usedSlots.has(candidate))
     if (!slot) return { ok: false, error: 'Sala llena' }
     room.players.push({ slot, username, socketId })
+    room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
+    if (room.players.length === 1) room.hostSlot = slot
     socketToRoom.set(socketId, roomId)
     return { ok: true, room }
   },
@@ -115,7 +120,7 @@ export const RoomManager = {
     return rooms.get(roomId)?.hostSlot ?? null
   },
 
-  removePlayer(socketId: string): { room: RoomState; slot: PlayerSlot; player: PlayerInfo } | null {
+  removePlayer(socketId: string): { room: RoomState; slot: PlayerSlot; player: PlayerInfo; graceMs: number; disconnectEpoch: number } | null {
     const room = this.getRoomBySocket(socketId)
     if (!room) return null
 
@@ -123,46 +128,45 @@ export const RoomManager = {
     if (!player) return null
 
     const disconnectedPlayer = { ...player }
-
-    if (!room.game && room.phase === 'waiting') {
-      player.socketId = ''
-      socketToRoom.delete(socketId)
-      setTimeout(() => {
-        const currentRoom = rooms.get(room.roomId)
-        const currentPlayer = currentRoom?.players.find(p => p.slot === player.slot)
-        if (!currentRoom || currentPlayer?.socketId !== '') return
-        currentRoom.players = currentRoom.players.filter(p => p.slot !== player.slot)
-        if (currentRoom.hostSlot === player.slot) {
-          currentRoom.hostSlot = currentRoom.players[0]?.slot ?? 1
-        }
-        if (currentRoom.players.length === 0 && !this.hasSpectators(room.roomId)) {
-          rooms.delete(room.roomId)
-        }
-      }, room.hostSlot === player.slot ? HOST_RECONNECT_GRACE_MS : PLAYER_RECONNECT_GRACE_MS)
-      return { room, slot: player.slot, player: disconnectedPlayer }
-    }
+    const disconnectEpoch = (room.disconnectEpoch[player.slot] ?? 0) + 1
+    room.disconnectEpoch[player.slot] = disconnectEpoch
 
     player.socketId = ''
     socketToRoom.delete(socketId)
 
-    room.phase = 'finished'
-    setTimeout(() => {
-      const currentRoom = rooms.get(room.roomId)
-      const currentPlayer = currentRoom?.players.find(p => p.slot === player.slot)
-      if (currentRoom && currentPlayer?.socketId === '') {
-        currentRoom.players = currentRoom.players.filter(p => p.slot !== player.slot)
-      }
-      if (currentRoom?.players.length === 0 && !this.hasSpectators(room.roomId)) {
-        rooms.delete(room.roomId)
-      }
-    }, room.hostSlot === player.slot ? HOST_RECONNECT_GRACE_MS : PLAYER_RECONNECT_GRACE_MS)
+    if (room.game) room.phase = 'finished'
 
-    return { room, slot: player.slot, player: disconnectedPlayer }
+    const graceMs = room.hostSlot === player.slot
+      ? HOST_RECONNECT_GRACE_MS
+      : PLAYER_RECONNECT_GRACE_MS
+    return { room, slot: player.slot, player: disconnectedPlayer, graceMs, disconnectEpoch }
+  },
+
+  expireDisconnectedPlayer(roomId: string, slot: PlayerSlot, disconnectEpoch: number): RoomState | null {
+    const room = rooms.get(roomId)
+    if (!room) return null
+    const player = room.players.find(p => p.slot === slot)
+    if (!player || player.socketId !== '' || room.disconnectEpoch[slot] !== disconnectEpoch) return null
+
+    room.players = room.players.filter(p => p.slot !== slot)
+    if (room.hostSlot === slot) {
+      room.hostSlot = room.players.find(p => p.socketId)?.slot ?? room.players[0]?.slot ?? 1
+    }
+    if (room.players.length === 0 && !this.hasSpectators(roomId)) {
+      rooms.delete(roomId)
+      return null
+    }
+    return room
   },
 
   removeDisconnectedPlayers(roomId: string): void {
     const room = rooms.get(roomId)
     if (!room) return
+    for (const player of room.players) {
+      if (!player.socketId) {
+        room.disconnectEpoch[player.slot] = (room.disconnectEpoch[player.slot] ?? 0) + 1
+      }
+    }
     room.players = room.players.filter(player => player.socketId !== '')
   },
 
@@ -239,7 +243,7 @@ export const RoomManager = {
       .map(r => ({
         roomId:      r.roomId,
         name:        r.name,
-        playerCount: r.players.length,
+        playerCount: r.players.filter(player => player.socketId !== '').length,
         phase:       r.phase as 'waiting' | 'playing',
       }))
   },
