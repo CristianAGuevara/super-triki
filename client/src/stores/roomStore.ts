@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { PlayerInfo, PlayerSlot, RoomStateSnapshot } from '@/types/socket'
 
+const ROOM_SESSION_KEY = 'st_room_session'
+
+interface SavedRoomSession {
+  roomId: string
+  playerSlot: PlayerSlot
+  reconnectToken: string
+}
+
 export const useRoomStore = defineStore('room', () => {
   const roomId       = ref<string | null>(null)
   const name         = ref('')
@@ -18,14 +26,60 @@ export const useRoomStore = defineStore('room', () => {
   const isSpectator = ref(false)
   const connected = ref(false)
   const roomPassword = ref<string | undefined>(undefined)
+  const reconnectToken = ref<string | null>(null)
   const error        = ref<string | null>(null)
 
-  function setFromAck(ackRoomId: string, slot: PlayerSlot, password?: string) {
+  function setFromAck(ackRoomId: string, slot: PlayerSlot, password?: string, token?: string) {
+    if (token !== undefined) reconnectToken.value = token
+    else if (roomId.value !== ackRoomId) reconnectToken.value = null
     roomId.value = ackRoomId
     mySlot.value = slot
     isSpectator.value = false
     roomPassword.value = password
+    saveSession()
     error.value  = null
+  }
+
+  function saveSession() {
+    if (!roomId.value || !mySlot.value || !reconnectToken.value) return
+    try {
+      const session: SavedRoomSession = {
+        roomId: roomId.value,
+        playerSlot: mySlot.value,
+        reconnectToken: reconnectToken.value,
+      }
+      window.localStorage.setItem(ROOM_SESSION_KEY, JSON.stringify(session))
+    } catch {
+      // Keep the in-memory session if local storage is unavailable.
+    }
+  }
+
+  function restoreSession(targetRoomId: string): boolean {
+    try {
+      const raw = window.localStorage.getItem(ROOM_SESSION_KEY)
+      if (!raw) return false
+      const session = JSON.parse(raw) as Partial<SavedRoomSession>
+      if (session.roomId?.toUpperCase() !== targetRoomId.toUpperCase() ||
+          typeof session.reconnectToken !== 'string' ||
+          ![1, 2, 3, 4].includes(Number(session.playerSlot))) return false
+
+      roomId.value = session.roomId
+      mySlot.value = session.playerSlot as PlayerSlot
+      reconnectToken.value = session.reconnectToken
+      isSpectator.value = false
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function clearSavedSession() {
+    reconnectToken.value = null
+    try {
+      window.localStorage.removeItem(ROOM_SESSION_KEY)
+    } catch {
+      // Ignore storage restrictions.
+    }
   }
 
   function setSpectating(value: boolean) {
@@ -90,12 +144,13 @@ export const useRoomStore = defineStore('room', () => {
     isSpectator.value = false
     connected.value = false
     roomPassword.value = undefined
+    reconnectToken.value = null
     error.value        = null
   }
 
   return {
     roomId, name, isPrivate, phase, mySlot, hostSlot, players, playerCount,
-    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, roomPassword, error,
-    setFromAck, setSpectating, setConnection, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
+    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, roomPassword, reconnectToken, error,
+    setFromAck, restoreSession, clearSavedSession, setSpectating, setConnection, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
   }
 })

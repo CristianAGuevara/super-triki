@@ -5,7 +5,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
-import type { GameMovePayload, RoomJoinAck, SpectateJoinAck } from '@/types/socket'
+import type { GameMovePayload, RoomJoinAck, RoomReconnectAck, SpectateJoinAck } from '@/types/socket'
 
 export function useSocket() {
   const socket     = getSocket()
@@ -34,14 +34,18 @@ export function useSocket() {
     }
 
     if (!userStore.username) return
-    const result = await emitJoinRoom(roomStore.roomId, userStore.username, roomStore.roomPassword)
+    const result = roomStore.reconnectToken
+      ? await emitReconnectRoom(roomStore.roomId, roomStore.reconnectToken)
+      : await emitJoinRoom(roomStore.roomId, userStore.username, roomStore.roomPassword)
     if (!result.ok) {
       roomStore.setConnection(false)
       roomStore.setError(result.error ?? 'No se pudo recuperar la sala')
       return
     }
     if (result.roomState) roomStore.setRoomState(result.roomState)
-    if (result.playerSlot) roomStore.mySlot = result.playerSlot
+    if (result.playerSlot && result.roomId) {
+      roomStore.setFromAck(result.roomId, result.playerSlot, roomStore.roomPassword, result.reconnectToken)
+    }
     roomStore.setConnection(true)
   }
 
@@ -160,11 +164,31 @@ export function useSocket() {
     })
   }
 
+  async function emitReconnectRoom(roomId: string, reconnectToken: string): Promise<RoomReconnectAck> {
+    if (!await waitForSocketConnection()) {
+      return { ok: false, error: 'No se pudo conectar con el servidor' }
+    }
+    return new Promise(resolve => {
+      let settled = false
+      const timeout = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        resolve({ ok: false, error: 'El servidor no respondió al recuperar la sala' })
+      }, 8_000)
+      socket.emit('room:reconnect', { roomId, reconnectToken }, result => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(result)
+      })
+    })
+  }
+
   function emitStart(roomId: string): void {
     socket.emit('game:start', { roomId }, result => {
       if (!result.ok) roomStore.setError(result.error ?? 'No se pudo iniciar la partida')
     })
   }
 
-  return { emitJoinRoom, emitJoinSpectator, emitMove, emitRematch, emitStart }
+  return { emitJoinRoom, emitReconnectRoom, emitJoinSpectator, emitMove, emitRematch, emitStart }
 }

@@ -2,6 +2,7 @@ import type { PlayerSlot } from '../types/game.js'
 import type { PlayerInfo, PublicRoomInfo, RoomStateSnapshot } from '../types/socket.js'
 import type { RoomGameState } from '../engine/GameEngine.js'
 import { generateRoomCode } from './roomUtils.js'
+import { randomUUID } from 'node:crypto'
 
 export interface RoomState {
   roomId:      string
@@ -9,6 +10,7 @@ export interface RoomState {
   isPrivate:   boolean
   password?:   string
   players:     PlayerInfo[]
+  reconnectTokens: Partial<Record<PlayerSlot, string>>
   phase:       'waiting' | 'playing' | 'finished'
   game:        RoomGameState | null
   lastGame:    RoomGameState | null
@@ -25,7 +27,7 @@ const rooms = new Map<string, RoomState>()
 const socketToRoom = new Map<string, string>()
 const socketToSpectatorRoom = new Map<string, string>()
 const PLAYER_RECONNECT_GRACE_MS = 90_000
-const HOST_RECONNECT_GRACE_MS = 180_000
+const HOST_RECONNECT_GRACE_MS = 900_000
 
 export const RoomManager = {
   createRoom(
@@ -44,6 +46,7 @@ export const RoomManager = {
       isPrivate,
       password:    isPrivate ? password : undefined,
       players:     [{ slot: 1, username, socketId }],
+      reconnectTokens: { 1: randomUUID() },
       phase:       'waiting',
       game:        null,
       lastGame:    null,
@@ -94,10 +97,39 @@ export const RoomManager = {
     const slot = ([1, 2, 3, 4] as PlayerSlot[]).find(candidate => !usedSlots.has(candidate))
     if (!slot) return { ok: false, error: 'Sala llena' }
     room.players.push({ slot, username, socketId })
+    room.reconnectTokens[slot] = randomUUID()
     room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
     if (room.players.length === 1) room.hostSlot = slot
     socketToRoom.set(socketId, roomId)
     return { ok: true, room }
+  },
+
+  reconnectRoom(
+    roomId: string,
+    reconnectToken: string,
+    socketId: string,
+  ): { ok: true; room: RoomState; slot: PlayerSlot; previousSocketId?: string } | { ok: false; error: string } {
+    const room = rooms.get(roomId)
+    if (!room) return { ok: false, error: 'Sala no encontrada' }
+
+    const entry = Object.entries(room.reconnectTokens).find(([, token]) => token === reconnectToken)
+    if (!entry) return { ok: false, error: 'La sesión ya no es válida; vuelve a unirte a la sala' }
+
+    const slot = Number(entry[0]) as PlayerSlot
+    const player = room.players.find(candidate => candidate.slot === slot)
+    if (!player) return { ok: false, error: 'El jugador ya no pertenece a esta sala' }
+
+    const previousSocketId = player.socketId && player.socketId !== socketId
+      ? player.socketId
+      : undefined
+    if (previousSocketId) socketToRoom.delete(previousSocketId)
+
+    room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
+    player.socketId = socketId
+    socketToRoom.set(socketId, roomId)
+    if (room.game && !room.game.winResult && !room.game.isDraw) room.phase = 'playing'
+
+    return { ok: true, room, slot, previousSocketId }
   },
 
   getRoom(roomId: string): RoomState | undefined {
@@ -149,6 +181,8 @@ export const RoomManager = {
     if (!player || player.socketId !== '' || room.disconnectEpoch[slot] !== disconnectEpoch) return null
 
     room.players = room.players.filter(p => p.slot !== slot)
+    delete room.reconnectTokens[slot]
+    delete room.disconnectEpoch[slot]
     if (room.hostSlot === slot) {
       room.hostSlot = room.players.find(p => p.socketId)?.slot ?? room.players[0]?.slot ?? 1
     }
@@ -165,6 +199,7 @@ export const RoomManager = {
     for (const player of room.players) {
       if (!player.socketId) {
         room.disconnectEpoch[player.slot] = (room.disconnectEpoch[player.slot] ?? 0) + 1
+        delete room.reconnectTokens[player.slot]
       }
     }
     room.players = room.players.filter(player => player.socketId !== '')

@@ -179,7 +179,7 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
-const { emitJoinRoom, emitRematch, emitStart } = useSocket()
+const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
 const copied = ref<'player' | 'spectator' | null>(null)
@@ -241,7 +241,20 @@ const turnLabel = computed(() => {
 })
 
 onMounted(async () => {
+  const hasSavedSession = !roomStore.mySlot && roomStore.restoreSession(roomId.value)
   connectSocket()
+
+  if (hasSavedSession && roomStore.reconnectToken) {
+    const resumed = await emitReconnectRoom(roomId.value, roomStore.reconnectToken)
+    if (resumed.ok && resumed.roomId && resumed.playerSlot) {
+      roomStore.setFromAck(resumed.roomId, resumed.playerSlot, roomStore.roomPassword, resumed.reconnectToken)
+      if (resumed.roomState) roomStore.setRoomState(resumed.roomState)
+      roomStore.setConnection(true)
+      return
+    }
+    roomStore.clearSavedSession()
+    roomStore.reset()
+  }
 
   // If we navigated here directly (shared link or page refresh) and have no slot yet
   if (!roomStore.mySlot) {

@@ -109,8 +109,40 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const room = RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password)
     socket.leave('lobby')
     socket.join(room.roomId)
-    ack({ ok: true, roomId: room.roomId, playerSlot: 1 })
+    ack({ ok: true, roomId: room.roomId, playerSlot: 1, reconnectToken: room.reconnectTokens[1] })
     socket.emit('room:state', RoomManager.toSnapshot(room))
+    broadcastRoomList(io)
+  })
+
+  // ── room:reconnect ───────────────────────────────────────────
+  socket.on('room:reconnect', (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string' ||
+        typeof payload.reconnectToken !== 'string' || !payload.reconnectToken) {
+      ack({ ok: false, error: 'Datos de reconexión inválidos' })
+      return
+    }
+
+    const roomId = payload.roomId.trim().toUpperCase()
+    const result = RoomManager.reconnectRoom(roomId, payload.reconnectToken, socket.id)
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+
+    if (result.previousSocketId) {
+      io.sockets.sockets.get(result.previousSocketId)?.disconnect(true)
+    }
+    socket.leave('lobby')
+    socket.join(roomId)
+    ack({
+      ok: true,
+      roomId,
+      playerSlot: result.slot,
+      reconnectToken: result.room.reconnectTokens[result.slot],
+      roomState: RoomManager.toSnapshot(result.room),
+    })
+    io.to(roomId).emit('room:state', RoomManager.toSnapshot(result.room))
+    emitCurrentGame(socket, result.room)
     broadcastRoomList(io)
   })
 
@@ -139,7 +171,13 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const alreadyIn = existing.players.find(p => p.socketId === socket.id)
     if (alreadyIn) {
       socket.join(roomId)
-      ack({ ok: true, roomId, playerSlot: alreadyIn.slot, roomState: RoomManager.toSnapshot(existing) })
+      ack({
+        ok: true,
+        roomId,
+        playerSlot: alreadyIn.slot,
+        reconnectToken: existing.reconnectTokens[alreadyIn.slot],
+        roomState: RoomManager.toSnapshot(existing),
+      })
       emitCurrentGame(socket, existing)
       return
     }
@@ -164,7 +202,13 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     socket.leave('lobby')
     socket.join(roomId)
     const newSlot = room.players.find(p => p.socketId === socket.id)?.slot ?? 1
-    ack({ ok: true, roomId, playerSlot: newSlot, roomState: RoomManager.toSnapshot(room) })
+    ack({
+      ok: true,
+      roomId,
+      playerSlot: newSlot,
+      reconnectToken: room.reconnectTokens[newSlot],
+      roomState: RoomManager.toSnapshot(room),
+    })
 
     socket.to(roomId).emit('player:joined', { username: username.trim(), slot: newSlot })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))

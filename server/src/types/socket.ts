@@ -12,6 +12,7 @@ export interface RoomCreateAck {
   ok: boolean
   roomId?: string
   playerSlot?: PlayerSlot
+  reconnectToken?: string
   error?: string
 }
 
@@ -24,6 +25,16 @@ export interface RoomJoinAck {
   ok: boolean
   roomId?: string
   playerSlot?: PlayerSlot
+  reconnectToken?: string
+  roomState?: RoomStateSnapshot
+  error?: string
+}
+
+export interface RoomReconnectAck {
+  ok: boolean
+  roomId?: string
+  playerSlot?: PlayerSlot
+  reconnectToken?: string
   roomState?: RoomStateSnapshot
   error?: string
 }
@@ -51,6 +62,7 @@ export interface GameStartPayload { roomId: string }
 export interface ClientToServerEvents {
   'room:create': (payload: RoomCreatePayload, ack: (res: RoomCreateAck) => void) => void
   'room:join':   (payload: RoomJoinPayload,   ack: (res: RoomJoinAck)   => void) => void
+  'room:reconnect': (payload: { roomId: string; reconnectToken: string }, ack: (res: RoomReconnectAck) => void) => void
   'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
   'game:move':   (payload: GameMovePayload,   ack: (res: GameMoveAck)   => void) => void
   'game:rematch':(payload: RematchPayload, ack: (res: GameControlAck) => void) => void
