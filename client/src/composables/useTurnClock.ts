@@ -1,9 +1,12 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 
-const TURN_DURATION_MS = 90_000
+const DEFAULT_TURN_DURATION_MS = 90_000
 
-export function useTurnClock(isPaused: () => boolean = () => false) {
+export function useTurnClock(
+  isPaused: () => boolean = () => false,
+  getDurationMs: () => number = () => DEFAULT_TURN_DURATION_MS,
+) {
   const gameStore = useGameStore()
   const now = ref(Date.now())
   const pausedSeconds = ref<number | null>(null)
@@ -11,7 +14,7 @@ export function useTurnClock(isPaused: () => boolean = () => false) {
 
   const calculateRemaining = () => Math.max(
     0,
-    Math.ceil((gameStore.turnStartedAt + TURN_DURATION_MS - now.value) / 1_000),
+    Math.ceil((gameStore.turnStartedAt + getDurationMs() - now.value) / 1_000),
   )
 
   watch(isPaused, paused => {
@@ -20,6 +23,10 @@ export function useTurnClock(isPaused: () => boolean = () => false) {
   }, { immediate: true, flush: 'sync' })
 
   watch(() => gameStore.turnStartedAt, () => {
+    if (isPaused()) pausedSeconds.value = calculateRemaining()
+  }, { flush: 'sync' })
+
+  watch(getDurationMs, () => {
     if (isPaused()) pausedSeconds.value = calculateRemaining()
   }, { flush: 'sync' })
 

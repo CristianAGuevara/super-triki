@@ -156,7 +156,7 @@ export const useGameStore = defineStore('game', () => {
       return true
     }
 
-    if (detectDraw(board.value)) {
+    if (detectDraw(board.value, inventories.value, players.value)) {
       isDraw.value = true
       audioStore.playSfx('draw')
       return true
@@ -213,7 +213,14 @@ export const useGameStore = defineStore('game', () => {
 
   function _advanceTurn() {
     const idx = players.value.indexOf(currentPlayer.value)
-    currentPlayer.value = players.value[(idx + 1) % players.value.length]
+    for (let step = 1; step <= players.value.length; step++) {
+      const candidate = players.value[(idx + step) % players.value.length]
+      if ((inventories.value[candidate]?.length ?? 0) > 0) {
+        currentPlayer.value = candidate
+        return
+      }
+    }
+    isDraw.value = true
   }
 
   function setDragState(payload: DragPayload | null) {

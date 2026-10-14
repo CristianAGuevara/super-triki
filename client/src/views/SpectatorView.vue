@@ -8,7 +8,7 @@
       <div class="spectator__header-right">
         <span class="spectator__turn-inline">
           Turno: <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
-          <span class="spectator__timer" :class="{ 'spectator__timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
+          <span v-if="roomStore.gameSettings.turnTimerEnabled" class="spectator__timer" :class="{ 'spectator__timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
         </span>
         <span class="spectator__status" :class="`spectator__status--${roomStore.phase}`">{{ statusLabel }}</span>
       </div>
@@ -102,7 +102,10 @@ const turnLabel = computed(() => {
 const turnColor = computed(() =>
   gameStore.playerMeta[gameStore.currentPlayer]?.color ?? 'var(--accent-primary)'
 )
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(
+  undefined,
+  () => roomStore.gameSettings.turnDurationSeconds * 1_000,
+)
 
 const resultLabel = computed(() => {
   if (!gameStore.winResult) return 'Tablero completo'

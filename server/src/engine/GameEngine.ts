@@ -1,6 +1,6 @@
-import type { Board, LastMove, Piece, PlayerSlot } from '../types/game.js'
+import type { Board, GameSettings, LastMove, Piece, PlayerSlot } from '../types/game.js'
 import type { GameMovePayload } from '../types/socket.js'
-import { SIZE_ORDER } from '../types/game.js'
+import { DEFAULT_GAME_SETTINGS, SIZE_ORDER } from '../types/game.js'
 import { emptyBoard, getAllLines } from './boardUtils.js'
 import { detectWin, detectDraw } from './winDetection.js'
 
@@ -19,6 +19,7 @@ export interface RoomGameState {
   isDraw:        boolean
   players:       PlayerSlot[]
   lastMove:      LastMove | null
+  settings:      GameSettings
 }
 
 function buildInventory(slot: PlayerSlot): Piece[] {
@@ -31,7 +32,11 @@ function buildInventory(slot: PlayerSlot): Piece[] {
   return pieces
 }
 
-export function buildInitialGameState(playerCount: number | PlayerSlot[], startingPlayer: PlayerSlot = 1): RoomGameState {
+export function buildInitialGameState(
+  playerCount: number | PlayerSlot[],
+  startingPlayer: PlayerSlot = 1,
+  settings: GameSettings = DEFAULT_GAME_SETTINGS,
+): RoomGameState {
   const players = Array.isArray(playerCount)
     ? [...playerCount]
     : Array.from({ length: playerCount }, (_, i) => (i + 1) as PlayerSlot)
@@ -50,6 +55,7 @@ export function buildInitialGameState(playerCount: number | PlayerSlot[], starti
     isDraw:        false,
     players,
     lastMove:      null,
+    settings:      { ...settings },
   }
 }
 
@@ -118,21 +124,33 @@ export function applyMove(
   }
 
   const winResult = detectWin(newBoard, LINES, state.players)
-  const isDraw = !winResult && detectDraw(newBoard)
+  const isDraw = !winResult && detectDraw(newBoard, newInventories, state.players)
 
-  const currentIdx = state.players.indexOf(actingSlot)
-  const nextPlayer = state.players[(currentIdx + 1) % state.players.length]
+  let nextPlayer = actingSlot
+  let turnSteps = 1
+  if (!winResult && !isDraw) {
+    const currentIdx = state.players.indexOf(actingSlot)
+    for (let step = 1; step <= state.players.length; step++) {
+      const candidate = state.players[(currentIdx + step) % state.players.length]
+      if ((newInventories[candidate]?.length ?? 0) > 0) {
+        nextPlayer = candidate
+        turnSteps = step
+        break
+      }
+    }
+  }
 
   return {
     board:         newBoard,
     inventories:   newInventories,
     currentPlayer: winResult || isDraw ? actingSlot : nextPlayer,
     moveNumber:    state.moveNumber + 1,
-    turnNumber:    state.turnNumber + 1,
+    turnNumber:    state.turnNumber + turnSteps,
     turnStartedAt: Date.now(),
     winResult,
     isDraw,
     players:       state.players,
+    settings:      state.settings,
     lastMove: {
       pieceId,
       player: piece.player,
@@ -145,12 +163,39 @@ export function applyMove(
 
 export function skipTurn(state: RoomGameState, now = Date.now()): RoomGameState {
   if (state.winResult || state.isDraw || state.players.length < 2) return state
+  const inventories = Object.fromEntries(
+    state.players.map(slot => [slot, [...(state.inventories[slot] ?? [])]])
+  ) as Record<PlayerSlot, Piece[]>
+
+  if (state.settings.turnTimerEnabled && state.settings.removePieceOnTimeout) {
+    const pieces = inventories[state.currentPlayer]
+    const penaltyIndex = pieces.findIndex(piece => piece.size === 'small')
+    if (penaltyIndex >= 0) pieces.splice(penaltyIndex, 1)
+    else if (pieces.length > 0) pieces.pop()
+  }
+
+  const isDraw = detectDraw(state.board, inventories, state.players)
   const currentIdx = state.players.indexOf(state.currentPlayer)
+  let nextPlayer = state.currentPlayer
+  let turnSteps = 1
+  if (!isDraw) {
+    for (let step = 1; step <= state.players.length; step++) {
+      const candidate = state.players[(currentIdx + step) % state.players.length]
+      if ((inventories[candidate]?.length ?? 0) > 0) {
+        nextPlayer = candidate
+        turnSteps = step
+        break
+      }
+    }
+  }
+
   return {
     ...state,
-    currentPlayer: state.players[(currentIdx + 1) % state.players.length],
-    turnNumber: state.turnNumber + 1,
+    inventories,
+    currentPlayer: nextPlayer,
+    turnNumber: state.turnNumber + turnSteps,
     turnStartedAt: now,
+    isDraw,
   }
 }
 

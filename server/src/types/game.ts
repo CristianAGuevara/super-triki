@@ -6,6 +6,18 @@ export type Player = number
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
+export interface GameSettings {
+  turnTimerEnabled: boolean
+  turnDurationSeconds: number
+  removePieceOnTimeout: boolean
+}
+
+export const DEFAULT_GAME_SETTINGS: GameSettings = {
+  turnTimerEnabled: false,
+  turnDurationSeconds: 90,
+  removePieceOnTimeout: false,
+}
+
 export interface Piece {
   id: string
   player: Player

@@ -1,4 +1,4 @@
-import type { Board, LastMove, Piece, Size, WinResult } from '@/types/game'
+import type { Board, GameSettings, LastMove, Piece, Size, WinResult } from '@/types/game'
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
@@ -55,7 +55,7 @@ export interface ClientToServerEvents {
   'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
   'game:move':   (payload: GameMovePayload, ack: (res: GameMoveAck) => void) => void
   'game:rematch':(payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
-  'game:start':  (payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
+  'game:start':  (payload: { roomId: string; settings?: GameSettings }, ack: (res: GameControlAck) => void) => void
   'game:finish': (payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
   'rooms:get':   (ack: (rooms: PublicRoomInfo[]) => void) => void
 }
@@ -78,6 +78,7 @@ export interface RoomStateSnapshot {
   scores:      Record<number, number>
   roundNumber: number
   hostSlot: PlayerSlot
+  gameSettings: GameSettings
 }
 
 export interface PublicRoomInfo {
@@ -96,6 +97,7 @@ export interface GameStateSnapshot {
   turnStartedAt?: number
   players:       PlayerSlot[]
   lastMove?: LastMove | null
+  gameSettings?: GameSettings
 }
 
 export interface GameOverPayload {

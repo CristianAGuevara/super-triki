@@ -1,4 +1,4 @@
-import type { Board, LastMove, Piece, Size, WinResult, PlayerSlot } from './game.js'
+import type { Board, GameSettings, LastMove, Piece, Size, WinResult, PlayerSlot } from './game.js'
 
 // ── Client → Server ──────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ export interface GameMoveAck { ok: boolean; error?: string }
 export interface GameControlAck { ok: boolean; error?: string }
 
 export interface RematchPayload  { roomId: string }
-export interface GameStartPayload { roomId: string }
+export interface GameStartPayload { roomId: string; settings?: GameSettings }
 
 export interface ClientToServerEvents {
   'room:create': (payload: RoomCreatePayload, ack: (res: RoomCreateAck) => void) => void
@@ -89,6 +89,7 @@ export interface RoomStateSnapshot {
   scores:      Record<number, number>
   roundNumber: number
   hostSlot: PlayerSlot
+  gameSettings: GameSettings
 }
 
 export interface PublicRoomInfo {

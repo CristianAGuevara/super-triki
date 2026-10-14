@@ -1,6 +1,7 @@
-import type { PlayerSlot } from '../types/game.js'
+import type { GameSettings, PlayerSlot } from '../types/game.js'
 import type { PlayerInfo, PublicRoomInfo, RoomStateSnapshot } from '../types/socket.js'
-import { TURN_DURATION_MS, type RoomGameState } from '../engine/GameEngine.js'
+import type { RoomGameState } from '../engine/GameEngine.js'
+import { DEFAULT_GAME_SETTINGS } from '../types/game.js'
 import { generateRoomCode } from './roomUtils.js'
 import { randomUUID } from 'node:crypto'
 import { Redis } from '@upstash/redis'
@@ -25,6 +26,7 @@ export interface RoomState {
   players:     PlayerInfo[]
   reconnectTokens: Partial<Record<PlayerSlot, string>>
   phase:       'waiting' | 'playing' | 'finished'
+  gameSettings: GameSettings
   game:        RoomGameState | null
   lastGame:    RoomGameState | null
   createdAt:   number
@@ -141,6 +143,7 @@ export const RoomManager = {
       players:     [{ slot: 1, username, socketId }],
       reconnectTokens: { 1: randomUUID() },
       phase:       'waiting',
+      gameSettings: { ...DEFAULT_GAME_SETTINGS },
       game:        null,
       lastGame:    null,
       createdAt:   Date.now(),
@@ -283,7 +286,7 @@ export const RoomManager = {
 
   getReconnectGraceMs(room: RoomState, slot: PlayerSlot): number {
     if (room.hostSlot === slot) return HOST_RECONNECT_GRACE_MS
-    if (!room.game) return PLAYER_RECONNECT_GRACE_MS
+    if (!room.game || !room.game.settings.turnTimerEnabled) return PLAYER_RECONNECT_GRACE_MS
 
     const playerCount = room.game.players.length
     const targetIndex = room.game.players.indexOf(slot)
@@ -291,7 +294,8 @@ export const RoomManager = {
     if (targetIndex < 0 || currentIndex < 0 || playerCount < 2) return PLAYER_RECONNECT_GRACE_MS
 
     const turnsUntilPlayerIsUp = (targetIndex - currentIndex + playerCount) % playerCount
-    const timeUntilTheirTurn = turnsUntilPlayerIsUp * TURN_DURATION_MS
+    const turnDuration = room.game.settings.turnDurationSeconds * 1_000
+    const timeUntilTheirTurn = turnsUntilPlayerIsUp * turnDuration
     return Math.max(PLAYER_RECONNECT_GRACE_MS, timeUntilTheirTurn + 30_000)
   },
 
@@ -352,6 +356,13 @@ export const RoomManager = {
     return room
   },
 
+  async setGameSettings(roomId: string, settings: GameSettings): Promise<void> {
+    const room = await loadRoom(roomId)
+    if (!room) return
+    room.gameSettings = { ...settings }
+    await saveRoom(room)
+  },
+
   async joinSpectator(roomId: string, socketId: string): Promise<RoomState | undefined> {
     const room = await loadRoom(roomId)
     if (!room) return undefined
@@ -384,6 +395,7 @@ export const RoomManager = {
     const room = await loadRoom(roomId)
     if (room) {
       room.game  = game
+      room.gameSettings = { ...game.settings }
       room.phase = 'playing'
       await saveRoom(room)
     }
@@ -458,6 +470,7 @@ export const RoomManager = {
       scores:      room.scores,
       roundNumber: room.roundNumber,
       hostSlot:    room.hostSlot,
+      gameSettings: room.gameSettings,
     }
   },
 }

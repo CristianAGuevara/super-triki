@@ -39,6 +39,30 @@
 
       <p class="lobby__count">{{ roomStore.playerCount }}/4 jugadores</p>
 
+      <details v-if="roomStore.mySlot === roomStore.hostSlot" class="lobby__options">
+        <summary>Opciones de partida</summary>
+        <label class="lobby__option">
+          <input v-model="roomStore.gameSettings.turnTimerEnabled" type="checkbox" />
+          <span>Temporizador por turno</span>
+        </label>
+        <div v-if="roomStore.gameSettings.turnTimerEnabled" class="lobby__timer-options">
+          <label class="lobby__option lobby__option--select">
+            <span>Tiempo para jugar</span>
+            <select v-model.number="roomStore.gameSettings.turnDurationSeconds">
+              <option :value="30">30 segundos</option>
+              <option :value="60">1 minuto</option>
+              <option :value="90">1 minuto y 30 segundos</option>
+              <option :value="120">2 minutos</option>
+              <option :value="180">3 minutos</option>
+            </select>
+          </label>
+          <label class="lobby__option">
+            <input v-model="roomStore.gameSettings.removePieceOnTimeout" type="checkbox" />
+            <span>Eliminar una ficha cuando se salte el turno</span>
+          </label>
+        </div>
+      </details>
+
       <button
          v-if="roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount >= 2"
         class="lobby__start-btn"
@@ -71,7 +95,7 @@
         <span class="room__code">{{ roomStore.name || roomId }} <span class="room__id">#{{ roomId }}</span></span>
         <span class="room__turn" v-if="!gameStore.isGameOver">
           Turno: <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
-          <span class="room__turn-timer" :class="{ 'room__turn-timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
+          <span v-if="roomStore.gameSettings.turnTimerEnabled" class="room__turn-timer" :class="{ 'room__turn-timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
         </span>
       </header>
 
@@ -212,7 +236,10 @@ const canFinishGameForHost = computed(() =>
   roomStore.mySlot === roomStore.hostSlot && roomStore.phase === 'playing' &&
   roomStore.players.some(player => !player.socketId)
 )
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(
+  undefined,
+  () => roomStore.gameSettings.turnDurationSeconds * 1_000,
+)
 
 const lastGameResult = computed(() => {
   if (gameStore.isDraw) return 'Empate'
@@ -323,7 +350,7 @@ function handleFinishGame() {
 function handleStart() {
   if (roomStore.roomId) {
     audioStore.playSfx('click')
-    emitStart(roomStore.roomId)
+    emitStart(roomStore.roomId, roomStore.gameSettings)
   }
 }
 
@@ -571,6 +598,29 @@ function closeRules() {
   font-variant-numeric: tabular-nums;
   font-weight: 800;
 }
+
+.lobby__options {
+  width: min(100%, 360px);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.lobby__options summary {
+  padding: 10px 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby__timer-options { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; }
+.lobby__option { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12px; }
+.lobby__option input { accent-color: var(--accent-primary); }
+.lobby__option--select { justify-content: space-between; }
+.lobby__option select { padding: 6px 8px; border: 1px solid var(--cell-border); border-radius: 8px; background: var(--cell-bg); color: var(--text-primary); }
 
 .room__turn-timer--urgent { color: var(--accent-danger); border-color: var(--accent-danger); }
 

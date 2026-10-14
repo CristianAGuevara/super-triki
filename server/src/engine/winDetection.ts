@@ -1,4 +1,4 @@
-import type { Board, Line, WinResult, Size, CellCoord } from '../types/game.js'
+import type { Board, Line, Piece, WinResult, Size, CellCoord } from '../types/game.js'
 import { SIZE_ORDER } from '../types/game.js'
 
 function checkSameSize(board: Board, lines: Line[]): WinResult | null {
@@ -74,8 +74,15 @@ export function detectWin(board: Board, lines: Line[], players: number[]): WinRe
   )
 }
 
-export function detectDraw(board: Board): boolean {
-  return board.every(row =>
+export function detectDraw<T extends number = number>(
+  board: Board,
+  inventories?: Partial<Record<T, Piece[]>>,
+  players?: T[],
+): boolean {
+  const fullBoard = board.every(row =>
     row.every(cell => cell.large !== null && cell.medium !== null && cell.small !== null)
   )
+  const noPiecesLeft = !!inventories && !!players && players.length > 0 &&
+    players.every(player => (inventories[player]?.length ?? 0) === 0)
+  return fullBoard || noPiecesLeft
 }

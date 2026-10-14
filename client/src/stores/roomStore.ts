@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { GameSettings } from '@/types/game'
+import { DEFAULT_GAME_SETTINGS } from '@/types/game'
 import type { PlayerInfo, PlayerSlot, RoomStateSnapshot } from '@/types/socket'
 
 const ROOM_SESSION_KEY = 'st_room_session'
@@ -26,6 +28,7 @@ export const useRoomStore = defineStore('room', () => {
   const isSpectator = ref(false)
   const connected = ref(false)
   const roomPassword = ref<string | undefined>(undefined)
+  const gameSettings = ref<GameSettings>({ ...DEFAULT_GAME_SETTINGS })
   const reconnectToken = ref<string | null>(null)
   const error        = ref<string | null>(null)
 
@@ -97,6 +100,7 @@ export const useRoomStore = defineStore('room', () => {
     isPrivate.value   = snapshot.isPrivate
     phase.value       = snapshot.phase
     hostSlot.value    = snapshot.hostSlot
+    gameSettings.value = { ...DEFAULT_GAME_SETTINGS, ...(snapshot.gameSettings ?? {}) }
     players.value     = snapshot.players
     playerCount.value = snapshot.playerCount
     scores.value      = snapshot.scores
@@ -147,13 +151,14 @@ export const useRoomStore = defineStore('room', () => {
     isSpectator.value = false
     connected.value = false
     roomPassword.value = undefined
+    gameSettings.value = { ...DEFAULT_GAME_SETTINGS }
     reconnectToken.value = null
     error.value        = null
   }
 
   return {
     roomId, name, isPrivate, phase, mySlot, hostSlot, players, playerCount,
-    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, roomPassword, reconnectToken, error,
+    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, roomPassword, reconnectToken, gameSettings, error,
     setFromAck, restoreSession, clearSavedSession, setSpectating, setConnection, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
   }
 })

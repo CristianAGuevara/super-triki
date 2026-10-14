@@ -5,6 +5,18 @@ export const SIZE_ORDER: Size[] = ['large', 'medium', 'small']
 // Numeric so expanding to 3 or 4 players requires zero type changes
 export type Player = number
 
+export interface GameSettings {
+  turnTimerEnabled: boolean
+  turnDurationSeconds: number
+  removePieceOnTimeout: boolean
+}
+
+export const DEFAULT_GAME_SETTINGS: GameSettings = {
+  turnTimerEnabled: false,
+  turnDurationSeconds: 90,
+  removePieceOnTimeout: false,
+}
+
 export interface Piece {
   id: string
   player: Player

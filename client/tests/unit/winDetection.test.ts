@@ -165,4 +165,14 @@ describe('detectDraw', () => {
     board[2][2].small = null
     expect(detectDraw(board)).toBe(false)
   })
+
+  it('returns true when all players have used all their pieces', () => {
+    const inventories = { 1: [], 2: [] }
+    expect(detectDraw(freshBoard(), inventories, players)).toBe(true)
+  })
+
+  it('does not draw while any player still has pieces', () => {
+    const inventories = { 1: [], 2: [mkPiece(2, 'small')] }
+    expect(detectDraw(freshBoard(), inventories, players)).toBe(false)
+  })
 })

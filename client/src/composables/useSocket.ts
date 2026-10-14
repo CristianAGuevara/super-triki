@@ -5,6 +5,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
+import type { GameSettings } from '@/types/game'
 import type { GameMovePayload, RoomJoinAck, RoomReconnectAck, SpectateJoinAck } from '@/types/socket'
 
 export function useSocket() {
@@ -201,8 +202,8 @@ export function useSocket() {
     })
   }
 
-  function emitStart(roomId: string): void {
-    socket.emit('game:start', { roomId }, result => {
+  function emitStart(roomId: string, settings?: GameSettings): void {
+    socket.emit('game:start', { roomId, settings }, result => {
       if (!result.ok) roomStore.setError(result.error ?? 'No se pudo iniciar la partida')
     })
   }
