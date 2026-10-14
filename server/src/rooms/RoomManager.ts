@@ -3,6 +3,19 @@ import type { PlayerInfo, PublicRoomInfo, RoomStateSnapshot } from '../types/soc
 import { TURN_DURATION_MS, type RoomGameState } from '../engine/GameEngine.js'
 import { generateRoomCode } from './roomUtils.js'
 import { randomUUID } from 'node:crypto'
+import { Redis } from '@upstash/redis'
+
+const REST_URL = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL
+const REST_TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN
+const redis = REST_URL && REST_TOKEN ? new Redis({ url: REST_URL, token: REST_TOKEN }) : null
+const ROOM_TTL_SECONDS = 20 * 60
+const ROOM_INDEX_KEY = 'super-triki:rooms'
+const ROOM_LOCK_SCRIPT = `
+  if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('DEL', KEYS[1])
+  end
+  return 0
+`
 
 export interface RoomState {
   roomId:      string
@@ -21,6 +34,7 @@ export interface RoomState {
   lastRoundPlayers: PlayerSlot[] | null
   lastStartingPlayer: PlayerSlot | null
   disconnectEpoch: Partial<Record<PlayerSlot, number>>
+  disconnectUntil: Partial<Record<PlayerSlot, number>>
 }
 
 const rooms = new Map<string, RoomState>()
@@ -29,16 +43,95 @@ const socketToSpectatorRoom = new Map<string, string>()
 const PLAYER_RECONNECT_GRACE_MS = 90_000
 const HOST_RECONNECT_GRACE_MS = 900_000
 
+function roomKey(roomId: string) {
+  return `super-triki:room:${roomId}`
+}
+
+async function loadRoom(roomId: string): Promise<RoomState | undefined> {
+  if (!redis) return rooms.get(roomId)
+  const room = await redis.get<RoomState>(roomKey(roomId))
+  if (room) {
+    if (pruneExpiredDisconnects(room)) await saveRoom(room)
+    else rooms.set(roomId, room)
+  } else rooms.delete(roomId)
+  return room ?? undefined
+}
+
+function pruneExpiredDisconnects(room: RoomState, now = Date.now()): boolean {
+  let changed = false
+  for (const player of [...room.players]) {
+    if (player.socketId) continue
+    const deadline = room.disconnectUntil[player.slot]
+    if (!deadline || deadline > now) continue
+
+    delete room.reconnectTokens[player.slot]
+    delete room.disconnectUntil[player.slot]
+    room.disconnectEpoch[player.slot] = (room.disconnectEpoch[player.slot] ?? 0) + 1
+    changed = true
+
+    if (room.game) {
+      if (room.hostSlot === player.slot) {
+        room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.hostSlot
+      }
+      continue
+    }
+
+    room.players = room.players.filter(candidate => candidate.slot !== player.slot)
+    if (room.hostSlot === player.slot) {
+      room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.players[0]?.slot ?? 1
+    }
+  }
+  return changed
+}
+
+async function saveRoom(room: RoomState): Promise<void> {
+  rooms.set(room.roomId, room)
+  if (!redis) return
+  await redis.set(roomKey(room.roomId), room, { ex: ROOM_TTL_SECONDS })
+  await redis.sadd(ROOM_INDEX_KEY, room.roomId)
+  await redis.expire(ROOM_INDEX_KEY, ROOM_TTL_SECONDS * 2)
+}
+
+async function deleteRoom(roomId: string): Promise<void> {
+  rooms.delete(roomId)
+  if (!redis) return
+  await redis.del(roomKey(roomId))
+  await redis.srem(ROOM_INDEX_KEY, roomId)
+}
+
 export const RoomManager = {
-  createRoom(
+  async persistRoom(room: RoomState): Promise<void> {
+    await saveRoom(room)
+  },
+
+  async withRoomLock<T>(roomId: string, callback: () => Promise<T> | T): Promise<T> {
+    if (!redis) return callback()
+    const lockKey = `super-triki:lock:${roomId}`
+    const owner = randomUUID()
+    const deadline = Date.now() + 8_000
+    let acquired = false
+    while (!acquired && Date.now() < deadline) {
+      acquired = (await redis.set(lockKey, owner, { nx: true, ex: 15 })) === 'OK'
+      if (!acquired) await new Promise(resolve => setTimeout(resolve, 40))
+    }
+    if (!acquired) throw new Error(`Could not acquire room lock for ${roomId}`)
+
+    try {
+      return await callback()
+    } finally {
+      await redis.eval(ROOM_LOCK_SCRIPT, [lockKey], [owner])
+    }
+  },
+
+  async createRoom(
     username: string,
     socketId: string,
     name: string,
     isPrivate: boolean,
     password?: string,
-  ): RoomState {
+  ): Promise<RoomState> {
     let roomId: string
-    do { roomId = generateRoomCode() } while (rooms.has(roomId))
+    do { roomId = generateRoomCode() } while (await loadRoom(roomId))
 
     const room: RoomState = {
       roomId,
@@ -57,19 +150,20 @@ export const RoomManager = {
       lastRoundPlayers: null,
       lastStartingPlayer: null,
       disconnectEpoch: {},
+      disconnectUntil: {},
     }
-    rooms.set(roomId, room)
+    await saveRoom(room)
     socketToRoom.set(socketId, roomId)
     return room
   },
 
-  joinRoom(
+  async joinRoom(
     roomId: string,
     username: string,
     socketId: string,
     password?: string,
-  ): { ok: true; room: RoomState } | { ok: false; error: string } {
-    const room = rooms.get(roomId)
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
     if (!room)                         return { ok: false, error: 'Sala no encontrada' }
     if (room.isPrivate && room.password && room.password !== password)
                                         return { ok: false, error: 'Contraseña incorrecta' }
@@ -77,10 +171,15 @@ export const RoomManager = {
     // A refresh creates a new socket id. Keep a disconnected player briefly so
     // they can reclaim their slot instead of permanently ending the room.
     const disconnectedPlayer = room.players.find(p =>
-      !p.socketId && p.username.toLowerCase() === username.toLowerCase()
+      !p.socketId && (room.disconnectUntil[p.slot] ?? 0) > Date.now() &&
+      p.username.toLowerCase() === username.toLowerCase()
     )
     if (disconnectedPlayer) {
+      if ((room.disconnectUntil[disconnectedPlayer.slot] ?? 0) <= Date.now()) {
+        return { ok: false, error: 'El tiempo para recuperar esta plaza terminó' }
+      }
       room.disconnectEpoch[disconnectedPlayer.slot] = (room.disconnectEpoch[disconnectedPlayer.slot] ?? 0) + 1
+      delete room.disconnectUntil[disconnectedPlayer.slot]
       disconnectedPlayer.socketId = socketId
       socketToRoom.set(socketId, roomId)
       if (room.game && !room.game.winResult && !room.game.isDraw) {
@@ -89,6 +188,7 @@ export const RoomManager = {
           room.game.turnStartedAt = Date.now()
         }
       }
+      await saveRoom(room)
       return { ok: true, room }
     }
 
@@ -104,15 +204,16 @@ export const RoomManager = {
     room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
     if (room.players.length === 1) room.hostSlot = slot
     socketToRoom.set(socketId, roomId)
+    await saveRoom(room)
     return { ok: true, room }
   },
 
-  reconnectRoom(
+  async reconnectRoom(
     roomId: string,
     reconnectToken: string,
     socketId: string,
-  ): { ok: true; room: RoomState; slot: PlayerSlot; previousSocketId?: string } | { ok: false; error: string } {
-    const room = rooms.get(roomId)
+  ): Promise<{ ok: true; room: RoomState; slot: PlayerSlot; previousSocketId?: string } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
     if (!room) return { ok: false, error: 'Sala no encontrada' }
 
     const entry = Object.entries(room.reconnectTokens).find(([, token]) => token === reconnectToken)
@@ -121,6 +222,11 @@ export const RoomManager = {
     const slot = Number(entry[0]) as PlayerSlot
     const player = room.players.find(candidate => candidate.slot === slot)
     if (!player) return { ok: false, error: 'El jugador ya no pertenece a esta sala' }
+    if (player.socketId === '' && (room.disconnectUntil[slot] ?? 0) <= Date.now()) {
+      delete room.reconnectTokens[slot]
+      await saveRoom(room)
+      return { ok: false, error: 'El tiempo para recuperar esta plaza terminó' }
+    }
 
     const previousSocketId = player.socketId && player.socketId !== socketId
       ? player.socketId
@@ -128,49 +234,54 @@ export const RoomManager = {
     if (previousSocketId) socketToRoom.delete(previousSocketId)
 
     room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
+    delete room.disconnectUntil[slot]
     player.socketId = socketId
     socketToRoom.set(socketId, roomId)
     if (room.game && !room.game.winResult && !room.game.isDraw) room.phase = 'playing'
     if (room.game?.currentPlayer === slot) room.game.turnStartedAt = Date.now()
 
+    await saveRoom(room)
+
     return { ok: true, room, slot, previousSocketId }
   },
 
-  getRoom(roomId: string): RoomState | undefined {
-    return rooms.get(roomId)
+  getRoom(roomId: string): Promise<RoomState | undefined> {
+    return loadRoom(roomId)
   },
 
-  getRoomBySocket(socketId: string): RoomState | undefined {
+  async getRoomBySocket(socketId: string): Promise<RoomState | undefined> {
     const roomId = socketToRoom.get(socketId)
-    return roomId ? rooms.get(roomId) : undefined
+    return roomId ? loadRoom(roomId) : undefined
   },
 
-  getSlotBySocket(socketId: string, roomId?: string): PlayerSlot | null {
-    const room = this.getRoomBySocket(socketId)
+  async getSlotBySocket(socketId: string, roomId?: string): Promise<PlayerSlot | null> {
+    const room = await this.getRoomBySocket(socketId)
     if (!room) return null
     if (roomId && room.roomId !== roomId) return null
     return room.players.find(p => p.socketId === socketId)?.slot ?? null
   },
 
-  getHostSlot(roomId: string): PlayerSlot | null {
-    return rooms.get(roomId)?.hostSlot ?? null
+  async getHostSlot(roomId: string): Promise<PlayerSlot | null> {
+    return (await loadRoom(roomId))?.hostSlot ?? null
   },
 
-  removePlayer(socketId: string): { room: RoomState; slot: PlayerSlot; player: PlayerInfo; graceMs: number; disconnectEpoch: number } | null {
-    const room = this.getRoomBySocket(socketId)
+  async removePlayer(socketId: string): Promise<{ room: RoomState; slot: PlayerSlot; player: PlayerInfo; graceMs: number; disconnectEpoch: number } | null> {
+    const room = await this.getRoomBySocket(socketId)
     if (!room) return null
 
     const player = room.players.find(p => p.socketId === socketId)
     if (!player) return null
 
     const disconnectedPlayer = { ...player }
+    const graceMs = this.getReconnectGraceMs(room, player.slot)
     const disconnectEpoch = (room.disconnectEpoch[player.slot] ?? 0) + 1
     room.disconnectEpoch[player.slot] = disconnectEpoch
+    room.disconnectUntil[player.slot] = Date.now() + graceMs
 
     player.socketId = ''
     socketToRoom.delete(socketId)
 
-    const graceMs = this.getReconnectGraceMs(room, player.slot)
+    await saveRoom(room)
     return { room, slot: player.slot, player: disconnectedPlayer, graceMs, disconnectEpoch }
   },
 
@@ -188,60 +299,68 @@ export const RoomManager = {
     return Math.max(PLAYER_RECONNECT_GRACE_MS, timeUntilTheirTurn + 30_000)
   },
 
-  expireDisconnectedPlayer(roomId: string, slot: PlayerSlot, disconnectEpoch: number): RoomState | null {
-    const room = rooms.get(roomId)
+  async expireDisconnectedPlayer(roomId: string, slot: PlayerSlot, disconnectEpoch: number): Promise<RoomState | null> {
+    const room = await loadRoom(roomId)
     if (!room) return null
     const player = room.players.find(p => p.slot === slot)
     if (!player || player.socketId !== '' || room.disconnectEpoch[slot] !== disconnectEpoch) return null
 
     if (room.game) {
       delete room.reconnectTokens[slot]
+      delete room.disconnectUntil[slot]
       room.disconnectEpoch[slot] = disconnectEpoch + 1
       if (room.hostSlot === slot) {
         room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.hostSlot
       }
+      await saveRoom(room)
       return room
     }
 
     room.players = room.players.filter(p => p.slot !== slot)
     delete room.reconnectTokens[slot]
     delete room.disconnectEpoch[slot]
+    delete room.disconnectUntil[slot]
     if (room.hostSlot === slot) {
       room.hostSlot = room.players.find(p => p.socketId)?.slot ?? room.players[0]?.slot ?? 1
     }
-    if (room.players.length === 0 && !this.hasSpectators(roomId)) {
-      rooms.delete(roomId)
+    if (room.players.length === 0 && !this.hasSpectators(roomId) && !redis) {
+      await deleteRoom(roomId)
       return null
     }
+    await saveRoom(room)
     return room
   },
 
-  removeDisconnectedPlayers(roomId: string): void {
-    const room = rooms.get(roomId)
+  async removeDisconnectedPlayers(roomId: string): Promise<void> {
+    const room = await loadRoom(roomId)
     if (!room) return
     for (const player of room.players) {
       if (!player.socketId) {
         room.disconnectEpoch[player.slot] = (room.disconnectEpoch[player.slot] ?? 0) + 1
         delete room.reconnectTokens[player.slot]
+        delete room.disconnectUntil[player.slot]
       }
     }
     room.players = room.players.filter(player => player.socketId !== '')
+    await saveRoom(room)
   },
 
-  finishGameForHost(roomId: string): RoomState | null {
-    const room = rooms.get(roomId)
+  async finishGameForHost(roomId: string): Promise<RoomState | null> {
+    await this.removeDisconnectedPlayers(roomId)
+    const room = await loadRoom(roomId)
     if (!room) return null
-    this.removeDisconnectedPlayers(roomId)
     room.game = null
     room.lastGame = null
     room.phase = 'waiting'
+    await saveRoom(room)
     return room
   },
 
-  joinSpectator(roomId: string, socketId: string): RoomState | undefined {
-    const room = rooms.get(roomId)
+  async joinSpectator(roomId: string, socketId: string): Promise<RoomState | undefined> {
+    const room = await loadRoom(roomId)
     if (!room) return undefined
     socketToSpectatorRoom.set(socketId, roomId)
+    await saveRoom(room)
     return room
   },
 
@@ -265,28 +384,31 @@ export const RoomManager = {
     return false
   },
 
-  setGame(roomId: string, game: RoomGameState): void {
-    const room = rooms.get(roomId)
+  async setGame(roomId: string, game: RoomGameState): Promise<void> {
+    const room = await loadRoom(roomId)
     if (room) {
       room.game  = game
       room.phase = 'playing'
+      await saveRoom(room)
     }
   },
 
-  initScores(roomId: string, slots: PlayerSlot[]): void {
-    const room = rooms.get(roomId)
+  async initScores(roomId: string, slots: PlayerSlot[]): Promise<void> {
+    const room = await loadRoom(roomId)
     if (!room) return
     slots.forEach(s => { if (room.scores[s] === undefined) room.scores[s] = 0 })
+    await saveRoom(room)
   },
 
-  addScore(roomId: string, slot: PlayerSlot): void {
-    const room = rooms.get(roomId)
+  async addScore(roomId: string, slot: PlayerSlot): Promise<void> {
+    const room = await loadRoom(roomId)
     if (!room) return
     room.scores[slot] = (room.scores[slot] ?? 0) + 1
+    await saveRoom(room)
   },
 
-  nextRound(roomId: string): PlayerSlot | null {
-    const room = rooms.get(roomId)
+  async nextRound(roomId: string): Promise<PlayerSlot | null> {
+    const room = await loadRoom(roomId)
     if (!room || room.players.length === 0) return null
 
     const slots = room.players.map(player => player.slot)
@@ -302,12 +424,25 @@ export const RoomManager = {
 
     room.lastRoundPlayers = slots
     room.lastStartingPlayer = startingPlayer
+    await saveRoom(room)
     return startingPlayer
   },
 
-  getPublicRooms(): PublicRoomInfo[] {
+  async getPublicRooms(): Promise<PublicRoomInfo[]> {
+    if (redis) {
+      const roomIds = await redis.smembers<string[]>(ROOM_INDEX_KEY)
+      const loadedRooms = await Promise.all(roomIds.map(roomId => loadRoom(roomId)))
+      const expired = roomIds.filter((_, i) => !loadedRooms[i])
+      if (expired.length) await redis.srem(ROOM_INDEX_KEY, ...expired)
+        return loadedRooms.flatMap(r => r && r.players.some(player => player.socketId) && !r.isPrivate && r.phase !== 'finished' ? [{
+        roomId: r.roomId,
+        name: r.name,
+        playerCount: r.players.filter(player => player.socketId !== '').length,
+        phase: r.phase as 'waiting' | 'playing',
+      }] : [])
+    }
     return Array.from(rooms.values())
-      .filter(r => !r.isPrivate && r.phase !== 'finished')
+      .filter(r => r.players.some(player => player.socketId) && !r.isPrivate && r.phase !== 'finished')
       .map(r => ({
         roomId:      r.roomId,
         name:        r.name,

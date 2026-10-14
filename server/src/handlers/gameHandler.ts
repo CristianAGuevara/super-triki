@@ -1,7 +1,8 @@
 import type { Server, Socket } from 'socket.io'
 import type { ClientToServerEvents, GameMovePayload, ServerToClientEvents } from '../types/socket.js'
-import type { PlayerSlot, Size } from '../types/game.js'
+import type { Size } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
+import type { RoomState } from '../rooms/RoomManager.js'
 import {
   buildInitialGameState,
   validateMove,
@@ -23,30 +24,37 @@ function clearTurnTimer(roomId: string) {
 
 function scheduleTurnTimer(io: TypedServer, roomId: string) {
   clearTurnTimer(roomId)
-  const room = RoomManager.getRoom(roomId)
-  const game = room?.game
-  if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw) return
-  if (!room.players.some(player => player.slot === game.currentPlayer && player.socketId)) return
+  void RoomManager.getRoom(roomId).then(room => {
+    const game = room?.game
+    if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw) return
+    if (!room.players.some(player => player.slot === game.currentPlayer && player.socketId)) return
 
-  const expectedTurnNumber = game.turnNumber
-  const expectedPlayer = game.currentPlayer
-  const remaining = Math.max(0, game.turnStartedAt + TURN_DURATION_MS - Date.now())
-  const timer = setTimeout(() => {
-    const currentRoom = RoomManager.getRoom(roomId)
-    const currentGame = currentRoom?.game
-    if (!currentRoom || currentRoom.phase !== 'playing' || !currentGame ||
-        currentGame.turnNumber !== expectedTurnNumber || currentGame.currentPlayer !== expectedPlayer) return
+    const expectedTurnNumber = game.turnNumber
+    const expectedPlayer = game.currentPlayer
+    const remaining = Math.max(0, game.turnStartedAt + TURN_DURATION_MS - Date.now())
+    const timer = setTimeout(() => {
+      void RoomManager.withRoomLock(roomId, async () => {
+        const currentRoom = await RoomManager.getRoom(roomId)
+        const currentGame = currentRoom?.game
+        if (!currentRoom || currentRoom.phase !== 'playing' || !currentGame ||
+            currentGame.turnNumber !== expectedTurnNumber || currentGame.currentPlayer !== expectedPlayer ||
+            !currentRoom.players.some(player => player.slot === expectedPlayer && player.socketId)) return false
 
-    currentRoom.game = skipTurn(currentGame)
-    io.to(roomId).emit('game:turn-timeout', { player: expectedPlayer })
-    io.to(roomId).emit('game:state', toSnapshot(currentRoom.game))
-    scheduleTurnTimer(io, roomId)
-  }, remaining)
-  turnTimers.set(roomId, timer)
+        currentRoom.game = skipTurn(currentGame)
+        await RoomManager.persistRoom(currentRoom)
+        io.to(roomId).emit('game:turn-timeout', { player: expectedPlayer })
+        io.to(roomId).emit('game:state', toSnapshot(currentRoom.game))
+        return true
+      }).then(changed => {
+        if (changed) scheduleTurnTimer(io, roomId)
+      }).catch(error => console.error('[game:turn-timeout]', error))
+    }, remaining)
+    turnTimers.set(roomId, timer)
+  }).catch(error => console.error('[game:timer-load]', error))
 }
 
-function broadcastRoomList(io: TypedServer) {
-  io.to('lobby').emit('rooms:list', RoomManager.getPublicRooms())
+async function broadcastRoomList(io: TypedServer) {
+  io.to('lobby').emit('rooms:list', await RoomManager.getPublicRooms())
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,7 +73,7 @@ function isValidMovePayload(value: unknown): value is GameMovePayload {
     isSize(value.targetSize)
 }
 
-function emitCurrentGame(socket: TypedSocket, room: ReturnType<typeof RoomManager.getRoom>): void {
+function emitCurrentGame(socket: TypedSocket, room: RoomState | undefined): void {
   const game = room?.game ?? room?.lastGame
   if (!game) return
 
@@ -82,27 +90,27 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
   // All new connections join the lobby channel to receive room list updates
   socket.join('lobby')
-  socket.emit('rooms:list', RoomManager.getPublicRooms())
+  void RoomManager.getPublicRooms().then(rooms => socket.emit('rooms:list', rooms))
 
   // ── rooms:get ────────────────────────────────────────────────
-  socket.on('rooms:get', ack => {
-    ack(RoomManager.getPublicRooms())
+  socket.on('rooms:get', async ack => {
+    ack(await RoomManager.getPublicRooms())
   })
 
   // ── spectate:join ────────────────────────────────────────────
-  socket.on('spectate:join', (payload, ack) => {
+  socket.on('spectate:join', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.roomId !== 'string') {
       ack({ ok: false, error: 'Datos inválidos' })
       return
     }
 
     const roomId = payload.roomId.trim().toUpperCase()
-    const room = RoomManager.getRoom(roomId)
+    const room = await RoomManager.getRoom(roomId)
     if (!room) {
       ack({ ok: false, error: 'Sala no encontrada' })
       return
     }
-    if (RoomManager.getRoomBySocket(socket.id)) {
+    if (await RoomManager.getRoomBySocket(socket.id)) {
       ack({ ok: false, error: 'Ya estás jugando en una sala' })
       return
     }
@@ -113,15 +121,20 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
 
-    RoomManager.joinSpectator(roomId, socket.id)
+    const joinedRoom = await RoomManager.withRoomLock(roomId, () => RoomManager.joinSpectator(roomId, socket.id))
+    if (!joinedRoom) {
+      ack({ ok: false, error: 'Sala no encontrada' })
+      return
+    }
     socket.leave('lobby')
     socket.join(roomId)
-    ack({ ok: true, roomId, roomState: RoomManager.toSnapshot(room) })
-    emitCurrentGame(socket, room)
+    ack({ ok: true, roomId, roomState: RoomManager.toSnapshot(joinedRoom) })
+    emitCurrentGame(socket, joinedRoom)
+    scheduleTurnTimer(io, roomId)
   })
 
   // ── room:create ──────────────────────────────────────────────
-  socket.on('room:create', (payload, ack) => {
+  socket.on('room:create', async (payload, ack) => {
     if (!isRecord(payload)) {
       ack({ ok: false, error: 'Datos inválidos' })
       return
@@ -135,20 +148,20 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Nombre requerido' })
       return
     }
-    if (RoomManager.getRoomBySocket(socket.id) || RoomManager.getSpectatorRoom(socket.id)) {
+    if (await RoomManager.getRoomBySocket(socket.id) || RoomManager.getSpectatorRoom(socket.id)) {
       ack({ ok: false, error: 'Ya estás en una sala' })
       return
     }
-    const room = RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password)
+    const room = await RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password)
     socket.leave('lobby')
     socket.join(room.roomId)
     ack({ ok: true, roomId: room.roomId, playerSlot: 1, reconnectToken: room.reconnectTokens[1] })
     socket.emit('room:state', RoomManager.toSnapshot(room))
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
   })
 
   // ── room:reconnect ───────────────────────────────────────────
-  socket.on('room:reconnect', (payload, ack) => {
+  socket.on('room:reconnect', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.roomId !== 'string' ||
         typeof payload.reconnectToken !== 'string' || !payload.reconnectToken) {
       ack({ ok: false, error: 'Datos de reconexión inválidos' })
@@ -156,14 +169,16 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
 
     const roomId = payload.roomId.trim().toUpperCase()
-    const result = RoomManager.reconnectRoom(roomId, payload.reconnectToken, socket.id)
+    const result = await RoomManager.withRoomLock(roomId, () =>
+      RoomManager.reconnectRoom(roomId, payload.reconnectToken as string, socket.id)
+    )
     if (!result.ok) {
       ack({ ok: false, error: result.error })
       return
     }
 
     if (result.previousSocketId) {
-      io.sockets.sockets.get(result.previousSocketId)?.disconnect(true)
+      io.in(result.previousSocketId).disconnectSockets(true)
     }
     socket.leave('lobby')
     socket.join(roomId)
@@ -180,11 +195,11 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(result.room))
     emitCurrentGame(socket, result.room)
     scheduleTurnTimer(io, roomId)
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
   })
 
   // ── room:join ────────────────────────────────────────────────
-  socket.on('room:join', (payload, ack) => {
+  socket.on('room:join', async (payload, ack) => {
     if (!isRecord(payload)) {
       ack({ ok: false, error: 'Datos inválidos' })
       return
@@ -198,7 +213,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
 
-    const existing = RoomManager.getRoom(roomId)
+    const existing = await RoomManager.getRoom(roomId)
     if (!existing) {
       ack({ ok: false, error: 'Sala no encontrada' })
       return
@@ -220,7 +235,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
 
-    const currentRoom = RoomManager.getRoomBySocket(socket.id)
+    const currentRoom = await RoomManager.getRoomBySocket(socket.id)
     if (RoomManager.getSpectatorRoom(socket.id)) {
       ack({ ok: false, error: 'Ya estás viendo una sala' })
       return
@@ -230,7 +245,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
 
-    const result = RoomManager.joinRoom(roomId, username.trim(), socket.id, password)
+    const result = await RoomManager.withRoomLock(roomId, () =>
+      RoomManager.joinRoom(roomId, username.trim(), socket.id, password)
+    )
     if (!result.ok) {
       ack({ ok: false, error: result.error })
       return
@@ -255,190 +272,204 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
     emitCurrentGame(socket, room)
     scheduleTurnTimer(io, roomId)
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
   })
 
   // ── game:start ───────────────────────────────────────────────
-  socket.on('game:start', (payload, ack) => {
+  socket.on('game:start', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.roomId !== 'string') {
       ack({ ok: false, error: 'Datos de inicio inválidos' })
       return
     }
     const roomId = payload.roomId.trim().toUpperCase()
-    const room = RoomManager.getRoom(roomId)
-    if (!room) {
-      ack({ ok: false, error: 'Sala no encontrada' })
-      return
-    }
-    if (room.phase !== 'waiting') {
-      ack({ ok: false, error: 'La sala no está esperando para iniciar' })
-      return
-    }
+    const outcome = await RoomManager.withRoomLock(roomId, async () => {
+      let room = await RoomManager.getRoom(roomId)
+      if (!room) return { ok: false as const, error: 'Sala no encontrada' }
+      if (room.phase !== 'waiting') return { ok: false as const, error: 'La sala no está esperando para iniciar' }
 
-    const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== RoomManager.getHostSlot(roomId)) {
-      ack({ ok: false, error: 'Solo el host puede iniciar la partida' })
-      return
-    }
-    if (room.players.filter(player => player.socketId).length < 2) {
-      ack({ ok: false, error: 'Se necesitan al menos dos jugadores conectados' })
-      return
-    }
+      const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
+      const hostSlot = await RoomManager.getHostSlot(roomId)
+      if (actingSlot !== hostSlot) return { ok: false as const, error: 'Solo el host puede iniciar la partida' }
+      if (room.players.filter(player => player.socketId).length < 2) {
+        return { ok: false as const, error: 'Se necesitan al menos dos jugadores conectados' }
+      }
 
-    RoomManager.removeDisconnectedPlayers(roomId)
+      await RoomManager.removeDisconnectedPlayers(roomId)
+      room = await RoomManager.getRoom(roomId)
+      if (!room) return { ok: false as const, error: 'Sala no encontrada' }
+      const slots = room.players.map(player => player.slot)
+      await RoomManager.initScores(roomId, slots)
+      const startingPlayer = await RoomManager.nextRound(roomId)
+      if (!startingPlayer) return { ok: false as const, error: 'No se pudo elegir quién comienza' }
+      const game = buildInitialGameState(slots, startingPlayer)
+      await RoomManager.setGame(roomId, game)
+      const updatedRoom = await RoomManager.getRoom(roomId)
+      return updatedRoom
+        ? { ok: true as const, room: updatedRoom, game }
+        : { ok: false as const, error: 'Sala no encontrada' }
+    })
 
-    const slots = room.players.map(p => p.slot)
-    RoomManager.initScores(roomId, slots)
-    const startingPlayer = RoomManager.nextRound(roomId)
-    if (!startingPlayer) {
-      ack({ ok: false, error: 'No se pudo elegir quién comienza' })
+    if (!outcome.ok) {
+      ack({ ok: false, error: outcome.error })
       return
     }
-    const game = buildInitialGameState(slots, startingPlayer)
-    RoomManager.setGame(roomId, game)
+    const { room, game } = outcome
     ack({ ok: true })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
     scheduleTurnTimer(io, roomId)
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
   })
 
   // ── game:move ────────────────────────────────────────────────
-  socket.on('game:move', (payload, ack) => {
+  socket.on('game:move', async (payload, ack) => {
     if (!isValidMovePayload(payload)) {
       ack({ ok: false, error: 'Movimiento inválido' })
       return
     }
     const normalizedPayload = { ...payload, roomId: payload.roomId.trim().toUpperCase() }
-    const room = RoomManager.getRoom(normalizedPayload.roomId)
-    if (!room || !room.game) {
-      ack({ ok: false, error: 'Sala o partida no encontrada' })
+    const outcome = await RoomManager.withRoomLock(normalizedPayload.roomId, async () => {
+      const room = await RoomManager.getRoom(normalizedPayload.roomId)
+      if (!room?.game) return { ok: false as const, error: 'Sala o partida no encontrada' }
+
+      const actingSlot = await RoomManager.getSlotBySocket(socket.id, normalizedPayload.roomId)
+      if (!actingSlot) return { ok: false as const, error: 'No eres un jugador de esta sala' }
+
+      if (Date.now() >= room.game.turnStartedAt + TURN_DURATION_MS) {
+        const timedOutPlayer = room.game.currentPlayer
+        room.game = skipTurn(room.game)
+        await RoomManager.persistRoom(room)
+        return { ok: false as const, kind: 'timeout' as const, error: 'Se agotó el tiempo; el turno pasó al siguiente jugador', timedOutPlayer, room }
+      }
+
+      const validation = validateMove(room.game, normalizedPayload, actingSlot)
+      if (!validation.valid) return { ok: false as const, error: validation.reason }
+
+      const game = applyMove(room.game, normalizedPayload)
+      if (game.winResult) room.scores[game.winResult.winner] = (room.scores[game.winResult.winner] ?? 0) + 1
+      room.game = game.winResult || game.isDraw ? null : game
+      if (game.winResult || game.isDraw) {
+        room.lastGame = game
+        room.phase = 'waiting'
+      }
+      await RoomManager.persistRoom(room)
+      return { ok: true as const, game, room, finished: Boolean(game.winResult || game.isDraw) }
+    })
+
+    if (!outcome.ok) {
+      ack({ ok: false, error: outcome.error })
+      if ('kind' in outcome && outcome.kind === 'timeout') {
+        io.to(normalizedPayload.roomId).emit('game:turn-timeout', { player: outcome.timedOutPlayer })
+        io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(outcome.room.game!))
+        scheduleTurnTimer(io, normalizedPayload.roomId)
+      }
       return
     }
-
-    const actingSlot = RoomManager.getSlotBySocket(socket.id, normalizedPayload.roomId)
-    if (!actingSlot) {
-      ack({ ok: false, error: 'No eres un jugador de esta sala' })
-      return
-    }
-
-    if (Date.now() >= room.game.turnStartedAt + TURN_DURATION_MS) {
-      const timedOutPlayer = room.game.currentPlayer
-      room.game = skipTurn(room.game)
-      ack({ ok: false, error: 'Se agotó el tiempo; el turno pasó al siguiente jugador' })
-      io.to(normalizedPayload.roomId).emit('game:turn-timeout', { player: timedOutPlayer })
-      io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(room.game))
-      scheduleTurnTimer(io, normalizedPayload.roomId)
-      return
-    }
-
-    const validation = validateMove(room.game, normalizedPayload, actingSlot)
-    if (!validation.valid) {
-      ack({ ok: false, error: validation.reason })
-      return
-    }
-
-    const newState = applyMove(room.game, normalizedPayload)
-    room.game = newState
 
     ack({ ok: true })
-    io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(newState))
-
-    if (newState.winResult || newState.isDraw) {
+    io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(outcome.game))
+    if (outcome.finished) {
       clearTurnTimer(normalizedPayload.roomId)
-      if (newState.winResult) {
-        RoomManager.addScore(normalizedPayload.roomId, newState.winResult.winner as PlayerSlot)
-      }
-      room.lastGame = newState
-      room.game = null
-      room.phase = 'waiting'
-      io.to(normalizedPayload.roomId).emit('room:state', RoomManager.toSnapshot(room))
+      io.to(normalizedPayload.roomId).emit('room:state', RoomManager.toSnapshot(outcome.room))
       io.to(normalizedPayload.roomId).emit('game:over', {
-        winResult:  newState.winResult,
-        finalState: toSnapshot(newState),
+        winResult: outcome.game.winResult,
+        finalState: toSnapshot(outcome.game),
       })
-      broadcastRoomList(io)
+      await broadcastRoomList(io)
     } else {
       scheduleTurnTimer(io, normalizedPayload.roomId)
     }
   })
 
   // ── game:rematch ─────────────────────────────────────────────
-  socket.on('game:rematch', (payload, ack) => {
+  socket.on('game:rematch', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.roomId !== 'string') {
       ack({ ok: false, error: 'Datos de reinicio inválidos' })
       return
     }
     const roomId = payload.roomId.trim().toUpperCase()
-    const room = RoomManager.getRoom(roomId)
-    if (!room || room.phase !== 'finished' || room.players.length < 2) {
-      ack({ ok: false, error: 'La partida no está pausada o no hay jugadores suficientes' })
-      return
-    }
-    const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== RoomManager.getHostSlot(roomId)) {
-      ack({ ok: false, error: 'Solo el host puede reiniciar la partida' })
-      return
-    }
-    const connectedPlayers = room.players.filter(player => player.socketId)
-    if (connectedPlayers.length < 2) {
-      ack({ ok: false, error: 'Se necesitan al menos dos jugadores conectados' })
-      return
-    }
-    RoomManager.removeDisconnectedPlayers(roomId)
+    const outcome = await RoomManager.withRoomLock(roomId, async () => {
+      let room = await RoomManager.getRoom(roomId)
+      if (!room || room.phase !== 'finished' || room.players.length < 2) {
+        return { ok: false as const, error: 'La partida no está pausada o no hay jugadores suficientes' }
+      }
+      const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
+      const hostSlot = await RoomManager.getHostSlot(roomId)
+      if (actingSlot !== hostSlot) return { ok: false as const, error: 'Solo el host puede reiniciar la partida' }
+      if (room.players.filter(player => player.socketId).length < 2) {
+        return { ok: false as const, error: 'Se necesitan al menos dos jugadores conectados' }
+      }
+      await RoomManager.removeDisconnectedPlayers(roomId)
+      room = await RoomManager.getRoom(roomId)
+      if (!room) return { ok: false as const, error: 'Sala no encontrada' }
 
-    const startingPlayer = RoomManager.nextRound(roomId)
-    if (!startingPlayer) {
-      ack({ ok: false, error: 'No se pudo elegir quién comienza' })
+      const startingPlayer = await RoomManager.nextRound(roomId)
+      if (!startingPlayer) return { ok: false as const, error: 'No se pudo elegir quién comienza' }
+      const game = buildInitialGameState(room.players.map(player => player.slot), startingPlayer)
+      await RoomManager.setGame(roomId, game)
+      const updatedRoom = await RoomManager.getRoom(roomId)
+      return updatedRoom
+        ? { ok: true as const, room: updatedRoom, game }
+        : { ok: false as const, error: 'Sala no encontrada' }
+    })
+    if (!outcome.ok) {
+      ack({ ok: false, error: outcome.error })
       return
     }
-    const game = buildInitialGameState(room.players.map(player => player.slot), startingPlayer)
-    RoomManager.setGame(roomId, game)
+    const { room, game } = outcome
     ack({ ok: true })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
     io.to(roomId).emit('game:state', toSnapshot(game))
     scheduleTurnTimer(io, roomId)
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
   })
 
   // Host may end a paused multiplayer game and return everyone to the lobby.
-  socket.on('game:finish', (payload, ack) => {
+  socket.on('game:finish', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.roomId !== 'string') {
       ack({ ok: false, error: 'Datos inválidos' })
       return
     }
     const roomId = payload.roomId.trim().toUpperCase()
-    const room = RoomManager.getRoom(roomId)
-    if (!room?.game || room.phase !== 'playing') {
-      ack({ ok: false, error: 'No hay una partida activa para finalizar' })
+    const waitingRoom = await RoomManager.withRoomLock(roomId, async () => {
+      const room = await RoomManager.getRoom(roomId)
+      if (!room?.game || room.phase !== 'playing') return { error: 'No hay una partida activa para finalizar' }
+      const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
+      const hostSlot = await RoomManager.getHostSlot(roomId)
+      if (actingSlot !== hostSlot) return { error: 'Solo el host puede finalizar la partida' }
+      if (!room.players.some(player => !player.socketId)) return { error: 'No hay jugadores desconectados' }
+      return { room: await RoomManager.finishGameForHost(roomId) }
+    })
+    if ('error' in waitingRoom) {
+      ack({ ok: false, error: waitingRoom.error })
       return
     }
-    const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
-    if (actingSlot !== RoomManager.getHostSlot(roomId)) {
-      ack({ ok: false, error: 'Solo el host puede finalizar la partida' })
-      return
-    }
-    if (!room.players.some(player => !player.socketId)) {
-      ack({ ok: false, error: 'No hay jugadores desconectados' })
-      return
-    }
-
     clearTurnTimer(roomId)
-    const waitingRoom = RoomManager.finishGameForHost(roomId)
-    if (!waitingRoom) {
+    if (!waitingRoom.room) {
       ack({ ok: false, error: 'No se pudo recuperar la sala' })
       return
     }
     ack({ ok: true })
-    io.to(roomId).emit('room:state', RoomManager.toSnapshot(waitingRoom))
+    io.to(roomId).emit('room:state', RoomManager.toSnapshot(waitingRoom.room))
     io.to(roomId).emit('game:aborted', { reason: 'host-ended-game' })
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
   })
 
   // ── disconnect ───────────────────────────────────────────────
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     RoomManager.removeSpectator(socket.id)
-    const result = RoomManager.removePlayer(socket.id)
+    const socketRoom = await RoomManager.getRoomBySocket(socket.id)
+    if (!socketRoom) return
+
+    const result = await RoomManager.withRoomLock(socketRoom.roomId, async () => {
+      const disconnected = await RoomManager.removePlayer(socket.id)
+      if (!disconnected?.room.game || disconnected.room.game.currentPlayer !== disconnected.slot) return disconnected
+
+      clearTurnTimer(disconnected.room.roomId)
+      disconnected.room.game.turnStartedAt = Date.now()
+      await RoomManager.persistRoom(disconnected.room)
+      return disconnected
+    })
     if (!result) return
 
     const { room, slot, player, graceMs, disconnectEpoch } = result
@@ -450,20 +481,23 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         permanent: false,
       })
       if (room.game.currentPlayer === slot) {
-        clearTurnTimer(room.roomId)
-        room.game.turnStartedAt = Date.now()
         io.to(room.roomId).emit('game:clock', { turnStartedAt: room.game.turnStartedAt })
       }
     }
 
     io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))
-    broadcastRoomList(io)
+    await broadcastRoomList(io)
 
     setTimeout(() => {
-      const updatedRoom = RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
-      if (!updatedRoom) clearTurnTimer(room.roomId)
-      if (updatedRoom) io.to(updatedRoom.roomId).emit('room:state', RoomManager.toSnapshot(updatedRoom))
-      broadcastRoomList(io)
+      void RoomManager.withRoomLock(room.roomId, () =>
+        RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
+      ).then(updatedRoom => {
+        if (!updatedRoom) clearTurnTimer(room.roomId)
+        return RoomManager.getRoom(room.roomId).then(currentRoom => {
+          if (currentRoom) io.to(currentRoom.roomId).emit('room:state', RoomManager.toSnapshot(currentRoom))
+          return broadcastRoomList(io)
+        })
+      }).catch(error => console.error('[room:disconnect-expiry]', error))
     }, graceMs)
   })
 }
