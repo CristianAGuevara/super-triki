@@ -102,10 +102,7 @@ const turnLabel = computed(() => {
 const turnColor = computed(() =>
   gameStore.playerMeta[gameStore.currentPlayer]?.color ?? 'var(--accent-primary)'
 )
-const isCurrentTurnPaused = computed(() =>
-  roomStore.players.some(player => player.slot === gameStore.currentPlayer && !player.socketId)
-)
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(() => isCurrentTurnPaused.value)
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
 
 const resultLabel = computed(() => {
   if (!gameStore.winResult) return 'Tablero completo'

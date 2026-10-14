@@ -27,8 +27,7 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
   void RoomManager.getRoom(roomId).then(room => {
     const game = room?.game
     if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw) return
-    if (!room.players.some(player => player.slot === game.currentPlayer && player.socketId)) return
-
+    if (!room.players.some(player => player.socketId)) return
     const expectedTurnNumber = game.turnNumber
     const expectedPlayer = game.currentPlayer
     const remaining = Math.max(0, game.turnStartedAt + TURN_DURATION_MS - Date.now())
@@ -38,7 +37,7 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
         const currentGame = currentRoom?.game
         if (!currentRoom || currentRoom.phase !== 'playing' || !currentGame ||
             currentGame.turnNumber !== expectedTurnNumber || currentGame.currentPlayer !== expectedPlayer ||
-            !currentRoom.players.some(player => player.slot === expectedPlayer && player.socketId)) return false
+            !currentRoom.players.some(player => player.socketId)) return false
 
         currentRoom.game = skipTurn(currentGame)
         await RoomManager.persistRoom(currentRoom)
@@ -463,11 +462,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     const result = await RoomManager.withRoomLock(socketRoom.roomId, async () => {
       const disconnected = await RoomManager.removePlayer(socket.id)
-      if (!disconnected?.room.game || disconnected.room.game.currentPlayer !== disconnected.slot) return disconnected
-
-      clearTurnTimer(disconnected.room.roomId)
-      disconnected.room.game.turnStartedAt = Date.now()
-      await RoomManager.persistRoom(disconnected.room)
+      if (!disconnected?.room.game) return disconnected
       return disconnected
     })
     if (!result) return
@@ -480,9 +475,6 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         slot,
         permanent: false,
       })
-      if (room.game.currentPlayer === slot) {
-        io.to(room.roomId).emit('game:clock', { turnStartedAt: room.game.turnStartedAt })
-      }
     }
 
     io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))

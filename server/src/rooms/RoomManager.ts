@@ -184,9 +184,6 @@ export const RoomManager = {
       socketToRoom.set(socketId, roomId)
       if (room.game && !room.game.winResult && !room.game.isDraw) {
         room.phase = 'playing'
-        if (room.game.currentPlayer === disconnectedPlayer.slot) {
-          room.game.turnStartedAt = Date.now()
-        }
       }
       await saveRoom(room)
       return { ok: true, room }
@@ -238,7 +235,6 @@ export const RoomManager = {
     player.socketId = socketId
     socketToRoom.set(socketId, roomId)
     if (room.game && !room.game.winResult && !room.game.isDraw) room.phase = 'playing'
-    if (room.game?.currentPlayer === slot) room.game.turnStartedAt = Date.now()
 
     await saveRoom(room)
 

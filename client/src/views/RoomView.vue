@@ -141,7 +141,7 @@
         <span class="disconnect-banner__icon" aria-hidden="true">!</span>
         <span class="disconnect-banner__message">
           <strong>{{ disconnectedName }} se desconectó.</strong>
-          {{ disconnectedTurn ? 'Su turno está en pausa hasta que vuelva.' : 'La partida continúa; si llega su turno, se esperará su reconexión.' }}
+          {{ disconnectedTurn ? 'Su reloj sigue corriendo; al agotarse, el turno pasa al siguiente jugador.' : 'La partida continúa; cuando llegue su turno, su reloj también correrá.' }}
         </span>
         <button
           v-if="canFinishGameForHost"
@@ -199,9 +199,6 @@ const rulesShownCount = ref(getRulesShownCount())
 
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
 const disconnectedTurn = computed(() => roomStore.disconnectedPlayer?.slot === gameStore.currentPlayer)
-const disconnectedTurnPaused = computed(() =>
-  roomStore.players.some(player => player.slot === gameStore.currentPlayer && !player.socketId)
-)
 const showDisconnectNotice = computed(() => roomStore.opponentLeft && roomStore.phase === 'playing')
 const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
 const orderedPlayers = computed(() => {
@@ -215,7 +212,7 @@ const canFinishGameForHost = computed(() =>
   roomStore.mySlot === roomStore.hostSlot && roomStore.phase === 'playing' &&
   roomStore.players.some(player => !player.socketId)
 )
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(() => disconnectedTurnPaused.value)
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
 
 const lastGameResult = computed(() => {
   if (gameStore.isDraw) return 'Empate'
