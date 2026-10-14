@@ -4,6 +4,7 @@ import type { GameSettings, Size } from '../types/game.js'
 import { DEFAULT_GAME_SETTINGS } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
 import type { RoomState } from '../rooms/RoomManager.js'
+import { emitRoomEvent } from '../redis.js'
 import {
   buildInitialGameState,
   validateMove,
@@ -52,14 +53,14 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
         }
         await RoomManager.persistRoom(currentRoom)
         return { room: currentRoom, game: skippedGame, finished }
-      }).then(result => {
+      }).then(async result => {
         if (!result) return
-        io.to(roomId).emit('game:turn-timeout', { player: expectedPlayer })
-        io.to(roomId).emit('game:state', toSnapshot(result.game))
+        await emitRoomEvent(io, roomId, 'game:turn-timeout', { player: expectedPlayer })
+        await emitRoomEvent(io, roomId, 'game:state', toSnapshot(result.game))
         if (result.finished) {
-          io.to(roomId).emit('room:state', RoomManager.toSnapshot(result.room))
-          io.to(roomId).emit('game:over', { winResult: null, finalState: toSnapshot(result.game) })
-          void broadcastRoomList(io)
+          await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(result.room))
+          await emitRoomEvent(io, roomId, 'game:over', { winResult: null, finalState: toSnapshot(result.game) })
+          await broadcastRoomList(io)
         } else {
           scheduleTurnTimer(io, roomId)
         }
@@ -70,7 +71,7 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
 }
 
 async function broadcastRoomList(io: TypedServer) {
-  io.to('lobby').emit('rooms:list', await RoomManager.getPublicRooms())
+  await emitRoomEvent(io, 'lobby', 'rooms:list', await RoomManager.getPublicRooms())
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -211,7 +212,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     socket.leave('lobby')
     socket.join(roomId)
     if (result.room.game?.currentPlayer === result.slot) {
-      io.to(roomId).emit('game:clock', { turnStartedAt: result.room.game.turnStartedAt })
+      await emitRoomEvent(io, roomId, 'game:clock', { turnStartedAt: result.room.game.turnStartedAt })
     }
     ack({
       ok: true,
@@ -220,7 +221,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       reconnectToken: result.room.reconnectTokens[result.slot],
       roomState: RoomManager.toSnapshot(result.room),
     })
-    io.to(roomId).emit('room:state', RoomManager.toSnapshot(result.room))
+    await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(result.room))
     emitCurrentGame(socket, result.room)
     scheduleTurnTimer(io, roomId)
     await broadcastRoomList(io)
@@ -293,10 +294,10 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       roomState: RoomManager.toSnapshot(room),
     })
 
-    socket.to(roomId).emit('player:joined', { username: username.trim(), slot: newSlot })
-    io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
+    await emitRoomEvent(io, roomId, 'player:joined', { username: username.trim(), slot: newSlot }, socket.id)
+    await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(room))
     if (room.game?.currentPlayer === newSlot) {
-      io.to(roomId).emit('game:clock', { turnStartedAt: room.game.turnStartedAt })
+      await emitRoomEvent(io, roomId, 'game:clock', { turnStartedAt: room.game.turnStartedAt })
     }
     emitCurrentGame(socket, room)
     scheduleTurnTimer(io, roomId)
@@ -345,8 +346,8 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
     const { room, game } = outcome
     ack({ ok: true })
-    io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
-    io.to(roomId).emit('game:state', toSnapshot(game))
+    await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(room))
+    await emitRoomEvent(io, roomId, 'game:state', toSnapshot(game))
     scheduleTurnTimer(io, roomId)
     await broadcastRoomList(io)
   })
@@ -406,12 +407,12 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (!outcome.ok) {
       ack({ ok: false, error: outcome.error })
       if ('kind' in outcome && outcome.kind === 'timeout') {
-        io.to(normalizedPayload.roomId).emit('game:turn-timeout', { player: outcome.timedOutPlayer })
-        io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(outcome.game))
+        await emitRoomEvent(io, normalizedPayload.roomId, 'game:turn-timeout', { player: outcome.timedOutPlayer })
+        await emitRoomEvent(io, normalizedPayload.roomId, 'game:state', toSnapshot(outcome.game))
         if (outcome.finished) {
           clearTurnTimer(normalizedPayload.roomId)
-          io.to(normalizedPayload.roomId).emit('room:state', RoomManager.toSnapshot(outcome.room))
-          io.to(normalizedPayload.roomId).emit('game:over', { winResult: null, finalState: toSnapshot(outcome.game) })
+          await emitRoomEvent(io, normalizedPayload.roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
+          await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', { winResult: null, finalState: toSnapshot(outcome.game) })
           await broadcastRoomList(io)
         } else {
           scheduleTurnTimer(io, normalizedPayload.roomId)
@@ -421,11 +422,11 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
 
     ack({ ok: true })
-    io.to(normalizedPayload.roomId).emit('game:state', toSnapshot(outcome.game))
+    await emitRoomEvent(io, normalizedPayload.roomId, 'game:state', toSnapshot(outcome.game))
     if (outcome.finished) {
       clearTurnTimer(normalizedPayload.roomId)
-      io.to(normalizedPayload.roomId).emit('room:state', RoomManager.toSnapshot(outcome.room))
-      io.to(normalizedPayload.roomId).emit('game:over', {
+      await emitRoomEvent(io, normalizedPayload.roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
+      await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', {
         winResult: outcome.game.winResult,
         finalState: toSnapshot(outcome.game),
       })
@@ -472,8 +473,8 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
     const { room, game } = outcome
     ack({ ok: true })
-    io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
-    io.to(roomId).emit('game:state', toSnapshot(game))
+    await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(room))
+    await emitRoomEvent(io, roomId, 'game:state', toSnapshot(game))
     scheduleTurnTimer(io, roomId)
     await broadcastRoomList(io)
   })
@@ -504,8 +505,8 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
     ack({ ok: true })
-    io.to(roomId).emit('room:state', RoomManager.toSnapshot(waitingRoom.room))
-    io.to(roomId).emit('game:aborted', { reason: 'host-ended-game' })
+    await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(waitingRoom.room))
+    await emitRoomEvent(io, roomId, 'game:aborted', { reason: 'host-ended-game' })
     await broadcastRoomList(io)
   })
 
@@ -525,25 +526,24 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const { room, slot, player, graceMs, disconnectEpoch } = result
 
     if (room.game) {
-      socket.to(room.roomId).emit('player:left', {
+      await emitRoomEvent(io, room.roomId, 'player:left', {
         username: player.username,
         slot,
         permanent: false,
-      })
+      }, socket.id)
     }
 
-    io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))
+    await emitRoomEvent(io, room.roomId, 'room:state', RoomManager.toSnapshot(room))
     await broadcastRoomList(io)
 
     setTimeout(() => {
       void RoomManager.withRoomLock(room.roomId, () =>
         RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
-      ).then(updatedRoom => {
+      ).then(async updatedRoom => {
         if (!updatedRoom) clearTurnTimer(room.roomId)
-        return RoomManager.getRoom(room.roomId).then(currentRoom => {
-          if (currentRoom) io.to(currentRoom.roomId).emit('room:state', RoomManager.toSnapshot(currentRoom))
-          return broadcastRoomList(io)
-        })
+        const currentRoom = await RoomManager.getRoom(room.roomId)
+        if (currentRoom) await emitRoomEvent(io, currentRoom.roomId, 'room:state', RoomManager.toSnapshot(currentRoom))
+        return broadcastRoomList(io)
       }).catch(error => console.error('[room:disconnect-expiry]', error))
     }, graceMs)
   })

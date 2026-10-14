@@ -4,13 +4,10 @@ import type { RoomGameState } from '../engine/GameEngine.js'
 import { DEFAULT_GAME_SETTINGS } from '../types/game.js'
 import { generateRoomCode } from './roomUtils.js'
 import { randomUUID } from 'node:crypto'
-import { Redis } from '@upstash/redis'
+import { redisPrefix, roomIndexKey, roomRedis as redis } from '../redis.js'
 
-const REST_URL = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL
-const REST_TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN
-const redis = REST_URL && REST_TOKEN ? new Redis({ url: REST_URL, token: REST_TOKEN }) : null
 const ROOM_TTL_SECONDS = 20 * 60
-const ROOM_INDEX_KEY = 'super-triki:rooms'
+const ROOM_INDEX_KEY = roomIndexKey
 const ROOM_LOCK_SCRIPT = `
   if redis.call('GET', KEYS[1]) == ARGV[1] then
     return redis.call('DEL', KEYS[1])
@@ -46,7 +43,7 @@ const PLAYER_RECONNECT_GRACE_MS = 90_000
 const HOST_RECONNECT_GRACE_MS = 900_000
 
 function roomKey(roomId: string) {
-  return `super-triki:room:${roomId}`
+  return `${redisPrefix}:room:${roomId}`
 }
 
 async function loadRoom(roomId: string): Promise<RoomState | undefined> {
@@ -108,7 +105,7 @@ export const RoomManager = {
 
   async withRoomLock<T>(roomId: string, callback: () => Promise<T> | T): Promise<T> {
     if (!redis) return callback()
-    const lockKey = `super-triki:lock:${roomId}`
+    const lockKey = `${redisPrefix}:lock:${roomId}`
     const owner = randomUUID()
     const deadline = Date.now() + 8_000
     let acquired = false
