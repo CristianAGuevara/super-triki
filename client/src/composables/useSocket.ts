@@ -73,6 +73,15 @@ export function useSocket() {
       roomStore.setPhase('playing')
     })
 
+    socket.on('game:clock', payload => {
+      gameStore.turnStartedAt = payload.turnStartedAt
+    })
+
+    socket.on('game:aborted', () => {
+      gameStore.initGame(roomStore.players.map(player => player.slot))
+      roomStore.setPhase('waiting')
+    })
+
     socket.on('game:over', result => {
       gameStore.applyGameOver(result)
       if (roomStore.phase !== 'waiting') roomStore.setPhase('finished')
@@ -101,6 +110,8 @@ export function useSocket() {
     socket.off('rooms:list')
     socket.off('room:state')
     socket.off('game:state')
+    socket.off('game:clock')
+    socket.off('game:aborted')
     socket.off('game:over')
     socket.off('player:joined')
     socket.off('player:left')
@@ -164,6 +175,12 @@ export function useSocket() {
     })
   }
 
+  function emitFinishGame(roomId: string): void {
+    socket.emit('game:finish', { roomId }, result => {
+      if (!result.ok) roomStore.setError(result.error ?? 'No se pudo finalizar la partida')
+    })
+  }
+
   async function emitReconnectRoom(roomId: string, reconnectToken: string): Promise<RoomReconnectAck> {
     if (!await waitForSocketConnection()) {
       return { ok: false, error: 'No se pudo conectar con el servidor' }
@@ -190,5 +207,5 @@ export function useSocket() {
     })
   }
 
-  return { emitJoinRoom, emitReconnectRoom, emitJoinSpectator, emitMove, emitRematch, emitStart }
+  return { emitJoinRoom, emitReconnectRoom, emitJoinSpectator, emitMove, emitRematch, emitStart, emitFinishGame }
 }

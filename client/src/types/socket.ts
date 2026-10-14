@@ -56,6 +56,7 @@ export interface ClientToServerEvents {
   'game:move':   (payload: GameMovePayload, ack: (res: GameMoveAck) => void) => void
   'game:rematch':(payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
   'game:start':  (payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
+  'game:finish': (payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
   'rooms:get':   (ack: (rooms: PublicRoomInfo[]) => void) => void
 }
 
@@ -107,6 +108,8 @@ export interface ServerToClientEvents {
   'game:state':    (state: GameStateSnapshot)       => void
   'game:over':     (result: GameOverPayload)        => void
   'game:turn-timeout': (payload: { player: PlayerSlot }) => void
+  'game:clock': (payload: { turnStartedAt: number }) => void
+  'game:aborted': (payload: { reason: string }) => void
   'rooms:list':    (rooms: PublicRoomInfo[])        => void
   'player:joined': (payload: { username: string; slot: PlayerSlot }) => void
   'player:left':   (payload: { username: string; slot: PlayerSlot; permanent: boolean }) => void

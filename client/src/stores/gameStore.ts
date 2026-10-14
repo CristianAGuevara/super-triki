@@ -70,14 +70,16 @@ export const useGameStore = defineStore('game', () => {
     return pieces
   }
 
-  function initGame(playerCount = 2) {
+  function initGame(playerCount: number | Player[] = 2) {
     board.value = emptyBoard()
-    const ps: Player[] = Array.from({ length: playerCount }, (_, i) => i + 1)
+    const ps: Player[] = Array.isArray(playerCount)
+      ? [...playerCount]
+      : Array.from({ length: playerCount }, (_, i) => i + 1)
     players.value = ps
     const invs: Record<Player, Piece[]> = {}
     ps.forEach(p => { invs[p] = _buildInventory(p) })
     inventories.value = invs
-    currentPlayer.value = 1
+    currentPlayer.value = ps[0] ?? 1
     winResult.value = null
     isDraw.value = false
     dragState.value = null

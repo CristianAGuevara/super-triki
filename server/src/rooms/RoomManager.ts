@@ -85,6 +85,9 @@ export const RoomManager = {
       socketToRoom.set(socketId, roomId)
       if (room.game && !room.game.winResult && !room.game.isDraw) {
         room.phase = 'playing'
+        if (room.game.currentPlayer === disconnectedPlayer.slot) {
+          room.game.turnStartedAt = Date.now()
+        }
       }
       return { ok: true, room }
     }
@@ -128,6 +131,7 @@ export const RoomManager = {
     player.socketId = socketId
     socketToRoom.set(socketId, roomId)
     if (room.game && !room.game.winResult && !room.game.isDraw) room.phase = 'playing'
+    if (room.game?.currentPlayer === slot) room.game.turnStartedAt = Date.now()
 
     return { ok: true, room, slot, previousSocketId }
   },
@@ -166,8 +170,6 @@ export const RoomManager = {
     player.socketId = ''
     socketToRoom.delete(socketId)
 
-    if (room.game) room.phase = 'finished'
-
     const graceMs = this.getReconnectGraceMs(room, player.slot)
     return { room, slot: player.slot, player: disconnectedPlayer, graceMs, disconnectEpoch }
   },
@@ -192,6 +194,15 @@ export const RoomManager = {
     const player = room.players.find(p => p.slot === slot)
     if (!player || player.socketId !== '' || room.disconnectEpoch[slot] !== disconnectEpoch) return null
 
+    if (room.game) {
+      delete room.reconnectTokens[slot]
+      room.disconnectEpoch[slot] = disconnectEpoch + 1
+      if (room.hostSlot === slot) {
+        room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.hostSlot
+      }
+      return room
+    }
+
     room.players = room.players.filter(p => p.slot !== slot)
     delete room.reconnectTokens[slot]
     delete room.disconnectEpoch[slot]
@@ -215,6 +226,16 @@ export const RoomManager = {
       }
     }
     room.players = room.players.filter(player => player.socketId !== '')
+  },
+
+  finishGameForHost(roomId: string): RoomState | null {
+    const room = rooms.get(roomId)
+    if (!room) return null
+    this.removeDisconnectedPlayers(roomId)
+    room.game = null
+    room.lastGame = null
+    room.phase = 'waiting'
+    return room
   },
 
   joinSpectator(roomId: string, socketId: string): RoomState | undefined {

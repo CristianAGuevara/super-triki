@@ -26,6 +26,7 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
   const room = RoomManager.getRoom(roomId)
   const game = room?.game
   if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw) return
+  if (!room.players.some(player => player.slot === game.currentPlayer && player.socketId)) return
 
   const expectedTurnNumber = game.turnNumber
   const expectedPlayer = game.currentPlayer
@@ -166,6 +167,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
     socket.leave('lobby')
     socket.join(roomId)
+    if (result.room.game?.currentPlayer === result.slot) {
+      io.to(roomId).emit('game:clock', { turnStartedAt: result.room.game.turnStartedAt })
+    }
     ack({
       ok: true,
       roomId,
@@ -246,6 +250,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     socket.to(roomId).emit('player:joined', { username: username.trim(), slot: newSlot })
     io.to(roomId).emit('room:state', RoomManager.toSnapshot(room))
+    if (room.game?.currentPlayer === newSlot) {
+      io.to(roomId).emit('game:clock', { turnStartedAt: room.game.turnStartedAt })
+    }
     emitCurrentGame(socket, room)
     scheduleTurnTimer(io, roomId)
     broadcastRoomList(io)
@@ -394,6 +401,40 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     broadcastRoomList(io)
   })
 
+  // Host may end a paused multiplayer game and return everyone to the lobby.
+  socket.on('game:finish', (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string') {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const roomId = payload.roomId.trim().toUpperCase()
+    const room = RoomManager.getRoom(roomId)
+    if (!room?.game || room.phase !== 'playing') {
+      ack({ ok: false, error: 'No hay una partida activa para finalizar' })
+      return
+    }
+    const actingSlot = RoomManager.getSlotBySocket(socket.id, roomId)
+    if (actingSlot !== RoomManager.getHostSlot(roomId)) {
+      ack({ ok: false, error: 'Solo el host puede finalizar la partida' })
+      return
+    }
+    if (!room.players.some(player => !player.socketId)) {
+      ack({ ok: false, error: 'No hay jugadores desconectados' })
+      return
+    }
+
+    clearTurnTimer(roomId)
+    const waitingRoom = RoomManager.finishGameForHost(roomId)
+    if (!waitingRoom) {
+      ack({ ok: false, error: 'No se pudo recuperar la sala' })
+      return
+    }
+    ack({ ok: true })
+    io.to(roomId).emit('room:state', RoomManager.toSnapshot(waitingRoom))
+    io.to(roomId).emit('game:aborted', { reason: 'host-ended-game' })
+    broadcastRoomList(io)
+  })
+
   // ── disconnect ───────────────────────────────────────────────
   socket.on('disconnect', () => {
     RoomManager.removeSpectator(socket.id)
@@ -402,14 +443,17 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     const { room, slot, player, graceMs, disconnectEpoch } = result
 
-    if (room.game) clearTurnTimer(room.roomId)
-
     if (room.game) {
       socket.to(room.roomId).emit('player:left', {
         username: player.username,
         slot,
         permanent: false,
       })
+      if (room.game.currentPlayer === slot) {
+        clearTurnTimer(room.roomId)
+        room.game.turnStartedAt = Date.now()
+        io.to(room.roomId).emit('game:clock', { turnStartedAt: room.game.turnStartedAt })
+      }
     }
 
     io.to(room.roomId).emit('room:state', RoomManager.toSnapshot(room))

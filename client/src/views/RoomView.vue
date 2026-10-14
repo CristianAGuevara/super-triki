@@ -135,26 +135,23 @@
       </div>
     </Transition>
 
-    <!-- ── Opponent disconnected overlay ── -->
+    <!-- Non-blocking warning. Connected players may continue their turns. -->
     <Transition name="overlay">
-      <div v-if="roomStore.opponentLeft" class="disconnect-overlay">
-        <div class="disconnect-card">
-          <p class="disconnect-icon">⚠</p>
-          <span class="disconnect-eyebrow">Partida en pausa</span>
-          <h2>{{ disconnectedName }} se desconectó</h2>
-          <p class="disconnect-sub">Esperando a que vuelva a la sala.</p>
-
-          <template v-if="canRestartAfterDisconnect">
-            <p class="disconnect-host-note">Como host, puedes comenzar una nueva partida con los jugadores conectados.</p>
-            <button class="disconnect-btn" @click="handleRestartAfterDisconnect">Reiniciar partida</button>
-          </template>
-          <p v-else class="disconnect-waiting">
-            Esperando al host para decidir cómo continuar…
-          </p>
-
-          <button class="disconnect-btn disconnect-btn--secondary" @click="goHome">Salir de la sala</button>
-        </div>
-      </div>
+      <aside v-if="showDisconnectNotice" class="disconnect-banner" role="status">
+        <span class="disconnect-banner__icon" aria-hidden="true">!</span>
+        <span class="disconnect-banner__message">
+          <strong>{{ disconnectedName }} se desconectó.</strong>
+          {{ disconnectedTurn ? 'Su turno está en pausa hasta que vuelva.' : 'La partida continúa; si llega su turno, se esperará su reconexión.' }}
+        </span>
+        <button
+          v-if="canFinishGameForHost"
+          class="disconnect-banner__finish"
+          @click="handleFinishGame"
+        >
+          Finalizar partida y volver a sala
+        </button>
+        <button class="disconnect-banner__close" aria-label="Cerrar aviso" @click="roomStore.setOpponentLeft(null)">×</button>
+      </aside>
     </Transition>
 
   </div>
@@ -181,8 +178,7 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
-const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart } = useSocket()
+const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
 const copied = ref<'player' | 'spectator' | null>(null)
@@ -202,6 +198,11 @@ function getRulesShownCount(): number {
 const rulesShownCount = ref(getRulesShownCount())
 
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
+const disconnectedTurn = computed(() => roomStore.disconnectedPlayer?.slot === gameStore.currentPlayer)
+const disconnectedTurnPaused = computed(() =>
+  roomStore.players.some(player => player.slot === gameStore.currentPlayer && !player.socketId)
+)
+const showDisconnectNotice = computed(() => roomStore.opponentLeft && roomStore.phase === 'playing')
 const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
 const orderedPlayers = computed(() => {
   if (roomStore.mySlot === null) return gameStore.players
@@ -210,9 +211,11 @@ const orderedPlayers = computed(() => {
     ...gameStore.players.filter(player => player !== roomStore.mySlot),
   ]
 })
-const canRestartAfterDisconnect = computed(() =>
-  roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount.value >= 2
+const canFinishGameForHost = computed(() =>
+  roomStore.mySlot === roomStore.hostSlot && roomStore.phase === 'playing' &&
+  roomStore.players.some(player => !player.socketId)
 )
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(() => disconnectedTurnPaused.value)
 
 const lastGameResult = computed(() => {
   if (gameStore.isDraw) return 'Empate'
@@ -313,10 +316,10 @@ function handleRematch() {
   }
 }
 
-function handleRestartAfterDisconnect() {
+function handleFinishGame() {
   if (roomStore.roomId) {
     audioStore.playSfx('click')
-    emitRematch(roomStore.roomId)
+    emitFinishGame(roomStore.roomId)
   }
 }
 
@@ -325,10 +328,6 @@ function handleStart() {
     audioStore.playSfx('click')
     emitStart(roomStore.roomId)
   }
-}
-
-function goHome() {
-  router.push('/')
 }
 
 function closeRules() {
@@ -383,6 +382,64 @@ function closeRules() {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 20px;
+  line-height: 1;
+}
+
+.disconnect-banner {
+  position: fixed;
+  z-index: 260;
+  top: 58px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(900px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid var(--accent-secondary);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+  transform: translateX(-50%);
+}
+
+.disconnect-banner__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  color: var(--text-on-accent);
+  font-weight: 900;
+}
+
+.disconnect-banner__message { flex: 1; }
+.disconnect-banner__message strong { color: var(--text-primary); }
+
+.disconnect-banner__finish {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--accent-secondary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.disconnect-banner__finish:hover { background: var(--control-hover); }
+
+.disconnect-banner__close {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 19px;
   line-height: 1;
 }
 
@@ -519,6 +576,12 @@ function closeRules() {
 }
 
 .room__turn-timer--urgent { color: var(--accent-danger); border-color: var(--accent-danger); }
+
+@media (max-width: 600px) {
+  .disconnect-banner { top: 52px; align-items: flex-start; flex-wrap: wrap; }
+  .disconnect-banner__message { min-width: calc(100% - 48px); }
+  .disconnect-banner__finish { margin-left: 32px; }
+}
 
 .room__main {
   display: flex;

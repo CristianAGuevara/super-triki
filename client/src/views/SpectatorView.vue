@@ -80,7 +80,6 @@ const route = useRoute()
 const router = useRouter()
 const roomStore = useRoomStore()
 const gameStore = useGameStore()
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock()
 const { emitJoinSpectator } = useSocket()
 
 const roomId = computed(() => String(route.params.id).toUpperCase())
@@ -103,6 +102,10 @@ const turnLabel = computed(() => {
 const turnColor = computed(() =>
   gameStore.playerMeta[gameStore.currentPlayer]?.color ?? 'var(--accent-primary)'
 )
+const isCurrentTurnPaused = computed(() =>
+  roomStore.players.some(player => player.slot === gameStore.currentPlayer && !player.socketId)
+)
+const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(() => isCurrentTurnPaused.value)
 
 const resultLabel = computed(() => {
   if (!gameStore.winResult) return 'Tablero completo'

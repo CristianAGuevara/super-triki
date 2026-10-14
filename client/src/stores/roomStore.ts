@@ -102,7 +102,11 @@ export const useRoomStore = defineStore('room', () => {
     scores.value      = snapshot.scores
     roundNumber.value = snapshot.roundNumber
     error.value = null
-    if (snapshot.phase !== 'finished') {
+    const missing = snapshot.players.find(player => !player.socketId)
+    if ((snapshot.phase === 'playing' || snapshot.phase === 'finished') && missing) {
+      disconnectedPlayer.value = { username: missing.username, slot: missing.slot }
+      opponentLeft.value = true
+    } else {
       opponentLeft.value = false
       disconnectedPlayer.value = null
     }
@@ -118,10 +122,9 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
-  function setOpponentLeft(info: { username: string; slot: PlayerSlot }) {
-    opponentLeft.value = true
+  function setOpponentLeft(info: { username: string; slot: PlayerSlot } | null) {
+    opponentLeft.value = info !== null
     disconnectedPlayer.value = info
-    phase.value = 'finished'
   }
 
   function setError(msg: string | null) {
