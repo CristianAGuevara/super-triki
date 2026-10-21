@@ -106,7 +106,7 @@ export const useRoomStore = defineStore('room', () => {
     scores.value      = snapshot.scores
     roundNumber.value = snapshot.roundNumber
     error.value = null
-    const missing = snapshot.players.find(player => !player.socketId)
+    const missing = snapshot.players.find(player => !player.connected)
     if ((snapshot.phase === 'playing' || snapshot.phase === 'finished') && missing) {
       disconnectedPlayer.value = { username: missing.username, slot: missing.slot }
       opponentLeft.value = true

@@ -41,24 +41,34 @@ export async function initializeRoomBus(
   if (!roomRedis) return false
 
   return new Promise(resolve => {
-    let ready = false
+    let settled = false
     let retryDelay = 1_000
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      console.warn('[redis] Event bus is not ready yet; continuing with local broadcasts')
+      resolve(false)
+    }, 8_000)
 
     const subscribe = () => {
-      const subscriber = roomRedis.subscribe<RoomBusMessage>(busChannel)
+      const subscriber = roomRedis!.subscribe<RoomBusMessage>(busChannel)
       let retryScheduled = false
+
       subscriber.on('message', ({ message }) => {
         if (message.origin === instanceId) return
         emitLocal(io, message)
       })
+
       subscriber.on('subscribe', () => {
         retryDelay = 1_000
-        if (!ready) {
-          ready = true
+        if (!settled) {
+          settled = true
+          clearTimeout(timeout)
           console.log('[+] Upstash REST event bus ready')
           resolve(true)
         }
       })
+
       subscriber.on('error', error => {
         console.error('[redis:subscribe]', error.message)
         if (retryScheduled) return

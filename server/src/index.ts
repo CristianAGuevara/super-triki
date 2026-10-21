@@ -22,18 +22,14 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: FRONTEND_URL, methods: ['GET', 'POST'] },
 })
 
-const roomBusReady = initializeRoomBus(io).catch(error => {
-  console.error('[redis] Room event bus failed to initialize', error)
-  return false
-})
-
-if (process.env.VERCEL || roomRedisEnabled) {
-  io.use((_socket, next) => {
-    void roomBusReady.then(ready => {
-      if (ready) next()
-      else next(new Error('Upstash Redis realtime service is unavailable'))
+if (!roomRedisEnabled) {
+  console.warn('[redis] Upstash REST credentials missing; using single-instance room state')
+} else {
+  void initializeRoomBus(io)
+    .then(ready => {
+      if (!ready) console.warn('[redis] Event bus not ready; local broadcasts remain available')
     })
-  })
+    .catch(error => console.error('[redis] Room event bus failed to initialize', error))
 }
 
 io.on('connection', socket => {

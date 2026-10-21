@@ -79,11 +79,17 @@ export interface PlayerInfo {
   socketId: string
 }
 
+export interface PublicPlayerInfo {
+  slot:      PlayerSlot
+  username:  string
+  connected: boolean
+}
+
 export interface RoomStateSnapshot {
   roomId:      string
   name:        string
   isPrivate:   boolean
-  players:     PlayerInfo[]
+  players:     PublicPlayerInfo[]
   phase:       'waiting' | 'playing' | 'finished'
   playerCount: number
   scores:      Record<number, number>

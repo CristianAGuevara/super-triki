@@ -48,12 +48,22 @@ function roomKey(roomId: string) {
 
 async function loadRoom(roomId: string): Promise<RoomState | undefined> {
   if (!redis) return rooms.get(roomId)
-  const room = await redis.get<RoomState>(roomKey(roomId))
-  if (room) {
-    if (pruneExpiredDisconnects(room)) await saveRoom(room)
-    else rooms.set(roomId, room)
-  } else rooms.delete(roomId)
-  return room ?? undefined
+
+  try {
+    const room = await redis.get<RoomState>(roomKey(roomId))
+    if (room) {
+      if (pruneExpiredDisconnects(room)) await saveRoom(room)
+      else rooms.set(roomId, room)
+    } else {
+      rooms.delete(roomId)
+    }
+    return room ?? undefined
+  } catch (error) {
+    // Keep the service usable if Upstash is temporarily unreachable. The local
+    // cache still serves rooms attached to this instance.
+    console.error('[redis:load-room]', error)
+    return rooms.get(roomId)
+  }
 }
 
 function pruneExpiredDisconnects(room: RoomState, now = Date.now()): boolean {
@@ -86,16 +96,26 @@ function pruneExpiredDisconnects(room: RoomState, now = Date.now()): boolean {
 async function saveRoom(room: RoomState): Promise<void> {
   rooms.set(room.roomId, room)
   if (!redis) return
-  await redis.set(roomKey(room.roomId), room, { ex: ROOM_TTL_SECONDS })
-  await redis.sadd(ROOM_INDEX_KEY, room.roomId)
-  await redis.expire(ROOM_INDEX_KEY, ROOM_TTL_SECONDS * 2)
+
+  try {
+    await redis.set(roomKey(room.roomId), room, { ex: ROOM_TTL_SECONDS })
+    await redis.sadd(ROOM_INDEX_KEY, room.roomId)
+    await redis.expire(ROOM_INDEX_KEY, ROOM_TTL_SECONDS * 2)
+  } catch (error) {
+    console.error('[redis:save-room]', error)
+  }
 }
 
 async function deleteRoom(roomId: string): Promise<void> {
   rooms.delete(roomId)
   if (!redis) return
-  await redis.del(roomKey(roomId))
-  await redis.srem(ROOM_INDEX_KEY, roomId)
+
+  try {
+    await redis.del(roomKey(roomId))
+    await redis.srem(ROOM_INDEX_KEY, roomId)
+  } catch (error) {
+    console.error('[redis:delete-room]', error)
+  }
 }
 
 export const RoomManager = {
@@ -105,20 +125,35 @@ export const RoomManager = {
 
   async withRoomLock<T>(roomId: string, callback: () => Promise<T> | T): Promise<T> {
     if (!redis) return callback()
+
     const lockKey = `${redisPrefix}:lock:${roomId}`
     const owner = randomUUID()
     const deadline = Date.now() + 8_000
     let acquired = false
-    while (!acquired && Date.now() < deadline) {
-      acquired = (await redis.set(lockKey, owner, { nx: true, ex: 15 })) === 'OK'
-      if (!acquired) await new Promise(resolve => setTimeout(resolve, 40))
+
+    try {
+      while (!acquired && Date.now() < deadline) {
+        acquired = (await redis.set(lockKey, owner, { nx: true, ex: 15 })) === 'OK'
+        if (!acquired) await new Promise(resolve => setTimeout(resolve, 40))
+      }
+    } catch (error) {
+      console.error('[redis:lock]', error)
+      return callback()
     }
-    if (!acquired) throw new Error(`Could not acquire room lock for ${roomId}`)
+
+    if (!acquired) {
+      console.error(`[redis:lock] Could not acquire lock for ${roomId}; continuing without it`)
+      return callback()
+    }
 
     try {
       return await callback()
     } finally {
-      await redis.eval(ROOM_LOCK_SCRIPT, [lockKey], [owner])
+      try {
+        await redis.eval(ROOM_LOCK_SCRIPT, [lockKey], [owner])
+      } catch (error) {
+        console.error('[redis:unlock]', error)
+      }
     }
   },
 
@@ -435,24 +470,38 @@ export const RoomManager = {
 
   async getPublicRooms(): Promise<PublicRoomInfo[]> {
     if (redis) {
-      const roomIds = await redis.smembers<string[]>(ROOM_INDEX_KEY)
-      const loadedRooms = await Promise.all(roomIds.map(roomId => loadRoom(roomId)))
-      const expired = roomIds.filter((_, i) => !loadedRooms[i])
-      if (expired.length) await redis.srem(ROOM_INDEX_KEY, ...expired)
-        return loadedRooms.flatMap(r => r && r.players.some(player => player.socketId) && !r.isPrivate && r.phase !== 'finished' ? [{
-        roomId: r.roomId,
-        name: r.name,
-        playerCount: r.players.filter(player => player.socketId !== '').length,
-        phase: r.phase as 'waiting' | 'playing',
-      }] : [])
+      try {
+        const roomIds = await redis.smembers<string[]>(ROOM_INDEX_KEY)
+        const loadedRooms = await Promise.all(roomIds.map(roomId => loadRoom(roomId)))
+        const expired = roomIds.filter((_, index) => !loadedRooms[index])
+        if (expired.length) await redis.srem(ROOM_INDEX_KEY, ...expired)
+
+        return loadedRooms.flatMap(room =>
+          room && room.players.some(player => player.socketId) &&
+          !room.isPrivate && room.phase !== 'finished'
+            ? [{
+                roomId: room.roomId,
+                name: room.name,
+                playerCount: room.players.filter(player => player.socketId !== '').length,
+                phase: room.phase as 'waiting' | 'playing',
+              }]
+            : [],
+        )
+      } catch (error) {
+        console.error('[redis:public-rooms]', error)
+      }
     }
+
     return Array.from(rooms.values())
-      .filter(r => r.players.some(player => player.socketId) && !r.isPrivate && r.phase !== 'finished')
-      .map(r => ({
-        roomId:      r.roomId,
-        name:        r.name,
-        playerCount: r.players.filter(player => player.socketId !== '').length,
-        phase:       r.phase as 'waiting' | 'playing',
+      .filter(room =>
+        room.players.some(player => player.socketId) &&
+        !room.isPrivate && room.phase !== 'finished'
+      )
+      .map(room => ({
+        roomId:      room.roomId,
+        name:        room.name,
+        playerCount: room.players.filter(player => player.socketId !== '').length,
+        phase:       room.phase as 'waiting' | 'playing',
       }))
   },
 
@@ -461,7 +510,11 @@ export const RoomManager = {
       roomId:      room.roomId,
       name:        room.name,
       isPrivate:   room.isPrivate,
-      players:     room.players,
+      players:     room.players.map(player => ({
+        slot: player.slot,
+        username: player.username,
+        connected: Boolean(player.socketId),
+      })),
       phase:       room.phase,
       playerCount: room.players.length,
       scores:      room.scores,

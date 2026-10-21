@@ -1,5 +1,7 @@
 <template>
   <div class="spectator">
+    <ConnectionBanner />
+
     <header class="spectator__header">
       <div class="spectator__identity">
         <span class="spectator__room-name">{{ roomStore.name || 'Sala en directo' }}</span>
@@ -75,6 +77,7 @@ import { connectSocket, disconnectSocket } from '@/services/socket'
 import Board from '@/components/Board.vue'
 import PlayerPanel from '@/components/PlayerPanel.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
+import ConnectionBanner from '@/components/ConnectionBanner.vue'
 
 const route = useRoute()
 const router = useRouter()

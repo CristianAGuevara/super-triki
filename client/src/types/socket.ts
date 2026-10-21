@@ -63,9 +63,9 @@ export interface ClientToServerEvents {
 // ── Server → Client ──────────────────────────────────────────────
 
 export interface PlayerInfo {
-  slot:     PlayerSlot
-  username: string
-  socketId: string
+  slot:      PlayerSlot
+  username:  string
+  connected: boolean
 }
 
 export interface RoomStateSnapshot {

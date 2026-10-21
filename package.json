@@ -7,8 +7,10 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w client\" \"npm run dev -w server\"",
+    "build": "npm run build:client && npm run build:server",
     "build:client": "npm run build -w client",
-    "build:server": "npm run build -w server"
+    "build:server": "npm run build -w server",
+    "test": "npm test -w client && npm test -w server"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
@@ -20,6 +22,9 @@
   },
   "allowScripts": {
     "esbuild": true
+  },
+  "overrides": {
+    "vue": "3.5.44"
   },
   "optionalDependencies": {
     "@rolldown/binding-linux-x64-gnu": "^1.2.11",

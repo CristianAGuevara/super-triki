@@ -89,7 +89,7 @@ export function useSocket() {
     })
 
     socket.on('player:joined', payload => {
-      roomStore.addPlayer({ ...payload, socketId: '' })
+      roomStore.addPlayer({ ...payload, connected: true })
       audioStore.playSfx('join')
     })
 

@@ -1,5 +1,7 @@
 <template>
   <div class="room">
+    <ConnectionBanner />
+
     <Transition name="overlay">
       <div v-if="roomStore.error" class="room__notice" role="alert">
         <span>{{ roomStore.error }}</span>
@@ -195,6 +197,7 @@ import Board from '@/components/Board.vue'
 import PlayerPanel from '@/components/PlayerPanel.vue'
 import GameStatus from '@/components/GameStatus.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
+import ConnectionBanner from '@/components/ConnectionBanner.vue'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -224,7 +227,7 @@ const rulesShownCount = ref(getRulesShownCount())
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
 const disconnectedTurn = computed(() => roomStore.disconnectedPlayer?.slot === gameStore.currentPlayer)
 const showDisconnectNotice = computed(() => roomStore.opponentLeft && roomStore.phase === 'playing')
-const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.socketId).length)
+const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.connected).length)
 const orderedPlayers = computed(() => {
   if (roomStore.mySlot === null) return gameStore.players
   return [
@@ -234,7 +237,7 @@ const orderedPlayers = computed(() => {
 })
 const canFinishGameForHost = computed(() =>
   roomStore.mySlot === roomStore.hostSlot && roomStore.phase === 'playing' &&
-  roomStore.players.some(player => !player.socketId)
+  roomStore.players.some(player => !player.connected)
 )
 const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(
   undefined,
