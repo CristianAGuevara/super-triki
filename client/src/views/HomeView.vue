@@ -194,6 +194,61 @@
           </button>
         </div>
 
+        <!-- Tournament -->
+        <div class="home__card home__card--tournament">
+          <div class="home__tournament-heading">
+            <h3 class="home__card-title">Torneo</h3>
+            <span class="home__tournament-badge">Hasta 50</span>
+          </div>
+          <p class="home__card-sub">
+            Grupos de 3 o 4 jugadores. Los ganadores avanzan hasta la final.
+          </p>
+
+          <div class="home__field">
+            <label class="home__label">Nombre del torneo</label>
+            <input
+              v-model="tournamentNameInput"
+              class="home__input"
+              type="text"
+              :placeholder="`Torneo de ${usernameInput || 'jugador'}`"
+              maxlength="30"
+              autocomplete="off"
+            />
+          </div>
+
+          <button
+            class="home__btn home__btn--primary"
+            :disabled="!canProceed || tournamentLoading"
+            @click="handleCreateTournament"
+          >
+            {{ tournamentAction === 'create' ? 'Creando torneo...' : 'Crear torneo' }}
+          </button>
+
+          <div class="home__tournament-separator"><span>o únete con un código</span></div>
+
+          <div class="home__field">
+            <label class="home__label">Código de torneo</label>
+            <input
+              v-model="tournamentCodeInput"
+              class="home__input home__input--code"
+              type="text"
+              placeholder="XK7F2A"
+              maxlength="6"
+              autocomplete="off"
+              @input="tournamentCodeInput = tournamentCodeInput.toUpperCase()"
+              @keydown.enter="handleJoinTournament"
+            />
+          </div>
+
+          <button
+            class="home__btn home__btn--secondary"
+            :disabled="!canJoinTournament || tournamentLoading"
+            @click="handleJoinTournament"
+          >
+            {{ tournamentAction === 'join' ? 'Uniéndose...' : 'Unirse al torneo' }}
+          </button>
+        </div>
+
         <!-- Spectator mode -->
         <div class="home__card home__card--spectator">
           <div class="home__spectator-heading">
@@ -240,7 +295,9 @@ import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useTournamentStore } from '@/stores/tournamentStore'
 import { connectSocket, getSocket, waitForSocketConnection } from '@/services/socket'
+import type { TournamentCreateAck, TournamentJoinAck } from '@/types/socket'
 
 const router     = useRouter()
 const route      = useRoute()
@@ -248,16 +305,21 @@ const userStore  = useUserStore()
 const roomStore  = useRoomStore()
 const lobbyStore = useLobbyStore()
 const audioStore = useAudioStore()
+const tournamentStore = useTournamentStore()
 
 const usernameInput       = ref(userStore.username ?? '')
 const roomNameInput       = ref('')
 const roomCodeInput       = ref((route.query.code as string) ?? '')
+const tournamentNameInput = ref('')
+const tournamentCodeInput = ref('')
 const spectatorCodeInput  = ref('')
 const createPasswordInput = ref('')
 const joinPasswordInput   = ref('')
 const createIsPrivate     = ref(false)
 const loading             = ref(false)
 const loadingRoomId       = ref<string | null>(null)
+const tournamentLoading   = ref(false)
+const tournamentAction    = ref<'create' | 'join' | null>(null)
 const action              = ref<'create' | 'join' | null>(null)
 const errorMsg            = ref<string | null>(null)
 const notice              = ref<string | null>(null)
@@ -266,6 +328,9 @@ let noticeTimer: number | undefined
 const publicRooms = computed(() => lobbyStore.publicRooms)
 const canProceed  = computed(() => usernameInput.value.trim().length >= 2)
 const canJoin     = computed(() => canProceed.value && roomCodeInput.value.trim().length === 6)
+const canJoinTournament = computed(() =>
+  canProceed.value && tournamentCodeInput.value.trim().length === 6
+)
 const canSpectate = computed(() => spectatorCodeInput.value.trim().length === 6)
 
 onMounted(() => {
@@ -275,8 +340,10 @@ onMounted(() => {
 
   const next = route.query.next as string | undefined
   if (next) {
-    const match = next.match(/\/room\/([A-Z0-9]+)/)
-    if (match) roomCodeInput.value = match[1]
+    const roomMatch = next.match(/\/room\/([A-Z0-9]+)/)
+    if (roomMatch) roomCodeInput.value = roomMatch[1]
+    const tournamentMatch = next.match(/\/tournament\/([A-Z0-9]+)/)
+    if (tournamentMatch) tournamentCodeInput.value = tournamentMatch[1]
   }
 })
 
@@ -321,6 +388,93 @@ async function handleCreate() {
     if (res.roomState) roomStore.setRoomState(res.roomState)
     router.push(`/room/${res.roomId}`)
   })
+}
+
+async function requestTournament<T extends { ok: boolean; error?: string }>(
+  timeoutMessage: string,
+  emit: (done: (result: T) => void) => void,
+): Promise<T> {
+  if (!await waitForSocketConnection()) {
+    return { ok: false, error: 'No se pudo conectar con el servidor' } as T
+  }
+  return new Promise(resolve => {
+    let settled = false
+    const timeout = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve({ ok: false, error: timeoutMessage } as T)
+    }, 8_000)
+    emit(result => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeout)
+      resolve(result)
+    })
+  })
+}
+
+async function handleCreateTournament() {
+  if (!canProceed.value || tournamentLoading.value) return
+  audioStore.playSfx('click')
+  userStore.setUsername(usernameInput.value)
+  tournamentLoading.value = true
+  tournamentAction.value = 'create'
+  errorMsg.value = null
+
+  const socket = getSocket()
+  const result = await requestTournament<TournamentCreateAck>(
+    'El servidor no respondió al crear el torneo',
+    done => socket.emit('tournament:create', {
+      username: usernameInput.value.trim(),
+      name: tournamentNameInput.value.trim(),
+    }, done),
+  )
+  tournamentLoading.value = false
+  tournamentAction.value = null
+
+  if (!result.ok || !result.tournamentId || !result.participantId || !result.reconnectToken) {
+    errorMsg.value = result.error ?? 'No se pudo crear el torneo'
+    return
+  }
+  tournamentStore.setFromAck(
+    result.tournamentId,
+    result.participantId,
+    result.reconnectToken,
+    result.state,
+  )
+  await router.push(`/tournament/${result.tournamentId}`)
+}
+
+async function handleJoinTournament() {
+  if (!canJoinTournament.value || tournamentLoading.value) return
+  audioStore.playSfx('click')
+  userStore.setUsername(usernameInput.value)
+  tournamentLoading.value = true
+  tournamentAction.value = 'join'
+  errorMsg.value = null
+
+  const socket = getSocket()
+  const result = await requestTournament<TournamentJoinAck>(
+    'El servidor no respondió al unirse al torneo',
+    done => socket.emit('tournament:join', {
+      tournamentId: tournamentCodeInput.value.trim().toUpperCase(),
+      username: usernameInput.value.trim(),
+    }, done),
+  )
+  tournamentLoading.value = false
+  tournamentAction.value = null
+
+  if (!result.ok || !result.tournamentId || !result.participantId || !result.reconnectToken) {
+    errorMsg.value = result.error ?? 'No se pudo unir al torneo'
+    return
+  }
+  tournamentStore.setFromAck(
+    result.tournamentId,
+    result.participantId,
+    result.reconnectToken,
+    result.state,
+  )
+  await router.push(`/tournament/${result.tournamentId}`)
 }
 
 async function handleJoinPublic(roomId: string) {
@@ -728,6 +882,49 @@ function showNotice(message: string) {
 .home__card--spectator {
   border-color: color-mix(in srgb, var(--accent-primary) 38%, var(--cell-border));
   background: linear-gradient(145deg, var(--surface), var(--surface-raised));
+}
+
+.home__card--tournament {
+  border-color: color-mix(in srgb, var(--accent-secondary) 42%, var(--cell-border));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-secondary) 12%, transparent), transparent 38%),
+    var(--cell-bg);
+}
+
+.home__tournament-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home__tournament-badge {
+  padding: 3px 8px;
+  border: 1px solid var(--accent-secondary);
+  border-radius: 999px;
+  color: var(--accent-secondary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.home__tournament-separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.home__tournament-separator::before,
+.home__tournament-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
 }
 
 .home__spectator-heading {

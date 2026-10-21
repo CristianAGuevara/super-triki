@@ -4,6 +4,11 @@ import type { GameSettings, Size } from '../types/game.js'
 import { DEFAULT_GAME_SETTINGS, isPlayerColorId } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
 import type { RoomState } from '../rooms/RoomManager.js'
+import {
+  TournamentManager,
+  tournamentChannel,
+} from '../tournaments/TournamentManager.js'
+import type { TournamentRoomAssignment } from '../types/socket.js'
 import { emitRoomEvent } from '../redis.js'
 import {
   buildInitialGameState,
@@ -72,6 +77,58 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
 
 async function broadcastRoomList(io: TypedServer) {
   await emitRoomEvent(io, 'lobby', 'rooms:list', await RoomManager.getPublicRooms())
+}
+
+async function emitTournamentState(io: TypedServer, tournamentId: string) {
+  const state = await TournamentManager.getSnapshot(tournamentId)
+  if (state) {
+    await emitRoomEvent(io, tournamentChannel(tournamentId), 'tournament:state', state)
+  }
+}
+
+async function emitTournamentAssignments(
+  io: TypedServer,
+  assignments: TournamentRoomAssignment[],
+) {
+  const roomIds = new Set<string>()
+  for (const assignment of assignments) {
+    roomIds.add(assignment.roomId)
+    const room = await RoomManager.getRoom(assignment.roomId)
+    const socketId = room?.players.find(player => player.slot === assignment.playerSlot)?.socketId
+    if (socketId) {
+      await emitRoomEvent(io, socketId, 'tournament:assigned', assignment)
+    }
+  }
+  for (const roomId of roomIds) {
+    scheduleTurnTimer(io, roomId)
+  }
+}
+
+function leaveOtherRoomChannels(socket: TypedSocket, roomId: string): void {
+  for (const joined of socket.rooms) {
+    if (joined === socket.id || joined === roomId || joined === 'lobby' ||
+        joined.startsWith('tournament:')) continue
+    socket.leave(joined)
+  }
+}
+
+async function completeTournamentGroup(
+  io: TypedServer,
+  room: RoomState,
+  game: { winResult: { winner: number } | null },
+) {
+  const meta = room.tournament
+  if (!meta) return
+  const winnerSlot = game.winResult?.winner ?? null
+  const result = await TournamentManager.recordGroupResult(
+    meta.id,
+    meta.groupId,
+    room.roomId,
+    winnerSlot === null ? null : winnerSlot as 1 | 2 | 3 | 4,
+  )
+  if (!result) return
+  await emitRoomEvent(io, tournamentChannel(meta.id), 'tournament:state', result.state)
+  await emitTournamentAssignments(io, result.assignments)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -143,6 +200,10 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Ya estás jugando en una sala' })
       return
     }
+    if (TournamentManager.getTournamentIdBySocket(socket.id)) {
+      ack({ ok: false, error: 'Ya estás en un torneo' })
+      return
+    }
 
     const currentSpectatorRoom = RoomManager.getSpectatorRoom(socket.id)
     if (currentSpectatorRoom && currentSpectatorRoom.roomId !== roomId) {
@@ -177,8 +238,10 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Nombre requerido' })
       return
     }
-    if (await RoomManager.getRoomBySocket(socket.id) || RoomManager.getSpectatorRoom(socket.id)) {
-      ack({ ok: false, error: 'Ya estás en una sala' })
+    if (await RoomManager.getRoomBySocket(socket.id) ||
+        RoomManager.getSpectatorRoom(socket.id) ||
+        TournamentManager.getTournamentIdBySocket(socket.id)) {
+      ack({ ok: false, error: 'Ya estás en una sala o torneo' })
       return
     }
     const room = await RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password)
@@ -216,6 +279,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       io.in(result.previousSocketId).disconnectSockets(true)
     }
     socket.leave('lobby')
+    leaveOtherRoomChannels(socket, roomId)
     socket.join(roomId)
     if (result.room.game?.currentPlayer === result.slot) {
       await emitRoomEvent(io, roomId, 'game:clock', { turnStartedAt: result.room.game.turnStartedAt })
@@ -275,6 +339,10 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Ya estás viendo una sala' })
       return
     }
+    if (TournamentManager.getTournamentIdBySocket(socket.id)) {
+      ack({ ok: false, error: 'Ya estás en un torneo' })
+      return
+    }
     if (currentRoom && currentRoom.roomId !== roomId) {
       ack({ ok: false, error: 'Ya estás en otra sala' })
       return
@@ -332,6 +400,178 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     ack({ ok: true })
     await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
+  })
+
+  // ── tournament:create ────────────────────────────────────────
+  socket.on('tournament:create', async (payload, ack) => {
+    if (!isRecord(payload)) {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+    const name = typeof payload.name === 'string' ? payload.name.trim() : ''
+    if (!username) {
+      ack({ ok: false, error: 'Nombre requerido' })
+      return
+    }
+    if (await RoomManager.getRoomBySocket(socket.id) ||
+        TournamentManager.getTournamentIdBySocket(socket.id) ||
+        RoomManager.getSpectatorRoom(socket.id)) {
+      ack({ ok: false, error: 'Ya estás en una sala o torneo' })
+      return
+    }
+
+    const { tournament, participant } = await TournamentManager.createTournament(
+      username,
+      socket.id,
+      name,
+    )
+    socket.leave('lobby')
+    socket.join(tournamentChannel(tournament.tournamentId))
+    ack({
+      ok: true,
+      tournamentId: tournament.tournamentId,
+      participantId: participant.id,
+      reconnectToken: participant.reconnectToken,
+      state: TournamentManager.snapshot(tournament),
+    })
+  })
+
+  // ── tournament:join ──────────────────────────────────────────
+  socket.on('tournament:join', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.tournamentId !== 'string') {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+    if (!tournamentId || !username) {
+      ack({ ok: false, error: 'Código y nombre requeridos' })
+      return
+    }
+    if (RoomManager.getSpectatorRoom(socket.id) ||
+        await RoomManager.getRoomBySocket(socket.id) ||
+        TournamentManager.getTournamentIdBySocket(socket.id)) {
+      ack({ ok: false, error: 'Ya estás en una sala o torneo' })
+      return
+    }
+
+    const result = await TournamentManager.joinTournament(tournamentId, username, socket.id)
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    TournamentManager.bindSocket(socket.id, tournamentId)
+    socket.leave('lobby')
+    socket.join(tournamentChannel(tournamentId))
+    ack({
+      ok: true,
+      tournamentId,
+      participantId: result.participant.id,
+      reconnectToken: result.participant.reconnectToken,
+      state: TournamentManager.snapshot(result.tournament),
+    })
+    await emitTournamentState(io, tournamentId)
+  })
+
+  // ── tournament:reconnect ─────────────────────────────────────
+  socket.on('tournament:reconnect', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.tournamentId !== 'string' ||
+        typeof payload.reconnectToken !== 'string') {
+      ack({ ok: false, error: 'Datos de reconexión inválidos' })
+      return
+    }
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const result = await TournamentManager.reconnectTournament(
+      tournamentId,
+      payload.reconnectToken,
+      socket.id,
+    )
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    if (result.previousSocketId) {
+      io.in(result.previousSocketId).disconnectSockets(true)
+    }
+    socket.leave('lobby')
+    socket.join(tournamentChannel(tournamentId))
+    ack({
+      ok: true,
+      tournamentId,
+      participantId: result.participant.id,
+      reconnectToken: result.participant.reconnectToken,
+      state: TournamentManager.snapshot(result.tournament),
+      assignment: result.assignment,
+    })
+    await emitTournamentState(io, tournamentId)
+  })
+
+  // ── tournament:start ─────────────────────────────────────────
+  socket.on('tournament:start', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.tournamentId !== 'string') {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const result = await TournamentManager.startTournament(tournamentId, socket.id)
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitTournamentState(io, tournamentId)
+    await emitTournamentAssignments(io, result.assignments)
+  })
+
+  // ── tournament:next-stage ────────────────────────────────────
+  socket.on('tournament:next-stage', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.tournamentId !== 'string') {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const result = await TournamentManager.advanceTournament(tournamentId, socket.id)
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitTournamentState(io, tournamentId)
+    await emitTournamentAssignments(io, result.assignments)
+  })
+
+  // ── tournament:retry-group ───────────────────────────────────
+  socket.on('tournament:retry-group', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.tournamentId !== 'string' ||
+        typeof payload.groupId !== 'string') {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const result = await TournamentManager.retryGroup(tournamentId, payload.groupId, socket.id)
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitTournamentState(io, tournamentId)
+    await emitTournamentAssignments(io, result.assignments)
+  })
+
+  // ── tournament:leave ─────────────────────────────────────────
+  socket.on('tournament:leave', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.tournamentId !== 'string') {
+      ack({ ok: false, error: 'Datos inválidos' })
+      return
+    }
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const state = await TournamentManager.leaveTournament(tournamentId, socket.id)
+    socket.leave(tournamentChannel(tournamentId))
+    ack({ ok: true })
+    if (state) {
+      await emitRoomEvent(io, tournamentChannel(tournamentId), 'tournament:state', state)
+    }
   })
 
   // ── game:start ───────────────────────────────────────────────
@@ -443,6 +683,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
           clearTurnTimer(normalizedPayload.roomId)
           await emitRoomEvent(io, normalizedPayload.roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
           await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', { winResult: null, finalState: toSnapshot(outcome.game) })
+          await completeTournamentGroup(io, outcome.room, outcome.game)
           await broadcastRoomList(io)
         } else {
           scheduleTurnTimer(io, normalizedPayload.roomId)
@@ -460,6 +701,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         winResult: outcome.game.winResult,
         finalState: toSnapshot(outcome.game),
       })
+      await completeTournamentGroup(io, outcome.room, outcome.game)
       await broadcastRoomList(io)
     } else {
       scheduleTurnTimer(io, normalizedPayload.roomId)
@@ -475,6 +717,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const roomId = payload.roomId.trim().toUpperCase()
     const outcome = await RoomManager.withRoomLock(roomId, async () => {
       let room = await RoomManager.getRoom(roomId)
+      if (room?.tournament) {
+        return { ok: false as const, error: 'Las partidas de torneo se gestionan desde el torneo' }
+      }
       if (!room || room.phase !== 'finished' || room.players.length < 2) {
         return { ok: false as const, error: 'La partida no está pausada o no hay jugadores suficientes' }
       }
@@ -518,6 +763,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const roomId = payload.roomId.trim().toUpperCase()
     const waitingRoom = await RoomManager.withRoomLock(roomId, async () => {
       const room = await RoomManager.getRoom(roomId)
+      if (room?.tournament) return { error: 'Las partidas de torneo se gestionan desde el torneo' }
       if (!room?.game || room.phase !== 'playing') return { error: 'No hay una partida activa para finalizar' }
       const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
       const hostSlot = await RoomManager.getHostSlot(roomId)
@@ -543,6 +789,16 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
   // ── disconnect ───────────────────────────────────────────────
   socket.on('disconnect', async () => {
     RoomManager.removeSpectator(socket.id)
+    const tournamentState = await TournamentManager.disconnectSocket(socket.id)
+    if (tournamentState) {
+      await emitRoomEvent(
+        io,
+        tournamentChannel(tournamentState.tournamentId),
+        'tournament:state',
+        tournamentState,
+      )
+    }
+
     const socketRoom = await RoomManager.getRoomBySocket(socket.id)
     if (!socketRoom) return
 

@@ -1,10 +1,12 @@
 import { onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getSocket, waitForSocketConnection } from '@/services/socket'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
+import { useTournamentStore } from '@/stores/tournamentStore'
 import type { GameSettings, PlayerColorId } from '@/types/game'
 import type {
   GameControlAck,
@@ -12,15 +14,22 @@ import type {
   RoomJoinAck,
   RoomReconnectAck,
   SpectateJoinAck,
+  TournamentControlAck,
+  TournamentCreateAck,
+  TournamentJoinAck,
+  TournamentReconnectAck,
+  TournamentRoomAssignment,
 } from '@/types/socket'
 
 export function useSocket() {
-  const socket     = getSocket()
-  const roomStore  = useRoomStore()
-  const gameStore  = useGameStore()
-  const lobbyStore = useLobbyStore()
-  const audioStore = useAudioStore()
-  const userStore = useUserStore()
+  const socket          = getSocket()
+  const router          = useRouter()
+  const roomStore       = useRoomStore()
+  const gameStore       = useGameStore()
+  const lobbyStore      = useLobbyStore()
+  const audioStore      = useAudioStore()
+  const userStore       = useUserStore()
+  const tournamentStore = useTournamentStore()
 
   async function resyncRoomAfterReconnect() {
     if (!roomStore.roomId) {
@@ -58,6 +67,32 @@ export function useSocket() {
 
   function resumeSocketWhenVisible() {
     if (!document.hidden && roomStore.roomId && !socket.connected) socket.connect()
+  }
+
+  async function applyTournamentAssignment(assignment: TournamentRoomAssignment): Promise<boolean> {
+    const result = await emitReconnectRoom(assignment.roomId, assignment.reconnectToken)
+    if (!result.ok) {
+      tournamentStore.setError(result.error ?? 'No se pudo entrar a la partida del torneo')
+      return false
+    }
+
+    roomStore.setFromAck(
+      assignment.roomId,
+      result.playerSlot ?? assignment.playerSlot,
+      undefined,
+      result.reconnectToken ?? assignment.reconnectToken,
+    )
+    if (result.roomState) roomStore.setRoomState(result.roomState)
+    else roomStore.setRoomState(assignment.roomState)
+    gameStore.applyServerState(assignment.gameState)
+    roomStore.setPhase('playing')
+    roomStore.beginTournamentRoomSwitch()
+    try {
+      await router.push(`/room/${assignment.roomId}`)
+    } finally {
+      roomStore.consumeTournamentRoomSwitch()
+    }
+    return true
   }
 
   function registerListeners() {
@@ -104,6 +139,14 @@ export function useSocket() {
       audioStore.playSfx('leave')
     })
 
+    socket.on('tournament:state', state => {
+      tournamentStore.setState(state)
+    })
+
+    socket.on('tournament:assigned', assignment => {
+      void applyTournamentAssignment(assignment)
+    })
+
     socket.on('error', payload => {
       roomStore.setError(payload.message)
     })
@@ -122,6 +165,8 @@ export function useSocket() {
     socket.off('game:over')
     socket.off('player:joined')
     socket.off('player:left')
+    socket.off('tournament:state')
+    socket.off('tournament:assigned')
     socket.off('error')
   }
 
@@ -129,6 +174,84 @@ export function useSocket() {
   onUnmounted(removeListeners)
 
   // ── Typed emit helpers ───────────────────────────────────────
+
+  async function ackRequest<T extends { ok: boolean; error?: string }>(
+    timeoutMessage: string,
+    emit: (done: (result: T) => void) => void,
+  ): Promise<T> {
+    if (!await waitForSocketConnection()) {
+      return { ok: false, error: 'No se pudo conectar con el servidor' } as T
+    }
+    return new Promise(resolve => {
+      let settled = false
+      const timeout = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        resolve({ ok: false, error: timeoutMessage } as T)
+      }, 8_000)
+      emit(result => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(result)
+      })
+    })
+  }
+
+  function emitCreateTournament(username: string, name: string): Promise<TournamentCreateAck> {
+    return ackRequest<TournamentCreateAck>(
+      'El servidor no respondió al crear el torneo',
+      done => socket.emit('tournament:create', { username, name }, done),
+    )
+  }
+
+  function emitJoinTournament(tournamentId: string, username: string): Promise<TournamentJoinAck> {
+    return ackRequest<TournamentJoinAck>(
+      'El servidor no respondió al unirse al torneo',
+      done => socket.emit('tournament:join', { tournamentId, username }, done),
+    )
+  }
+
+  function emitReconnectTournament(
+    tournamentId: string,
+    reconnectToken: string,
+  ): Promise<TournamentReconnectAck> {
+    return ackRequest<TournamentReconnectAck>(
+      'El servidor no respondió al recuperar el torneo',
+      done => socket.emit('tournament:reconnect', { tournamentId, reconnectToken }, done),
+    )
+  }
+
+  function emitLeaveTournament(tournamentId: string): Promise<TournamentControlAck> {
+    return ackRequest<TournamentControlAck>(
+      'El servidor no respondió al salir del torneo',
+      done => socket.emit('tournament:leave', { tournamentId }, done),
+    )
+  }
+
+  function emitStartTournament(tournamentId: string): Promise<TournamentControlAck> {
+    return ackRequest<TournamentControlAck>(
+      'El servidor no respondió al iniciar el torneo',
+      done => socket.emit('tournament:start', { tournamentId }, done),
+    )
+  }
+
+  function emitNextTournamentStage(tournamentId: string): Promise<TournamentControlAck> {
+    return ackRequest<TournamentControlAck>(
+      'El servidor no respondió al iniciar la siguiente ronda',
+      done => socket.emit('tournament:next-stage', { tournamentId }, done),
+    )
+  }
+
+  function emitRetryTournamentGroup(
+    tournamentId: string,
+    groupId: string,
+  ): Promise<TournamentControlAck> {
+    return ackRequest<TournamentControlAck>(
+      'El servidor no respondió al repetir el grupo',
+      done => socket.emit('tournament:retry-group', { tournamentId, groupId }, done),
+    )
+  }
 
   async function emitJoinRoom(roomId: string, username: string, password?: string): Promise<RoomJoinAck> {
     if (!await waitForSocketConnection()) {
@@ -243,5 +366,13 @@ export function useSocket() {
     emitRematch,
     emitStart,
     emitFinishGame,
+    emitCreateTournament,
+    emitJoinTournament,
+    emitReconnectTournament,
+    emitLeaveTournament,
+    emitStartTournament,
+    emitNextTournamentStage,
+    emitRetryTournamentGroup,
+    applyTournamentAssignment,
   }
 }

@@ -20,6 +20,15 @@ const ROOM_LOCK_SCRIPT = `
   return 0
 `
 
+export interface TournamentRoomMeta {
+  id: string
+  name: string
+  stage: number
+  groupId: string
+  groupLabel: string
+  participantIds: Partial<Record<PlayerSlot, string>>
+}
+
 export interface RoomState {
   roomId:      string
   name:        string
@@ -39,6 +48,7 @@ export interface RoomState {
   lastStartingPlayer: PlayerSlot | null
   disconnectEpoch: Partial<Record<PlayerSlot, number>>
   disconnectUntil: Partial<Record<PlayerSlot, number>>
+  tournament?: TournamentRoomMeta
 }
 
 const rooms = new Map<string, RoomState>()
@@ -216,6 +226,69 @@ export const RoomManager = {
     }
     await saveRoom(room)
     socketToRoom.set(socketId, roomId)
+    return room
+  },
+
+  async createTournamentRoom(params: {
+    name: string
+    tournament: {
+      id: string
+      name: string
+      stage: number
+      groupId: string
+      groupLabel: string
+    }
+    players: Array<{
+      participantId: string
+      username: string
+      socketId: string
+    }>
+  }): Promise<RoomState> {
+    let roomId: string
+    do { roomId = generateRoomCode() } while (await loadRoom(roomId))
+
+    const reconnectTokens: Partial<Record<PlayerSlot, string>> = {}
+    const participantIds: Partial<Record<PlayerSlot, string>> = {}
+    const players: PlayerInfo[] = params.players.slice(0, 4).map((player, index) => {
+      const slot = (index + 1) as PlayerSlot
+      reconnectTokens[slot] = randomUUID()
+      participantIds[slot] = player.participantId
+      return {
+        slot,
+        username: player.username,
+        socketId: player.socketId,
+        color: DEFAULT_PLAYER_COLOR_IDS[slot],
+      }
+    })
+
+    const room: RoomState = {
+      roomId,
+      name: params.name,
+      isPrivate: true,
+      players,
+      reconnectTokens,
+      phase: 'waiting',
+      gameSettings: { ...DEFAULT_GAME_SETTINGS },
+      game: null,
+      lastGame: null,
+      createdAt: Date.now(),
+      scores: {},
+      roundNumber: 0,
+      hostSlot: 1,
+      lastRoundPlayers: null,
+      lastStartingPlayer: null,
+      disconnectEpoch: {},
+      disconnectUntil: {},
+      tournament: {
+        ...params.tournament,
+        participantIds,
+      },
+    }
+
+    for (const player of players) {
+      if (player.socketId) socketToRoom.set(player.socketId, roomId)
+    }
+    await saveRoom(room)
     return room
   },
 
@@ -584,6 +657,15 @@ export const RoomManager = {
       roundNumber: room.roundNumber,
       hostSlot:    room.hostSlot,
       gameSettings: room.gameSettings,
+      tournament: room.tournament
+        ? {
+            id: room.tournament.id,
+            name: room.tournament.name,
+            stage: room.tournament.stage,
+            groupId: room.tournament.groupId,
+            groupLabel: room.tournament.groupLabel,
+          }
+        : undefined,
     }
   },
 }

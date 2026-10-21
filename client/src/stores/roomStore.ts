@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { GameSettings } from '@/types/game'
 import { DEFAULT_GAME_SETTINGS } from '@/types/game'
-import type { PlayerInfo, PlayerSlot, RoomStateSnapshot } from '@/types/socket'
+import type { PlayerInfo, PlayerSlot, RoomStateSnapshot, RoomTournamentInfo } from '@/types/socket'
 
 const ROOM_SESSION_KEY = 'st_room_session'
 
@@ -30,6 +30,8 @@ export const useRoomStore = defineStore('room', () => {
   const roomPassword = ref<string | undefined>(undefined)
   const gameSettings = ref<GameSettings>({ ...DEFAULT_GAME_SETTINGS })
   const reconnectToken = ref<string | null>(null)
+  const tournament   = ref<RoomTournamentInfo | null>(null)
+  const switchingTournamentRoom = ref(false)
   const error        = ref<string | null>(null)
 
   function setFromAck(ackRoomId: string, slot: PlayerSlot, password?: string, token?: string) {
@@ -103,6 +105,7 @@ export const useRoomStore = defineStore('room', () => {
     gameSettings.value = { ...DEFAULT_GAME_SETTINGS, ...(snapshot.gameSettings ?? {}) }
     players.value     = snapshot.players
     playerCount.value = snapshot.playerCount
+    tournament.value  = snapshot.tournament ?? null
     scores.value      = snapshot.scores
     roundNumber.value = snapshot.roundNumber
     error.value = null
@@ -135,6 +138,16 @@ export const useRoomStore = defineStore('room', () => {
     error.value = msg
   }
 
+  function beginTournamentRoomSwitch() {
+    switchingTournamentRoom.value = true
+  }
+
+  function consumeTournamentRoomSwitch(): boolean {
+    const switching = switchingTournamentRoom.value
+    switchingTournamentRoom.value = false
+    return switching
+  }
+
   function reset() {
     roomId.value       = null
     name.value         = ''
@@ -153,12 +166,14 @@ export const useRoomStore = defineStore('room', () => {
     roomPassword.value = undefined
     gameSettings.value = { ...DEFAULT_GAME_SETTINGS }
     reconnectToken.value = null
+    tournament.value = null
+    switchingTournamentRoom.value = false
     error.value        = null
   }
 
   return {
     roomId, name, isPrivate, phase, mySlot, hostSlot, players, playerCount,
-    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, roomPassword, reconnectToken, gameSettings, error,
-    setFromAck, restoreSession, clearSavedSession, setSpectating, setConnection, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, reset,
+    scores, roundNumber, opponentLeft, disconnectedPlayer, isSpectator, connected, roomPassword, reconnectToken, gameSettings, tournament, switchingTournamentRoom, error,
+    setFromAck, restoreSession, clearSavedSession, setSpectating, setConnection, setRoomState, setPhase, addPlayer, setOpponentLeft, setError, beginTournamentRoomSwitch, consumeTournamentRoomSwitch, reset,
   }
 })

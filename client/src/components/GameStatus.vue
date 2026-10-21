@@ -25,7 +25,11 @@
         </div>
 
         <div class="overlay__divider" />
-        <button v-if="canRematch" class="overlay__btn" @click="emit('rematch')">
+        <button v-if="isTournament" class="overlay__btn" @click="goToTournament">
+          <span aria-hidden="true">◂</span>
+          Volver al torneo
+        </button>
+        <button v-else-if="canRematch" class="overlay__btn" @click="emit('rematch')">
           <span aria-hidden="true">↻</span>
           Jugar de nuevo
         </button>
@@ -39,14 +43,23 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 
 const store     = useGameStore()
 const roomStore = useRoomStore()
+const router    = useRouter()
 const emit = defineEmits<{ rematch: [] }>()
 
-const canRematch = computed(() => !roomStore.roomId || roomStore.mySlot === roomStore.hostSlot)
+const isTournament = computed(() => Boolean(roomStore.tournament))
+const canRematch = computed(() =>
+  !isTournament.value && (!roomStore.roomId || roomStore.mySlot === roomStore.hostSlot)
+)
+
+function goToTournament() {
+  if (roomStore.tournament) void router.push(`/tournament/${roomStore.tournament.id}`)
+}
 
 const hostName = computed(() =>
   roomStore.players.find(player => player.slot === 1)?.username ?? 'el creador'

@@ -40,6 +40,16 @@ para desarrollo con una sola instancia, pero no para producción distribuida.
   disponibles. El color se conserva durante la partida y no puede repetirse
   entre jugadores de la misma sala.
 
+## Torneos
+
+Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o
+unirse con un código. Al iniciar, los jugadores se reparten en grupos de 3 o 4;
+solo se usa un grupo de 2 cuando es inevitable, como ocurre con 5 jugadores
+(3 + 2). El ganador de cada grupo avanza a la siguiente ronda hasta que queda un
+campeón. Los grupos empatados se pueden repetir. Las partidas de torneo usan un
+temporizador de 90 segundos por turno para que un jugador desconectado no bloquee
+la ronda.
+
 ## Variables de entorno
 
 Configura estas variables en Vercel o en tu shell local:

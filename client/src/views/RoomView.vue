@@ -101,9 +101,15 @@
     </div>
 
     <!-- ── Game ── -->
-    <template v-else-if="roomStore.phase === 'playing' || roomStore.phase === 'finished'">
+    <template v-else-if="roomStore.phase === 'playing' || roomStore.phase === 'finished' || (roomStore.tournament && gameStore.isGameOver)">
       <header class="room__header">
-        <span class="room__code">{{ roomStore.name || roomId }} <span class="room__id">#{{ roomId }}</span></span>
+        <span class="room__code">
+          {{ roomStore.tournament?.name || roomStore.name || roomId }}
+          <span class="room__id">#{{ roomId }}</span>
+          <span v-if="roomStore.tournament" class="room__tournament">
+            {{ roomStore.tournament.groupLabel }} · Ronda {{ roomStore.tournament.stage }}
+          </span>
+        </span>
         <span class="room__turn" v-if="!gameStore.isGameOver">
           Turno: <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
           <span v-if="roomStore.gameSettings.turnTimerEnabled" class="room__turn-timer" :class="{ 'room__turn-timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
@@ -221,7 +227,9 @@ const audioStore = useAudioStore()
 const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame, emitSetColor } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
+const mountedRoomId = String(route.params.id).toUpperCase()
 const copied = ref<'player' | 'spectator' | null>(null)
+let tournamentRedirectTimer: ReturnType<typeof setTimeout> | null = null
 const choosingColor = ref<PlayerColorId | null>(null)
 const showRules = ref(false)
 const RULES_STORAGE_KEY = 'st_rules_seen'
@@ -275,7 +283,8 @@ const lastGameResult = computed(() => {
 })
 
 watch(() => roomStore.phase, phase => {
-  if (phase !== 'playing' || rulesShownCount.value >= RULES_DISPLAY_LIMIT) return
+  if (phase !== 'playing' || roomStore.tournament ||
+      rulesShownCount.value >= RULES_DISPLAY_LIMIT) return
   rulesShownCount.value++
   try {
     window.localStorage.setItem(RULES_STORAGE_KEY, String(rulesShownCount.value))
@@ -283,6 +292,19 @@ watch(() => roomStore.phase, phase => {
     // The modal can still be shown if storage is unavailable.
   }
   showRules.value = true
+}, { immediate: true })
+
+watch(() => gameStore.isGameOver, over => {
+  if (tournamentRedirectTimer) {
+    clearTimeout(tournamentRedirectTimer)
+    tournamentRedirectTimer = null
+  }
+  if (!over || !roomStore.tournament) return
+
+  tournamentRedirectTimer = setTimeout(() => {
+    if (!roomStore.tournament) return
+    void router.push(`/tournament/${roomStore.tournament.id}`)
+  }, 2200)
 }, { immediate: true })
 
 const turnColor = computed(() => {
@@ -329,6 +351,18 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (tournamentRedirectTimer) {
+    clearTimeout(tournamentRedirectTimer)
+    tournamentRedirectTimer = null
+  }
+
+  const nextRoute = router.currentRoute.value
+  const nextRoomId = String(nextRoute.params.id ?? '').toUpperCase()
+  const switchingTournamentRoom = roomStore.consumeTournamentRoomSwitch() &&
+    nextRoute.name === 'room' &&
+    nextRoomId !== mountedRoomId
+  if (switchingTournamentRoom) return
+
   roomStore.reset()
   gameStore.initGame(2)
   disconnectSocket()
@@ -624,6 +658,17 @@ function closeRules() {
 
 .room__code { font-weight: 600; }
 .room__id   { font-weight: 400; color: var(--text-muted); font-size: 11px; letter-spacing: 1px; }
+.room__tournament {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--accent-secondary);
+  border-radius: 999px;
+  color: var(--accent-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
 
 .room__turn-timer {
   display: inline-flex;
