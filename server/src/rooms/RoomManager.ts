@@ -407,6 +407,21 @@ export const RoomManager = {
     return (await loadRoom(roomId))?.hostSlot ?? null
   },
 
+  async detachSocket(socketId: string): Promise<RoomState | null> {
+    const roomId = socketToRoom.get(socketId)
+    if (!roomId) return null
+    socketToRoom.delete(socketId)
+
+    const room = await loadRoom(roomId)
+    if (!room) return null
+    const player = room.players.find(candidate => candidate.socketId === socketId)
+    if (!player) return room
+
+    player.socketId = ''
+    await saveRoom(room)
+    return room
+  },
+
   async removePlayer(socketId: string): Promise<{ room: RoomState; slot: PlayerSlot; player: PlayerInfo; graceMs: number; disconnectEpoch: number } | null> {
     const room = await this.getRoomBySocket(socketId)
     if (!room) return null

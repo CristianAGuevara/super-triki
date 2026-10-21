@@ -363,9 +363,10 @@ onUnmounted(() => {
     nextRoomId !== mountedRoomId
   if (switchingTournamentRoom) return
 
+  const goingToTournament = nextRoute.name === 'tournament'
   roomStore.reset()
   gameStore.initGame(2)
-  disconnectSocket()
+  if (!goingToTournament) disconnectSocket()
 })
 
 async function copyLink(url: string, type: 'player' | 'spectator') {

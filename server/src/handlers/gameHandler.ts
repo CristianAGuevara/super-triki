@@ -494,6 +494,10 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (result.previousSocketId) {
       io.in(result.previousSocketId).disconnectSockets(true)
     }
+    if (!result.assignment) {
+      const detachedRoom = await RoomManager.detachSocket(socket.id)
+      if (detachedRoom) socket.leave(detachedRoom.roomId)
+    }
     socket.leave('lobby')
     socket.join(tournamentChannel(tournamentId))
     ack({
