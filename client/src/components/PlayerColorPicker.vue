@@ -1,7 +1,7 @@
 <template>
   <section class="color-picker" aria-labelledby="player-color-title">
     <div class="color-picker__heading">
-      <span id="player-color-title" class="color-picker__title">Tu color</span>
+      <span id="player-color-title" class="color-picker__title">Elige tu color</span>
       <span class="color-picker__current" role="status">{{ currentLabel }}</span>
     </div>
 

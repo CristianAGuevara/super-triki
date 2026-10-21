@@ -184,7 +184,13 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     const room = await RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password)
     socket.leave('lobby')
     socket.join(room.roomId)
-    ack({ ok: true, roomId: room.roomId, playerSlot: 1, reconnectToken: room.reconnectTokens[1] })
+    ack({
+      ok: true,
+      roomId: room.roomId,
+      playerSlot: 1,
+      reconnectToken: room.reconnectTokens[1],
+      roomState: RoomManager.toSnapshot(room),
+    })
     socket.emit('room:state', RoomManager.toSnapshot(room))
     await broadcastRoomList(io)
   })

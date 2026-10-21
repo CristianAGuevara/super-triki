@@ -17,6 +17,14 @@
 
       <div class="lobby__code">{{ roomId }}</div>
 
+      <PlayerColorPicker
+        v-if="roomStore.mySlot"
+        :model-value="myColor"
+        :taken="takenColors"
+        :disabled="choosingColor !== null || !roomStore.connected"
+        @select="chooseColor"
+      />
+
        <div class="lobby__copy-actions">
          <button class="lobby__copy-btn" @click="copyPlayerLink">
            {{ copied === 'player' ? '¡Copiado!' : 'Enlace para jugadores' }}
@@ -41,14 +49,6 @@
       </div>
 
       <p class="lobby__count">{{ roomStore.playerCount }}/4 jugadores</p>
-
-      <PlayerColorPicker
-        v-if="roomStore.mySlot"
-        :model-value="myColor"
-        :taken="takenColors"
-        :disabled="choosingColor !== null || !roomStore.connected"
-        @select="chooseColor"
-      />
 
       <details v-if="roomStore.mySlot === roomStore.hostSlot" class="lobby__options">
         <summary>Opciones de partida</summary>
@@ -416,7 +416,7 @@ function closeRules() {
   flex-direction: column;
   align-items: center;
   gap: 20px;
-  margin-top: 80px;
+  margin-top: 36px;
 }
 
 .room__notice {
@@ -664,6 +664,7 @@ function closeRules() {
 .room__turn-timer--urgent { color: var(--accent-danger); border-color: var(--accent-danger); }
 
 @media (max-width: 600px) {
+  .lobby { margin-top: 16px; gap: 14px; }
   .disconnect-banner { top: 52px; align-items: flex-start; flex-wrap: wrap; }
   .disconnect-banner__message { min-width: calc(100% - 48px); }
   .disconnect-banner__finish { margin-left: 32px; }

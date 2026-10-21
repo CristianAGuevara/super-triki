@@ -318,6 +318,7 @@ async function handleCreate() {
       createIsPrivate.value ? createPasswordInput.value || undefined : undefined,
       res.reconnectToken,
     )
+    if (res.roomState) roomStore.setRoomState(res.roomState)
     router.push(`/room/${res.roomId}`)
   })
 }

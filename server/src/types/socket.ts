@@ -22,6 +22,7 @@ export interface RoomCreateAck {
   roomId?: string
   playerSlot?: PlayerSlot
   reconnectToken?: string
+  roomState?: RoomStateSnapshot
   error?: string
 }
 
