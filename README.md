@@ -48,7 +48,8 @@ unirse con un código. Al iniciar, los jugadores se reparten priorizando grupos 
 ocurre con 5 jugadores (3 + 2). El ganador de cada grupo avanza a la siguiente ronda hasta que queda un
 campeón. Los grupos empatados se pueden repetir. Las partidas de torneo usan un
 temporizador de 90 segundos por turno para que un jugador desconectado no bloquee
-la ronda.
+la ronda. Los torneos públicos aparecen en el listado del menú principal,
+diferenciados de las salas y filtrables por tipo.
 
 ## Variables de entorno
 

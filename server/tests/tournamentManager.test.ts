@@ -36,6 +36,47 @@ test('limits tournament registration to fifty participants', async () => {
   if (!rejected.ok) assert.match(rejected.error, /lleno/i)
 })
 
+test('lists tournaments publicly until they finish', async () => {
+  const hostSocket = `tournament-listing-${randomUUID()}`
+  const created = await TournamentManager.createTournament('Host', hostSocket, 'Copa pública')
+  for (const [index, name] of ['Dos', 'Tres'].entries()) {
+    const joined = await TournamentManager.joinTournament(
+      created.tournament.tournamentId,
+      name,
+      `tournament-listing-${index}-${randomUUID()}`,
+    )
+    assert.equal(joined.ok, true)
+  }
+
+  const waitingList = await TournamentManager.getPublicTournaments()
+  const waitingEntry = waitingList.find(entry => entry.roomId === created.tournament.tournamentId)
+  assert.equal(waitingEntry?.kind, 'tournament')
+  assert.equal(waitingEntry?.maxPlayers, 50)
+
+  const started = await TournamentManager.startTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(started.ok, true)
+  const playingList = await TournamentManager.getPublicTournaments()
+  assert.equal(
+    playingList.find(entry => entry.roomId === created.tournament.tournamentId)?.phase,
+    'playing',
+  )
+
+  const group = started.ok ? started.state.groups[0] : null
+  assert.ok(group)
+  assert.ok(group.roomId)
+  const room = await RoomManager.getRoom(group.roomId)
+  assert.ok(room)
+  await TournamentManager.recordGroupResult(
+    created.tournament.tournamentId,
+    group.id,
+    room.roomId,
+    1,
+  )
+
+  const finishedList = await TournamentManager.getPublicTournaments()
+  assert.equal(finishedList.some(entry => entry.roomId === created.tournament.tournamentId), false)
+})
+
 test('starts a five-player tournament with a 3 + 2 split', async () => {
   const hostSocket = `tournament-host-${randomUUID()}`
   const { tournament } = await TournamentManager.createTournament(

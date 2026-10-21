@@ -75,8 +75,16 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
   }).catch(error => console.error('[game:timer-load]', error))
 }
 
+async function getPublicListings() {
+  const [rooms, tournaments] = await Promise.all([
+    RoomManager.getPublicRooms(),
+    TournamentManager.getPublicTournaments(),
+  ])
+  return [...rooms, ...tournaments]
+}
+
 async function broadcastRoomList(io: TypedServer) {
-  await emitRoomEvent(io, 'lobby', 'rooms:list', await RoomManager.getPublicRooms())
+  await emitRoomEvent(io, 'lobby', 'rooms:list', await getPublicListings())
 }
 
 async function emitTournamentState(io: TypedServer, tournamentId: string) {
@@ -176,11 +184,11 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
   // All new connections join the lobby channel to receive room list updates
   socket.join('lobby')
-  void RoomManager.getPublicRooms().then(rooms => socket.emit('rooms:list', rooms))
+  void getPublicListings().then(listings => socket.emit('rooms:list', listings))
 
   // ── rooms:get ────────────────────────────────────────────────
   socket.on('rooms:get', async ack => {
-    ack(await RoomManager.getPublicRooms())
+    ack(await getPublicListings())
   })
 
   // ── spectate:join ────────────────────────────────────────────
@@ -435,6 +443,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       reconnectToken: participant.reconnectToken,
       state: TournamentManager.snapshot(tournament),
     })
+    await broadcastRoomList(io)
   })
 
   // ── tournament:join ──────────────────────────────────────────
@@ -472,6 +481,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       state: TournamentManager.snapshot(result.tournament),
     })
     await emitTournamentState(io, tournamentId)
+    await broadcastRoomList(io)
   })
 
   // ── tournament:reconnect ─────────────────────────────────────
@@ -509,6 +519,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       assignment: result.assignment,
     })
     await emitTournamentState(io, tournamentId)
+    await broadcastRoomList(io)
   })
 
   // ── tournament:start ─────────────────────────────────────────
@@ -526,6 +537,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     await emitTournamentState(io, tournamentId)
     await emitTournamentAssignments(io, result.assignments)
+    await broadcastRoomList(io)
   })
 
   // ── tournament:next-stage ────────────────────────────────────
@@ -543,6 +555,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     await emitTournamentState(io, tournamentId)
     await emitTournamentAssignments(io, result.assignments)
+    await broadcastRoomList(io)
   })
 
   // ── tournament:retry-group ───────────────────────────────────
@@ -561,6 +574,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     await emitTournamentState(io, tournamentId)
     await emitTournamentAssignments(io, result.assignments)
+    await broadcastRoomList(io)
   })
 
   // ── tournament:leave ─────────────────────────────────────────
@@ -576,6 +590,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (state) {
       await emitRoomEvent(io, tournamentChannel(tournamentId), 'tournament:state', state)
     }
+    await broadcastRoomList(io)
   })
 
   // ── game:start ───────────────────────────────────────────────
@@ -801,6 +816,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         'tournament:state',
         tournamentState,
       )
+      await broadcastRoomList(io)
     }
 
     const socketRoom = await RoomManager.getRoomBySocket(socket.id)

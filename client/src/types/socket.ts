@@ -139,10 +139,13 @@ export interface RoomStateSnapshot {
 }
 
 export interface PublicRoomInfo {
+  kind:        'room' | 'tournament'
   roomId:      string
   name:        string
   playerCount: number
+  maxPlayers:  number
   phase:       'waiting' | 'playing'
+  stage?:      number
 }
 
 export interface GameStateSnapshot {

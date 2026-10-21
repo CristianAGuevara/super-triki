@@ -36,46 +36,80 @@
 
     <div class="home__body">
 
-      <!-- ── Left: public room list ── -->
+      <!-- ── Left: public rooms and tournaments ── -->
       <section class="home__section">
         <div class="home__section-header">
-          <h2 class="home__section-title">Salas disponibles</h2>
-          <span class="home__section-count">{{ publicRooms.length }} sala{{ publicRooms.length !== 1 ? 's' : '' }}</span>
+          <h2 class="home__section-title">Salas y torneos</h2>
+          <span class="home__section-count">
+            {{ filteredListings.length }} resultado{{ filteredListings.length !== 1 ? 's' : '' }}
+          </span>
+        </div>
+
+        <div class="home__filters" role="group" aria-label="Filtrar salas y torneos">
+          <button
+            v-for="option in listingFilters"
+            :key="option.id"
+            type="button"
+            class="home__filter"
+            :class="{ 'home__filter--active': listingFilter === option.id }"
+            :aria-pressed="listingFilter === option.id"
+            @click="listingFilter = option.id"
+          >
+            {{ option.label }}
+            <span>{{ option.count }}</span>
+          </button>
         </div>
 
         <div class="home__rooms">
           <TransitionGroup name="room-list" tag="div" class="home__rooms-inner">
             <div
-              v-for="room in publicRooms"
-              :key="room.roomId"
+              v-for="room in filteredListings"
+              :key="`${room.kind}-${room.roomId}`"
               class="room-card"
-              :class="{ 'room-card--playing': room.phase === 'playing' }"
+              :class="{
+                'room-card--playing': room.phase === 'playing',
+                'room-card--tournament': room.kind === 'tournament',
+              }"
             >
               <div class="room-card__info">
-                <span class="room-card__name">{{ room.name }}</span>
+                <div class="room-card__heading">
+                  <span
+                    class="room-card__kind"
+                    :class="`room-card__kind--${room.kind}`"
+                  >
+                    {{ room.kind === 'tournament' ? 'Torneo' : 'Sala' }}
+                  </span>
+                  <span class="room-card__name">{{ room.name }}</span>
+                </div>
                 <span class="room-card__meta">
-                  <span class="room-card__dots">
+                  <span v-if="room.kind === 'room'" class="room-card__dots">
                     <span
-                      v-for="i in 4"
+                      v-for="i in room.maxPlayers"
                       :key="i"
                       class="room-card__dot"
                       :class="{ 'room-card__dot--filled': i <= room.playerCount }"
                     />
                   </span>
-                  {{ room.playerCount }}/4
-                  <span class="room-card__phase">{{ room.phase === 'playing' ? '· En juego' : '· Esperando' }}</span>
+                  {{ room.playerCount }}/{{ room.maxPlayers }}
+                  <span class="room-card__phase">
+                    · {{ room.phase === 'playing' ? 'En juego' : 'Esperando' }}
+                    <template v-if="room.kind === 'tournament' && room.stage">
+                      · Ronda {{ room.stage }}
+                    </template>
+                  </span>
                 </span>
               </div>
               <div class="room-card__actions">
                 <button
                   class="room-card__btn"
-                  :disabled="room.phase === 'playing' || loading"
-                  :title="room.phase === 'playing' ? 'La partida ya comenzó; usa Espectar' : !canProceed ? 'Escribe tu nombre para unirte' : 'Unirse a la sala'"
-                  @click="handleJoinPublic(room.roomId)"
+                  :disabled="isListingDisabled(room)"
+                  :title="listingJoinTitle(room)"
+                  @click="handleJoinListing(room)"
                 >
-                  {{ loadingRoomId === room.roomId ? '...' : room.phase === 'playing' ? 'En juego' : 'Unirse' }}
+                  {{ listingButtonLabel(room) }}
                 </button>
                 <button
+                  v-if="room.kind === 'room'"
                   class="room-card__spectator-btn"
                   :disabled="loading"
                   @click="handleSpectatePublic(room.roomId)"
@@ -86,10 +120,10 @@
             </div>
           </TransitionGroup>
 
-          <div v-if="publicRooms.length === 0" class="home__empty">
+          <div v-if="filteredListings.length === 0" class="home__empty">
             <span class="home__empty-icon">◎</span>
-            <p>No hay salas públicas activas</p>
-            <p class="home__empty-sub">Crea una para empezar</p>
+            <p>{{ emptyListingTitle }}</p>
+            <p class="home__empty-sub">{{ emptyListingSubtitle }}</p>
           </div>
         </div>
       </section>
@@ -318,14 +352,42 @@ const joinPasswordInput   = ref('')
 const createIsPrivate     = ref(false)
 const loading             = ref(false)
 const loadingRoomId       = ref<string | null>(null)
+const joiningTournamentId = ref<string | null>(null)
 const tournamentLoading   = ref(false)
 const tournamentAction    = ref<'create' | 'join' | null>(null)
 const action              = ref<'create' | 'join' | null>(null)
+const listingFilter       = ref<'all' | 'room' | 'tournament'>('all')
 const errorMsg            = ref<string | null>(null)
 const notice              = ref<string | null>(null)
 let noticeTimer: number | undefined
 
-const publicRooms = computed(() => lobbyStore.publicRooms)
+const publicListings = computed(() => lobbyStore.publicRooms)
+const roomListings = computed(() => publicListings.value.filter(listing => listing.kind === 'room'))
+const tournamentListings = computed(() =>
+  publicListings.value.filter(listing => listing.kind === 'tournament')
+)
+const filteredListings = computed(() => {
+  if (listingFilter.value === 'room') return roomListings.value
+  if (listingFilter.value === 'tournament') return tournamentListings.value
+  return publicListings.value
+})
+const listingFilters = computed(() => [
+  { id: 'all' as const, label: 'Todos', count: publicListings.value.length },
+  { id: 'room' as const, label: 'Salas', count: roomListings.value.length },
+  { id: 'tournament' as const, label: 'Torneos', count: tournamentListings.value.length },
+])
+const emptyListingTitle = computed(() => {
+  if (listingFilter.value === 'tournament') return 'No hay torneos públicos activos'
+  if (listingFilter.value === 'room') return 'No hay salas públicas activas'
+  return 'No hay salas ni torneos activos'
+})
+const emptyListingSubtitle = computed(() =>
+  listingFilter.value === 'tournament'
+    ? 'Crea un torneo para empezar'
+    : listingFilter.value === 'room'
+      ? 'Crea una sala para empezar'
+      : 'Crea una sala o un torneo para empezar'
+)
 const canProceed  = computed(() => usernameInput.value.trim().length >= 2)
 const canJoin     = computed(() => canProceed.value && roomCodeInput.value.trim().length === 6)
 const canJoinTournament = computed(() =>
@@ -333,10 +395,39 @@ const canJoinTournament = computed(() =>
 )
 const canSpectate = computed(() => spectatorCodeInput.value.trim().length === 6)
 
+function isListingDisabled(listing: { kind: 'room' | 'tournament'; phase: string }): boolean {
+  if (listing.phase === 'playing' || !canProceed.value) return true
+  return listing.kind === 'tournament' ? tournamentLoading.value : loading.value
+}
+
+function listingJoinTitle(listing: { kind: 'room' | 'tournament'; phase: string }): string {
+  if (listing.phase === 'playing') return 'La partida ya comenzó'
+  if (!canProceed.value) return 'Escribe tu nombre para unirte'
+  return listing.kind === 'tournament' ? 'Unirse al torneo' : 'Unirse a la sala'
+}
+
+function listingButtonLabel(listing: { kind: 'room' | 'tournament'; roomId: string; phase: string }): string {
+  const busy = listing.kind === 'tournament'
+    ? joiningTournamentId.value === listing.roomId
+    : loadingRoomId.value === listing.roomId
+  if (busy) return '...'
+  if (listing.phase === 'playing') return 'En juego'
+  return listing.kind === 'tournament' ? 'Unirse al torneo' : 'Unirse'
+}
+
+function handleJoinListing(listing: { kind: 'room' | 'tournament'; roomId: string }): void {
+  if (listing.kind === 'tournament') {
+    void handleJoinTournamentById(listing.roomId)
+    return
+  }
+  void handleJoinPublic(listing.roomId)
+}
+
 onMounted(() => {
   connectSocket()
   const socket = getSocket()
   socket.on('rooms:list', rooms => lobbyStore.setRooms(rooms))
+  socket.emit('rooms:get', rooms => lobbyStore.setRooms(rooms))
 
   const next = route.query.next as string | undefined
   if (next) {
@@ -446,35 +537,50 @@ async function handleCreateTournament() {
 }
 
 async function handleJoinTournament() {
-  if (!canJoinTournament.value || tournamentLoading.value) return
+  if (!canJoinTournament.value) return
+  await handleJoinTournamentById(tournamentCodeInput.value.trim().toUpperCase())
+}
+
+async function handleJoinTournamentById(tournamentId: string) {
+  if (!canProceed.value) {
+    showNotice('Escribe tu nombre antes de unirte a un torneo')
+    return
+  }
+  if (tournamentLoading.value || !/^[A-Z0-9]{6}$/.test(tournamentId)) return
+
   audioStore.playSfx('click')
   userStore.setUsername(usernameInput.value)
   tournamentLoading.value = true
+  joiningTournamentId.value = tournamentId
   tournamentAction.value = 'join'
   errorMsg.value = null
 
-  const socket = getSocket()
-  const result = await requestTournament<TournamentJoinAck>(
-    'El servidor no respondió al unirse al torneo',
-    done => socket.emit('tournament:join', {
-      tournamentId: tournamentCodeInput.value.trim().toUpperCase(),
-      username: usernameInput.value.trim(),
-    }, done),
-  )
-  tournamentLoading.value = false
-  tournamentAction.value = null
+  try {
+    const socket = getSocket()
+    const result = await requestTournament<TournamentJoinAck>(
+      'El servidor no respondió al unirse al torneo',
+      done => socket.emit('tournament:join', {
+        tournamentId,
+        username: usernameInput.value.trim(),
+      }, done),
+    )
 
-  if (!result.ok || !result.tournamentId || !result.participantId || !result.reconnectToken) {
-    errorMsg.value = result.error ?? 'No se pudo unir al torneo'
-    return
+    if (!result.ok || !result.tournamentId || !result.participantId || !result.reconnectToken) {
+      errorMsg.value = result.error ?? 'No se pudo unir al torneo'
+      return
+    }
+    tournamentStore.setFromAck(
+      result.tournamentId,
+      result.participantId,
+      result.reconnectToken,
+      result.state,
+    )
+    await router.push(`/tournament/${result.tournamentId}`)
+  } finally {
+    tournamentLoading.value = false
+    joiningTournamentId.value = null
+    tournamentAction.value = null
   }
-  tournamentStore.setFromAck(
-    result.tournamentId,
-    result.participantId,
-    result.reconnectToken,
-    result.state,
-  )
-  await router.push(`/tournament/${result.tournamentId}`)
 }
 
 async function handleJoinPublic(roomId: string) {
@@ -733,6 +839,49 @@ function showNotice(message: string) {
   color: var(--text-muted);
 }
 
+.home__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.home__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid var(--cell-border);
+  border-radius: 999px;
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.home__filter span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.home__filter:hover { background: var(--control-hover); }
+.home__filter--active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.home__filter--active span {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
 /* ── Room list ── */
 .home__rooms {
   display: flex;
@@ -763,6 +912,16 @@ function showNotice(message: string) {
 
 .room-card--playing { opacity: 0.5; }
 
+.room-card--tournament {
+  border-color: color-mix(in srgb, var(--accent-secondary) 48%, var(--cell-border));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-secondary) 12%, transparent), transparent 45%),
+    var(--cell-bg);
+}
+.room-card--tournament:not(.room-card--playing):hover {
+  border-color: var(--accent-secondary);
+}
+
 .room-card__info {
   display: flex;
   flex-direction: column;
@@ -770,7 +929,33 @@ function showNotice(message: string) {
   min-width: 0;
 }
 
+.room-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.room-card__kind {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.room-card__kind--tournament {
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
 .room-card__name {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
@@ -843,6 +1028,13 @@ function showNotice(message: string) {
 
 .room-card__btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .room-card__btn:not(:disabled):hover { transform: scale(1.04); }
+.room-card--tournament .room-card__btn { background: var(--gradient-brand); }
+
+@media (max-width: 520px) {
+  .room-card { align-items: flex-start; flex-wrap: wrap; }
+  .room-card__info { flex: 1 1 100%; }
+  .room-card__actions { width: 100%; justify-content: flex-end; }
+}
 
 /* Empty state */
 .home__empty {

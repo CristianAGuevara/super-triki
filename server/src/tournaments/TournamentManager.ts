@@ -6,7 +6,7 @@ import type {
   TournamentSnapshot,
   TournamentState,
 } from '../types/tournament.js'
-import type { TournamentRoomAssignment } from '../types/socket.js'
+import type { PublicRoomInfo, TournamentRoomAssignment } from '../types/socket.js'
 import { RoomManager } from '../rooms/RoomManager.js'
 import { buildInitialGameState, toSnapshot as toGameSnapshot } from '../engine/GameEngine.js'
 import { redisPrefix, roomRedis as redis } from '../redis.js'
@@ -15,6 +15,7 @@ import { distributeGroupSizes, shuffle } from './grouping.js'
 
 const MAX_PARTICIPANTS = 50
 const TOURNAMENT_TTL_SECONDS = 6 * 60 * 60
+const TOURNAMENT_INDEX_KEY = `${redisPrefix}:tournaments`
 const TOURNAMENT_GAME_SETTINGS: GameSettings = {
   turnTimerEnabled: true,
   turnDurationSeconds: 90,
@@ -57,6 +58,7 @@ async function deleteTournament(tournamentId: string): Promise<void> {
   if (!redis) return
   try {
     await redis.del(tournamentKey(tournamentId))
+    await redis.srem(TOURNAMENT_INDEX_KEY, tournamentId)
   } catch (error) {
     console.error('[redis:delete-tournament]', error)
   }
@@ -70,6 +72,8 @@ async function saveTournament(tournament: TournamentState): Promise<void> {
     await redis.set(tournamentKey(tournament.tournamentId), tournament, {
       ex: TOURNAMENT_TTL_SECONDS,
     })
+    await redis.sadd(TOURNAMENT_INDEX_KEY, tournament.tournamentId)
+    await redis.expire(TOURNAMENT_INDEX_KEY, TOURNAMENT_TTL_SECONDS * 2)
   } catch (error) {
     console.error('[redis:save-tournament]', error)
   }
@@ -595,6 +599,40 @@ export const TournamentManager = {
       await saveTournament(tournament)
       return { state: toSnapshot(tournament), assignments: [] }
     })
+  },
+
+  async getPublicTournaments(): Promise<PublicRoomInfo[]> {
+    let loaded: Array<TournamentState | undefined>
+
+    if (redis) {
+      try {
+        const tournamentIds = await redis.smembers<string[]>(TOURNAMENT_INDEX_KEY)
+        loaded = await Promise.all(tournamentIds.map(tournamentId => loadTournament(tournamentId)))
+        const expired = tournamentIds.filter((_, index) => !loaded[index])
+        if (expired.length) await redis.srem(TOURNAMENT_INDEX_KEY, ...expired)
+      } catch (error) {
+        console.error('[redis:public-tournaments]', error)
+        loaded = Array.from(tournaments.values())
+      }
+    } else {
+      loaded = Array.from(tournaments.values())
+    }
+
+    return loaded.flatMap(tournament =>
+      tournament &&
+      tournament.phase !== 'finished' &&
+      tournament.participants.some(participant => participant.socketId)
+        ? [{
+            kind: 'tournament' as const,
+            roomId: tournament.tournamentId,
+            name: tournament.name,
+            playerCount: tournament.participants.length,
+            maxPlayers: MAX_PARTICIPANTS,
+            phase: tournament.phase as 'waiting' | 'playing',
+            stage: tournament.stage,
+          }]
+        : [],
+    )
   },
 
   async getTournament(tournamentId: string): Promise<TournamentState | undefined> {

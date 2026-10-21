@@ -630,9 +630,11 @@ export const RoomManager = {
           room && room.players.some(player => player.socketId) &&
           !room.isPrivate && room.phase !== 'finished'
             ? [{
+                kind: 'room' as const,
                 roomId: room.roomId,
                 name: room.name,
                 playerCount: room.players.filter(player => player.socketId !== '').length,
+                maxPlayers: 4,
                 phase: room.phase as 'waiting' | 'playing',
               }]
             : [],
@@ -648,9 +650,11 @@ export const RoomManager = {
         !room.isPrivate && room.phase !== 'finished'
       )
       .map(room => ({
+        kind:        'room' as const,
         roomId:      room.roomId,
         name:        room.name,
         playerCount: room.players.filter(player => player.socketId !== '').length,
+        maxPlayers:  4,
         phase:       room.phase as 'waiting' | 'playing',
       }))
   },
