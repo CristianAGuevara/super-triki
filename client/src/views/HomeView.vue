@@ -201,7 +201,7 @@
             <span class="home__tournament-badge">Hasta 50</span>
           </div>
           <p class="home__card-sub">
-            Grupos de 3 o 4 jugadores. Los ganadores avanzan hasta la final.
+            Grupos de 4 o 3 jugadores. Los ganadores avanzan hasta la final.
           </p>
 
           <div class="home__field">

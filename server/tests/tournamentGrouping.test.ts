@@ -23,11 +23,16 @@ test('keeps groups between 3 and 4 players when possible', () => {
   }
 })
 
-test('uses as many groups as possible for fifty players', () => {
+test('prioritizes groups of four and then groups of three', () => {
+  assert.deepEqual(distributeGroupSizes(7), [4, 3])
+  assert.deepEqual(distributeGroupSizes(10), [4, 3, 3])
+  assert.deepEqual(distributeGroupSizes(12), [4, 4, 4])
+  assert.deepEqual(distributeGroupSizes(13), [4, 3, 3, 3])
+
   const sizes = distributeGroupSizes(50)
-  assert.equal(sizes.length, 16)
-  assert.equal(sizes.filter(size => size === 3).length, 14)
-  assert.equal(sizes.filter(size => size === 4).length, 2)
+  assert.equal(sizes.length, 13)
+  assert.equal(sizes.filter(size => size === 4).length, 11)
+  assert.equal(sizes.filter(size => size === 3).length, 2)
 })
 
 test('a two-player final is allowed', () => {

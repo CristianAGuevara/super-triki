@@ -48,9 +48,9 @@
         </div>
 
         <p class="tournament__hint">
-          Los jugadores se repartirán en grupos de 3 o 4. Solo se usará un grupo de 2
-          cuando el total no permita otra combinación, como ocurre con 5 jugadores.
-          El ganador de cada grupo avanza.
+          Los jugadores se repartirán priorizando grupos de 4 y después grupos de 3.
+          Solo se usará un grupo de 2 cuando el total no permita otra combinación,
+          como ocurre con 5 jugadores. El ganador de cada grupo avanza.
         </p>
 
         <div class="tournament__invite">
