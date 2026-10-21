@@ -42,6 +42,14 @@
 
       <p class="lobby__count">{{ roomStore.playerCount }}/4 jugadores</p>
 
+      <PlayerColorPicker
+        v-if="roomStore.mySlot"
+        :model-value="myColor"
+        :taken="takenColors"
+        :disabled="choosingColor !== null || !roomStore.connected"
+        @select="chooseColor"
+      />
+
       <details v-if="roomStore.mySlot === roomStore.hostSlot" class="lobby__options">
         <summary>Opciones de partida</summary>
         <label class="lobby__option">
@@ -187,6 +195,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { PlayerColorId } from '@/types/game'
+import { resolvePlayerColorId } from '@/types/game'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
@@ -200,6 +210,7 @@ import GameStatus from '@/components/GameStatus.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import SelectionBar from '@/components/SelectionBar.vue'
+import PlayerColorPicker from '@/components/PlayerColorPicker.vue'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -207,10 +218,11 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
-const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame } = useSocket()
+const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame, emitSetColor } = useSocket()
 
 const roomId = computed(() => route.params.id as string)
 const copied = ref<'player' | 'spectator' | null>(null)
+const choosingColor = ref<PlayerColorId | null>(null)
 const showRules = ref(false)
 const RULES_STORAGE_KEY = 'st_rules_seen'
 const RULES_DISPLAY_LIMIT = 2
@@ -230,6 +242,15 @@ const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?
 const disconnectedTurn = computed(() => roomStore.disconnectedPlayer?.slot === gameStore.currentPlayer)
 const showDisconnectNotice = computed(() => roomStore.opponentLeft && roomStore.phase === 'playing')
 const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.connected).length)
+const myColor = computed<PlayerColorId>(() => {
+  const me = roomStore.players.find(player => player.slot === roomStore.mySlot)
+  return resolvePlayerColorId(me?.color, roomStore.mySlot ?? 1)
+})
+const takenColors = computed<PlayerColorId[]>(() =>
+  roomStore.players
+    .filter(player => player.slot !== roomStore.mySlot)
+    .map(player => resolvePlayerColorId(player.color, player.slot))
+)
 const orderedPlayers = computed(() => {
   if (roomStore.mySlot === null) return gameStore.players
   return [
@@ -356,6 +377,19 @@ function handleStart() {
   if (roomStore.roomId) {
     audioStore.playSfx('click')
     emitStart(roomStore.roomId, roomStore.gameSettings)
+  }
+}
+
+async function chooseColor(color: PlayerColorId) {
+  if (!roomStore.roomId || choosingColor.value || color === myColor.value) return
+  choosingColor.value = color
+  audioStore.playSfx('click')
+
+  try {
+    const result = await emitSetColor(roomStore.roomId, color)
+    if (!result.ok) roomStore.setError(result.error ?? 'No se pudo cambiar el color')
+  } finally {
+    choosingColor.value = null
   }
 }
 

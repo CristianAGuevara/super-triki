@@ -36,6 +36,9 @@ para desarrollo con una sola instancia, pero no para producción distribuida.
   **Cancelar** para deshacer la selección.
 - En pantallas táctiles también puedes arrastrar una ficha. El arrastre solo
   comienza tras mover el dedo unos 8 px, para distinguirlo de un toque.
+- En la sala de espera cada jugador puede elegir uno de los ocho colores
+  disponibles. El color se conserva durante la partida y no puede repetirse
+  entre jugadores de la misma sala.
 
 ## Variables de entorno
 

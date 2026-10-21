@@ -6,6 +6,31 @@ export type Player = number
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
+// Keep these ids in sync with client/src/types/game.ts.
+export const PLAYER_COLOR_IDS = [
+  'coral',
+  'cyan',
+  'magenta',
+  'amber',
+  'emerald',
+  'violet',
+  'orange',
+  'blue',
+] as const
+
+export type PlayerColorId = typeof PLAYER_COLOR_IDS[number]
+
+export const DEFAULT_PLAYER_COLOR_IDS: Record<PlayerSlot, PlayerColorId> = {
+  1: 'coral',
+  2: 'cyan',
+  3: 'magenta',
+  4: 'amber',
+}
+
+export function isPlayerColorId(value: unknown): value is PlayerColorId {
+  return typeof value === 'string' && (PLAYER_COLOR_IDS as readonly string[]).includes(value)
+}
+
 export interface GameSettings {
   turnTimerEnabled: boolean
   turnDurationSeconds: number

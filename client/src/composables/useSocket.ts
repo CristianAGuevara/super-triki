@@ -5,8 +5,14 @@ import { useGameStore } from '@/stores/gameStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
-import type { GameSettings } from '@/types/game'
-import type { GameMovePayload, RoomJoinAck, RoomReconnectAck, SpectateJoinAck } from '@/types/socket'
+import type { GameSettings, PlayerColorId } from '@/types/game'
+import type {
+  GameControlAck,
+  GameMovePayload,
+  RoomJoinAck,
+  RoomReconnectAck,
+  SpectateJoinAck,
+} from '@/types/socket'
 
 export function useSocket() {
   const socket     = getSocket()
@@ -170,6 +176,26 @@ export function useSocket() {
     })
   }
 
+  async function emitSetColor(roomId: string, color: PlayerColorId): Promise<GameControlAck> {
+    if (!await waitForSocketConnection()) {
+      return { ok: false, error: 'No se pudo conectar con el servidor' }
+    }
+    return new Promise(resolve => {
+      let settled = false
+      const timeout = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        resolve({ ok: false, error: 'El servidor no respondió al cambiar el color' })
+      }, 8_000)
+      socket.emit('room:set-color', { roomId, color }, result => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(result)
+      })
+    })
+  }
+
   function emitRematch(roomId: string): void {
     socket.emit('game:rematch', { roomId }, result => {
       if (!result.ok) roomStore.setError(result.error ?? 'No se pudo iniciar la siguiente partida')
@@ -208,5 +234,14 @@ export function useSocket() {
     })
   }
 
-  return { emitJoinRoom, emitReconnectRoom, emitJoinSpectator, emitMove, emitRematch, emitStart, emitFinishGame }
+  return {
+    emitJoinRoom,
+    emitReconnectRoom,
+    emitJoinSpectator,
+    emitMove,
+    emitSetColor,
+    emitRematch,
+    emitStart,
+    emitFinishGame,
+  }
 }

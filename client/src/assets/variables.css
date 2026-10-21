@@ -1,6 +1,15 @@
 :root {
   color-scheme: dark;
 
+  --player-color-coral: #ff4f7b;
+  --player-color-cyan: #00d9ff;
+  --player-color-magenta: #ff4fd8;
+  --player-color-amber: #ffd21f;
+  --player-color-emerald: #3ddc97;
+  --player-color-violet: #a78bfa;
+  --player-color-orange: #ff9f43;
+  --player-color-blue: #4d8dff;
+
   --player-1-color: #ff2d55;
   --player-2-color: #00d9ff;
   --player-3-color: #ff2fb3;
@@ -50,6 +59,15 @@
 
 :root[data-theme='sunset'] {
   color-scheme: light;
+
+  --player-color-coral: #e63963;
+  --player-color-cyan: #0b8fb8;
+  --player-color-magenta: #c0268f;
+  --player-color-amber: #d99a00;
+  --player-color-emerald: #178a5a;
+  --player-color-violet: #6d4bd1;
+  --player-color-orange: #d96b1f;
+  --player-color-blue: #2857c9;
 
   --player-1-color: #e63963;
   --player-2-color: #1677ff;

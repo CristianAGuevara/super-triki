@@ -1,7 +1,7 @@
 import type { Server, Socket } from 'socket.io'
 import type { ClientToServerEvents, GameMovePayload, ServerToClientEvents } from '../types/socket.js'
 import type { GameSettings, Size } from '../types/game.js'
-import { DEFAULT_GAME_SETTINGS } from '../types/game.js'
+import { DEFAULT_GAME_SETTINGS, isPlayerColorId } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
 import type { RoomState } from '../rooms/RoomManager.js'
 import { emitRoomEvent } from '../redis.js'
@@ -302,6 +302,30 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     emitCurrentGame(socket, room)
     scheduleTurnTimer(io, roomId)
     await broadcastRoomList(io)
+  })
+
+  // ── room:set-color ───────────────────────────────────────────
+  socket.on('room:set-color', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string' ||
+        !isPlayerColorId(payload.color)) {
+      ack({ ok: false, error: 'Color inválido' })
+      return
+    }
+
+    const roomId = payload.roomId.trim().toUpperCase()
+    const outcome = await RoomManager.withRoomLock(roomId, async () => {
+      const slot = await RoomManager.getSlotBySocket(socket.id, roomId)
+      if (!slot) return { ok: false as const, error: 'No perteneces a esta sala' }
+      return RoomManager.setPlayerColor(roomId, slot, payload.color)
+    })
+
+    if (!outcome.ok) {
+      ack({ ok: false, error: outcome.error })
+      return
+    }
+
+    ack({ ok: true })
+    await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
   })
 
   // ── game:start ───────────────────────────────────────────────

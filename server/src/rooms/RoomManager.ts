@@ -1,7 +1,12 @@
-import type { GameSettings, PlayerSlot } from '../types/game.js'
+import type { GameSettings, PlayerColorId, PlayerSlot } from '../types/game.js'
 import type { PlayerInfo, PublicRoomInfo, RoomStateSnapshot } from '../types/socket.js'
 import type { RoomGameState } from '../engine/GameEngine.js'
-import { DEFAULT_GAME_SETTINGS } from '../types/game.js'
+import {
+  DEFAULT_GAME_SETTINGS,
+  DEFAULT_PLAYER_COLOR_IDS,
+  PLAYER_COLOR_IDS,
+  isPlayerColorId,
+} from '../types/game.js'
 import { generateRoomCode } from './roomUtils.js'
 import { randomUUID } from 'node:crypto'
 import { redisPrefix, roomIndexKey, roomRedis as redis } from '../redis.js'
@@ -41,6 +46,23 @@ const socketToRoom = new Map<string, string>()
 const socketToSpectatorRoom = new Map<string, string>()
 const PLAYER_RECONNECT_GRACE_MS = 90_000
 const HOST_RECONNECT_GRACE_MS = 900_000
+
+function resolvePlayerColor(player: PlayerInfo): PlayerColorId {
+  return isPlayerColorId(player.color)
+    ? player.color
+    : DEFAULT_PLAYER_COLOR_IDS[player.slot]
+}
+
+function pickAvailablePlayerColor(room: RoomState, slot: PlayerSlot): PlayerColorId {
+  const used = new Set(
+    room.players
+      .filter(player => player.slot !== slot)
+      .map(resolvePlayerColor),
+  )
+  const preferred = DEFAULT_PLAYER_COLOR_IDS[slot]
+  if (!used.has(preferred)) return preferred
+  return PLAYER_COLOR_IDS.find(color => !used.has(color)) ?? preferred
+}
 
 function roomKey(roomId: string) {
   return `${redisPrefix}:room:${roomId}`
@@ -172,7 +194,12 @@ export const RoomManager = {
       name:        name.trim() || `Sala de ${username}`,
       isPrivate,
       password:    isPrivate ? password : undefined,
-      players:     [{ slot: 1, username, socketId }],
+      players:     [{
+        slot: 1,
+        username,
+        socketId,
+        color: DEFAULT_PLAYER_COLOR_IDS[1],
+      }],
       reconnectTokens: { 1: randomUUID() },
       phase:       'waiting',
       gameSettings: { ...DEFAULT_GAME_SETTINGS },
@@ -215,6 +242,9 @@ export const RoomManager = {
       }
       room.disconnectEpoch[disconnectedPlayer.slot] = (room.disconnectEpoch[disconnectedPlayer.slot] ?? 0) + 1
       delete room.disconnectUntil[disconnectedPlayer.slot]
+      if (!isPlayerColorId(disconnectedPlayer.color)) {
+        disconnectedPlayer.color = pickAvailablePlayerColor(room, disconnectedPlayer.slot)
+      }
       disconnectedPlayer.socketId = socketId
       socketToRoom.set(socketId, roomId)
       if (room.game && !room.game.winResult && !room.game.isDraw) {
@@ -231,7 +261,12 @@ export const RoomManager = {
     const usedSlots = new Set(room.players.map(player => player.slot))
     const slot = ([1, 2, 3, 4] as PlayerSlot[]).find(candidate => !usedSlots.has(candidate))
     if (!slot) return { ok: false, error: 'Sala llena' }
-    room.players.push({ slot, username, socketId })
+    room.players.push({
+      slot,
+      username,
+      socketId,
+      color: pickAvailablePlayerColor(room, slot),
+    })
     room.reconnectTokens[slot] = randomUUID()
     room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
     if (room.players.length === 1) room.hostSlot = slot
@@ -267,6 +302,9 @@ export const RoomManager = {
 
     room.disconnectEpoch[slot] = (room.disconnectEpoch[slot] ?? 0) + 1
     delete room.disconnectUntil[slot]
+    if (!isPlayerColorId(player.color)) {
+      player.color = pickAvailablePlayerColor(room, slot)
+    }
     player.socketId = socketId
     socketToRoom.set(socketId, roomId)
     if (room.game && !room.game.winResult && !room.game.isDraw) room.phase = 'playing'
@@ -395,6 +433,30 @@ export const RoomManager = {
     await saveRoom(room)
   },
 
+  async setPlayerColor(
+    roomId: string,
+    slot: PlayerSlot,
+    color: PlayerColorId,
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
+    if (!room) return { ok: false, error: 'Sala no encontrada' }
+    if (room.phase !== 'waiting') {
+      return { ok: false, error: 'Solo puedes cambiar tu color en la sala de espera' }
+    }
+
+    const player = room.players.find(candidate => candidate.slot === slot)
+    if (!player) return { ok: false, error: 'No perteneces a esta sala' }
+
+    const taken = room.players.some(candidate =>
+      candidate.slot !== slot && resolvePlayerColor(candidate) === color
+    )
+    if (taken) return { ok: false, error: 'Ese color ya está ocupado' }
+
+    player.color = color
+    await saveRoom(room)
+    return { ok: true, room }
+  },
+
   async joinSpectator(roomId: string, socketId: string): Promise<RoomState | undefined> {
     const room = await loadRoom(roomId)
     if (!room) return undefined
@@ -514,6 +576,7 @@ export const RoomManager = {
         slot: player.slot,
         username: player.username,
         connected: Boolean(player.socketId),
+        color: resolvePlayerColor(player),
       })),
       phase:       room.phase,
       playerCount: room.players.length,

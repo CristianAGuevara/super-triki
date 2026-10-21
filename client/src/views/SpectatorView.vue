@@ -298,11 +298,6 @@ function goHome() {
   border-width: 0;
 }
 
-.spectator__side :deep(.stack-ring--small.stack-ring--player1) { background: var(--player-1-color); }
-.spectator__side :deep(.stack-ring--small.stack-ring--player2) { background: var(--player-2-color); }
-.spectator__side :deep(.stack-ring--small.stack-ring--player3) { background: var(--player-3-color); }
-.spectator__side :deep(.stack-ring--small.stack-ring--player4) { background: var(--player-4-color); }
-
 .spectator__center {
   display: flex;
   flex-direction: column;

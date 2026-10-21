@@ -25,6 +25,32 @@ test('creates a room and assigns joining players sequential slots', async () => 
   await RoomManager.removePlayer(guestSocket)
 })
 
+test('assigns distinct default colors and allows changing them while waiting', async () => {
+  const hostSocket = `test-host-${randomUUID()}`
+  const guestSocket = `test-guest-${randomUUID()}`
+  const room = await RoomManager.createRoom('Anfitrión', hostSocket, 'Colores', false)
+  const joined = await RoomManager.joinRoom(room.roomId, 'Invitado', guestSocket)
+  assert.equal(joined.ok, true)
+  if (!joined.ok) return
+
+  assert.equal(joined.room.players[0].color, 'coral')
+  assert.equal(joined.room.players[1].color, 'cyan')
+
+  const changed = await RoomManager.setPlayerColor(joined.room.roomId, 2, 'emerald')
+  assert.equal(changed.ok, true)
+  if (changed.ok) {
+    assert.equal(changed.room.players[1].color, 'emerald')
+    assert.equal(RoomManager.toSnapshot(changed.room).players[1].color, 'emerald')
+  }
+
+  const conflict = await RoomManager.setPlayerColor(joined.room.roomId, 2, 'coral')
+  assert.equal(conflict.ok, false)
+  if (!conflict.ok) assert.match(conflict.error, /ocupado/i)
+
+  await RoomManager.removePlayer(hostSocket)
+  await RoomManager.removePlayer(guestSocket)
+})
+
 test('rejects a private room with the wrong password', async () => {
   const hostSocket = `test-host-${randomUUID()}`
   const guestSocket = `test-guest-${randomUUID()}`

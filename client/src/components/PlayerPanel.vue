@@ -31,6 +31,7 @@
               'stack-ring--selected': isSelected(pieceOfSet('large', i)),
             },
           ]"
+          :style="pieceColorStyle"
           :title="`Grande (J${player})`"
         />
         <div v-else class="stack-ring stack-ring--large stack-ring--used" />
@@ -48,6 +49,7 @@
               'stack-ring--selected': isSelected(pieceOfSet('medium', i)),
             },
           ]"
+          :style="pieceColorStyle"
           :title="`Mediana (J${player})`"
         />
         <div v-else class="stack-ring stack-ring--medium stack-ring--used" />
@@ -65,6 +67,7 @@
               'stack-ring--selected': isSelected(pieceOfSet('small', i)),
             },
           ]"
+          :style="pieceColorStyle"
           :title="`Pequeña (J${player})`"
         />
         <div v-else class="stack-ring stack-ring--small stack-ring--used" />
@@ -90,6 +93,7 @@ const userStore = useUserStore()
 
 const isActive  = computed(() => store.currentPlayer === props.player && !store.isGameOver)
 const meta      = computed(() => store.playerMeta[props.player])
+const pieceColorStyle = computed(() => ({ '--piece-color': meta.value.color }))
 const isMe      = computed(() => props.mySlot === props.player)
 
 // Can drag: must be my piece (in multiplayer) AND my turn
@@ -212,6 +216,8 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   transform: translate(-50%, -50%);
   border-radius: 50%;
   border-style: solid;
+  border-color: var(--piece-color, var(--accent-primary));
+  box-shadow: 0 0 5px var(--piece-color, var(--accent-primary));
   box-sizing: border-box;
   cursor: grab;
   transition: transform 0.15s ease, filter 0.15s ease;
@@ -226,18 +232,12 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 .stack-ring--used {
   opacity: 0.08;
   border-color: var(--ghost-piece);
+  box-shadow: none;
   pointer-events: none;
   cursor: default;
 }
 
-.stack-ring--used.stack-ring--small { background: var(--ghost-piece); }
-
-/* Player colors */
-.stack-ring--player1 { border-color: var(--player-1-color); box-shadow: 0 0 5px var(--player-1-color); }
-.stack-ring--player2 { border-color: var(--player-2-color); box-shadow: 0 0 5px var(--player-2-color); }
-.stack-ring--player3 { border-color: var(--player-3-color); box-shadow: 0 0 5px var(--player-3-color); }
-.stack-ring--player4 { border-color: var(--player-4-color); box-shadow: 0 0 5px var(--player-4-color); }
-
+/* Fallbacks when no room color is available (solo games or previews). */
 .stack-ring--player1 { --piece-color: var(--player-1-color); }
 .stack-ring--player2 { --piece-color: var(--player-2-color); }
 .stack-ring--player3 { --piece-color: var(--player-3-color); }
@@ -257,10 +257,8 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   pointer-events: none;
 }
 
-.stack-ring--small.stack-ring--player1 { background: var(--player-1-color); }
-.stack-ring--small.stack-ring--player2 { background: var(--player-2-color); }
-.stack-ring--small.stack-ring--player3 { background: var(--player-3-color); }
-.stack-ring--small.stack-ring--player4 { background: var(--player-4-color); }
+.stack-ring--small { background: var(--piece-color, var(--accent-primary)); }
+.stack-ring--used.stack-ring--small { background: var(--ghost-piece); }
 
 /* Selected by tapping on a touch device. */
 .stack-ring--selected {

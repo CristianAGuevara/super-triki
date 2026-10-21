@@ -1,8 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Board, LastMove, Piece, PieceEntrySource, Player, Size, WinResult, DragPayload } from '@/types/game'
+import type {
+  Board,
+  LastMove,
+  Piece,
+  PieceEntrySource,
+  Player,
+  PlayerColorId,
+  Size,
+  WinResult,
+  DragPayload,
+} from '@/types/game'
 import type { GameStateSnapshot, GameOverPayload } from '@/types/socket'
-import { SIZE_ORDER } from '@/types/game'
+import { SIZE_ORDER, getPlayerColorOption, playerColorCss } from '@/types/game'
 import { getAllLines, emptyBoard } from '@/utils/boardUtils'
 import { detectWin, detectDraw } from '@/composables/useWinDetection'
 import { getSocket } from '@/services/socket'
@@ -11,19 +21,27 @@ import { useAudioStore } from '@/stores/audioStore'
 
 const PIECES_PER_SIZE = 3
 
-const DEFAULT_META: Record<number, { color: string; label: string; cssVar: string }> = {
-  1: { color: '#ff2d55', label: 'Jugador 1', cssVar: '--player-1-color' },
-  2: { color: '#00d9ff', label: 'Jugador 2', cssVar: '--player-2-color' },
-  3: { color: '#ff2fb3', label: 'Jugador 3', cssVar: '--player-3-color' },
-  4: { color: '#ffd21f', label: 'Jugador 4', cssVar: '--player-4-color' },
-}
-
 export const useGameStore = defineStore('game', () => {
   const board = ref<Board>(emptyBoard())
   const inventories = ref<Record<Player, Piece[]>>({})
   const currentPlayer = ref<Player>(1)
   const players = ref<Player[]>([1, 2])
-  const playerMeta = ref(DEFAULT_META)
+  const playerMeta = computed(() => {
+    const roomStore = useRoomStore()
+    const meta: Record<number, { color: string; label: string; cssVar: string }> = {}
+
+    for (const slot of [1, 2, 3, 4]) {
+      const player = roomStore.players.find(candidate => candidate.slot === slot)
+      const colorId: PlayerColorId | undefined = player?.color
+      const option = getPlayerColorOption(colorId, slot)
+      meta[slot] = {
+        color: playerColorCss(colorId, slot),
+        label: `Jugador ${slot}`,
+        cssVar: option.cssVar,
+      }
+    }
+    return meta
+  })
   const winResult = ref<WinResult | null>(null)
   const isDraw = ref(false)
   const dragState = ref<DragPayload | null>(null)

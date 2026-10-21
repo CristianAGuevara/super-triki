@@ -12,6 +12,7 @@
         'piece--last-move-pulse': lastMoveActive,
       },
     ]"
+    :style="pieceStyle"
     :title="`${sizeName} (J${piece.player})`"
   />
 </template>
@@ -19,6 +20,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { Piece, PieceEntrySource, DragPayload } from '@/types/game'
+import { useGameStore } from '@/stores/gameStore'
 import { vDraggable } from '@/directives/vDraggable'
 
 const props = defineProps<{
@@ -29,9 +31,13 @@ const props = defineProps<{
   highlightLastMove?: boolean
 }>()
 
+const store = useGameStore()
 const pieceElement = ref<HTMLElement | null>(null)
 const entryAnimating = ref(props.animateEntry === true && props.entryFrom !== null && props.entryFrom !== undefined)
 const lastMoveActive = ref(false)
+const pieceStyle = computed(() => ({
+  '--piece-color': store.playerMeta[props.piece.player]?.color ?? 'var(--accent-primary)',
+}))
 
 const dragPayload = computed<DragPayload>(() => ({
   pieceId: props.piece.id,
@@ -116,6 +122,8 @@ function animateFromInventory() {
   position: relative;
   border-radius: 50%;
   border-style: solid;
+  border-color: var(--piece-color, var(--accent-primary));
+  box-shadow: 0 0 6px var(--piece-color, var(--accent-primary));
   cursor: grab;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   flex-shrink: 0;
@@ -162,16 +170,7 @@ function animateFromInventory() {
 .piece--medium { --light-inset: -1.5px; width: var(--size-medium); height: var(--size-medium); border-width: 3px; }
 .piece--small  { width: var(--size-small);  height: var(--size-small);  border-width: 0; }
 
-/* Player colors */
-.piece--player1 { border-color: var(--player-1-color); box-shadow: 0 0 6px var(--player-1-color); }
-.piece--player2 { border-color: var(--player-2-color); box-shadow: 0 0 6px var(--player-2-color); }
-.piece--player3 { border-color: var(--player-3-color); box-shadow: 0 0 6px var(--player-3-color); }
-.piece--player4 { border-color: var(--player-4-color); box-shadow: 0 0 6px var(--player-4-color); }
-
-.piece--small.piece--player1 { background: var(--player-1-color); }
-.piece--small.piece--player2 { background: var(--player-2-color); }
-.piece--small.piece--player3 { background: var(--player-3-color); }
-.piece--small.piece--player4 { background: var(--player-4-color); }
+.piece--small { background: var(--piece-color, var(--accent-primary)); }
 
 .piece--large::after,
 .piece--medium::after {
@@ -187,6 +186,7 @@ function animateFromInventory() {
   pointer-events: none;
 }
 
+/* Fallbacks when no room color is available (solo games or previews). */
 .piece--player1 { --piece-color: var(--player-1-color); }
 .piece--player2 { --piece-color: var(--player-2-color); }
 .piece--player3 { --piece-color: var(--player-3-color); }

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { DEFAULT_GAME_SETTINGS, resolvePlayerColorId } from '@/types/game'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -111,6 +113,33 @@ describe('placePiece', () => {
     expect(store.winResult).not.toBeNull()
     expect(store.winResult!.winner).toBe(1)
     expect(store.isGameOver).toBe(true)
+  })
+})
+
+describe('player colors', () => {
+  it('uses the colors selected by room players and falls back by slot', () => {
+    const roomStore = useRoomStore()
+    const gameStore = useGameStore()
+
+    roomStore.setRoomState({
+      roomId: 'TEST',
+      name: 'Test',
+      isPrivate: false,
+      phase: 'waiting',
+      players: [
+        { slot: 1, username: 'Uno', connected: true, color: 'emerald' },
+        { slot: 2, username: 'Dos', connected: true, color: 'blue' },
+      ],
+      playerCount: 2,
+      scores: {},
+      roundNumber: 0,
+      hostSlot: 1,
+      gameSettings: DEFAULT_GAME_SETTINGS,
+    })
+
+    expect(gameStore.playerMeta[1].color).toBe('var(--player-color-emerald)')
+    expect(gameStore.playerMeta[2].color).toBe('var(--player-color-blue)')
+    expect(resolvePlayerColorId(undefined, 2)).toBe('cyan')
   })
 })
 

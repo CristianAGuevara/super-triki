@@ -1,4 +1,12 @@
-import type { Board, GameSettings, LastMove, Piece, Size, WinResult } from '@/types/game'
+import type {
+  Board,
+  GameSettings,
+  LastMove,
+  Piece,
+  PlayerColorId,
+  Size,
+  WinResult,
+} from '@/types/game'
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
@@ -48,10 +56,16 @@ export interface GameMovePayload {
 export interface GameMoveAck { ok: boolean; error?: string }
 export interface GameControlAck { ok: boolean; error?: string }
 
+export interface RoomSetColorPayload {
+  roomId: string
+  color: PlayerColorId
+}
+
 export interface ClientToServerEvents {
   'room:create': (payload: { username: string; name: string; isPrivate: boolean; password?: string }, ack: (res: RoomCreateAck) => void) => void
   'room:join':   (payload: { roomId: string; username: string; password?: string }, ack: (res: RoomJoinAck) => void) => void
   'room:reconnect': (payload: { roomId: string; reconnectToken: string }, ack: (res: RoomReconnectAck) => void) => void
+  'room:set-color': (payload: RoomSetColorPayload, ack: (res: GameControlAck) => void) => void
   'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
   'game:move':   (payload: GameMovePayload, ack: (res: GameMoveAck) => void) => void
   'game:rematch':(payload: { roomId: string }, ack: (res: GameControlAck) => void) => void
@@ -66,6 +80,7 @@ export interface PlayerInfo {
   slot:      PlayerSlot
   username:  string
   connected: boolean
+  color?:    PlayerColorId
 }
 
 export interface RoomStateSnapshot {
