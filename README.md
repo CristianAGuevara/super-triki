@@ -50,6 +50,7 @@ escritura. Las salas guardadas en Redis expiran automáticamente después de
 npm run dev          # cliente + servidor
 npm run build        # compila ambos servicios
 npm test             # tests de cliente y servidor
+npm run verify       # build + tests, igual que CI
 ```
 
 ## Estructura
