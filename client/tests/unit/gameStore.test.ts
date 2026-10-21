@@ -114,6 +114,23 @@ describe('placePiece', () => {
   })
 })
 
+describe('tap selection', () => {
+  it('selects an available piece and only allows compatible empty slots', () => {
+    const store = useGameStore()
+    store.initGame(2)
+    const piece = store.inventories[1].find(item => item.size === 'medium')!
+
+    store.selectPiece({ pieceId: piece.id, player: 1, size: piece.size, source: 'inventory' })
+
+    expect(store.selectedPiece?.pieceId).toBe(piece.id)
+    expect(store.canDrop(1, 1, 'medium')).toBe(true)
+    expect(store.canDrop(1, 1, 'small')).toBe(false)
+
+    store.clearSelection()
+    expect(store.selectedPiece).toBeNull()
+  })
+})
+
 describe('resetGame', () => {
   it('resets board and inventories', () => {
     const store = useGameStore()

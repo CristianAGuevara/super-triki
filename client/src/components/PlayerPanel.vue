@@ -21,10 +21,16 @@
         <!-- large ring — back -->
         <div
           v-if="pieceOfSet('large', i)"
-          v-draggable="dragPayload(pieceOfSet('large', i)!)"
+          v-draggable="dragPayload(pieceOfSet('large', i)!, i - 1)"
           :data-piece-id="pieceOfSet('large', i)!.id"
           class="stack-ring stack-ring--large"
-          :class="[`stack-ring--player${player}`, { 'stack-ring--locked': !canDrag }]"
+          :class="[
+            `stack-ring--player${player}`,
+            {
+              'stack-ring--locked': !canDrag,
+              'stack-ring--selected': isSelected(pieceOfSet('large', i)),
+            },
+          ]"
           :title="`Grande (J${player})`"
         />
         <div v-else class="stack-ring stack-ring--large stack-ring--used" />
@@ -32,10 +38,16 @@
         <!-- medium ring — middle -->
         <div
           v-if="pieceOfSet('medium', i)"
-          v-draggable="dragPayload(pieceOfSet('medium', i)!)"
+          v-draggable="dragPayload(pieceOfSet('medium', i)!, i - 1)"
           :data-piece-id="pieceOfSet('medium', i)!.id"
           class="stack-ring stack-ring--medium"
-          :class="[`stack-ring--player${player}`, { 'stack-ring--locked': !canDrag }]"
+          :class="[
+            `stack-ring--player${player}`,
+            {
+              'stack-ring--locked': !canDrag,
+              'stack-ring--selected': isSelected(pieceOfSet('medium', i)),
+            },
+          ]"
           :title="`Mediana (J${player})`"
         />
         <div v-else class="stack-ring stack-ring--medium stack-ring--used" />
@@ -43,10 +55,16 @@
         <!-- small ring — front -->
         <div
           v-if="pieceOfSet('small', i)"
-          v-draggable="dragPayload(pieceOfSet('small', i)!)"
+          v-draggable="dragPayload(pieceOfSet('small', i)!, i - 1)"
           :data-piece-id="pieceOfSet('small', i)!.id"
           class="stack-ring stack-ring--small"
-          :class="[`stack-ring--player${player}`, { 'stack-ring--locked': !canDrag }]"
+          :class="[
+            `stack-ring--player${player}`,
+            {
+              'stack-ring--locked': !canDrag,
+              'stack-ring--selected': isSelected(pieceOfSet('small', i)),
+            },
+          ]"
           :title="`Pequeña (J${player})`"
         />
         <div v-else class="stack-ring stack-ring--small stack-ring--used" />
@@ -101,8 +119,12 @@ function isStackEmpty(i: number): boolean {
   return !pieceOfSet('large', i) && !pieceOfSet('medium', i) && !pieceOfSet('small', i)
 }
 
-function dragPayload(piece: Piece): DragPayload {
-  return { pieceId: piece.id, player: piece.player, size: piece.size, source: 'inventory' }
+function isSelected(piece: Piece | null): boolean {
+  return Boolean(piece && store.selectedPiece?.pieceId === piece.id)
+}
+
+function dragPayload(piece: Piece, setIndex: number): DragPayload {
+  return { pieceId: piece.id, player: piece.player, size: piece.size, source: 'inventory', setIndex }
 }
 </script>
 
@@ -239,6 +261,14 @@ function dragPayload(piece: Piece): DragPayload {
 .stack-ring--small.stack-ring--player2 { background: var(--player-2-color); }
 .stack-ring--small.stack-ring--player3 { background: var(--player-3-color); }
 .stack-ring--small.stack-ring--player4 { background: var(--player-4-color); }
+
+/* Selected by tapping on a touch device. */
+.stack-ring--selected {
+  outline: 3px solid color-mix(in srgb, var(--piece-color) 58%, white);
+  outline-offset: 4px;
+  filter: brightness(1.35);
+  z-index: 4;
+}
 
 /* Locked: not your turn or not your pieces */
 .stack-ring--locked {

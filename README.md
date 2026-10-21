@@ -28,6 +28,15 @@ npm run dev
 Sin credenciales de Upstash, el servidor usa estado local. Eso es suficiente
 para desarrollo con una sola instancia, pero no para producción distribuida.
 
+## Controles
+
+- **Escritorio:** arrastra una ficha del inventario a una casilla compatible.
+- **Móvil:** toca una ficha para seleccionarla; las casillas válidas se resaltan.
+  Luego toca una casilla para colocarla. Toca la misma ficha o el botón
+  **Cancelar** para deshacer la selección.
+- En pantallas táctiles también puedes arrastrar una ficha. El arrastre solo
+  comienza tras mover el dedo unos 8 px, para distinguirlo de un toque.
+
 ## Variables de entorno
 
 Configura estas variables en Vercel o en tu shell local:

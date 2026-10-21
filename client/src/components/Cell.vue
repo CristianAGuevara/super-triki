@@ -12,6 +12,7 @@
     @dragleave="handleDragLeave"
     @dragenter="handleDragEnter"
     @drop="handleDrop"
+    @click="handleCellClick"
   >
     <div class="cell__stack">
       <!-- Rendered large→medium→small so large is painted first (back), small on top -->
@@ -109,6 +110,24 @@ function handleDrop(e: DragEvent) {
   isHovered.value = false
   onDrop(e)
 }
+
+function handleCellClick() {
+  const selected = store.selectedPiece
+  if (!selected) return
+  if (!store.canDrop(props.row, props.col, selected.size)) {
+    store.rejectSelection()
+    if (typeof navigator !== 'undefined') navigator.vibrate?.([20, 35, 20])
+    return
+  }
+
+  store.placePiece({
+    pieceId: selected.pieceId,
+    targetRow: props.row,
+    targetCol: props.col,
+    targetSize: selected.size,
+  })
+  store.clearSelection()
+}
 </script>
 
 <style scoped>
@@ -127,6 +146,7 @@ function handleDrop(e: DragEvent) {
 
 .cell--can-drop {
   border-color: var(--drop-border);
+  cursor: pointer;
 }
 
 .cell--hover {

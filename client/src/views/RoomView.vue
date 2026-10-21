@@ -1,6 +1,7 @@
 <template>
   <div class="room">
     <ConnectionBanner />
+    <SelectionBar />
 
     <Transition name="overlay">
       <div v-if="roomStore.error" class="room__notice" role="alert">
@@ -198,6 +199,7 @@ import PlayerPanel from '@/components/PlayerPanel.vue'
 import GameStatus from '@/components/GameStatus.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
+import SelectionBar from '@/components/SelectionBar.vue'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -678,7 +680,46 @@ function closeRules() {
     order: 3;
   }
 
-  .room__player--mine { order: 2; }
+  .room__player--mine {
+    order: 2;
+    width: min(100%, 360px);
+  }
+
+  .room__player:not(.room__player--mine) {
+    order: 3;
+    width: min(100%, 300px);
+    opacity: 0.84;
+  }
+
+  .room__player:not(.room__player--mine) :deep(.player-panel__header) {
+    margin-bottom: 8px;
+  }
+
+  .room__player:not(.room__player--mine) :deep(.player-panel__sets) {
+    gap: 6px;
+  }
+
+  .room__player:not(.room__player--mine) :deep(.player-panel__stack) {
+    width: 54px;
+    height: 54px;
+  }
+
+  .room__player:not(.room__player--mine) :deep(.stack-ring--large) {
+    width: 54px;
+    height: 54px;
+    border-width: 4px;
+  }
+
+  .room__player:not(.room__player--mine) :deep(.stack-ring--medium) {
+    width: 34px;
+    height: 34px;
+    border-width: 3px;
+  }
+
+  .room__player:not(.room__player--mine) :deep(.stack-ring--small) {
+    width: 16px;
+    height: 16px;
+  }
 
   .room__center > :deep(.scoreboard) {
     order: 4;

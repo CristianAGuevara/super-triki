@@ -61,4 +61,6 @@ export interface DragPayload {
   player: Player
   size: Size
   source: 'inventory' | 'board'
+  /** Index of the concentric stack the piece belongs to in the inventory. */
+  setIndex?: number
 }

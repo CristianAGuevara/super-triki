@@ -27,6 +27,9 @@ export const useGameStore = defineStore('game', () => {
   const winResult = ref<WinResult | null>(null)
   const isDraw = ref(false)
   const dragState = ref<DragPayload | null>(null)
+  const selectedPiece = ref<DragPayload | null>(null)
+  const selectionHint = ref<string | null>(null)
+  let selectionHintTimer: ReturnType<typeof setTimeout> | null = null
   const moveNumber = ref(0)
   const turnStartedAt = ref(Date.now())
   const hasServerState = ref(false)
@@ -47,13 +50,15 @@ export const useGameStore = defineStore('game', () => {
 
   function canDrop(row: number, col: number, size: Size): boolean {
     if (isGameOver.value) return false
-    if (!dragState.value) return false
-    if (dragState.value.player !== currentPlayer.value) return false
-    if (dragState.value.size !== size) return false
+    const activePiece = dragState.value ?? selectedPiece.value
+    if (!activePiece) return false
+    if (activePiece.player !== currentPlayer.value) return false
+    if (activePiece.size !== size) return false
     const roomStore = useRoomStore()
-    // In multiplayer: only accept drops from my own pieces
-    if (roomStore.roomId && roomStore.mySlot !== dragState.value.player) return false
-    return board.value[row][col][size] === null
+    // In multiplayer: only accept drops from my own pieces.
+    if (roomStore.roomId && (!roomStore.connected || roomStore.mySlot !== activePiece.player)) return false
+    if (!inventories.value[activePiece.player]?.some(piece => piece.id === activePiece.pieceId)) return false
+    return board.value[row]?.[col]?.[size] === null
   }
 
   function pieceAt(row: number, col: number, size: Size): Piece | null {
@@ -83,6 +88,8 @@ export const useGameStore = defineStore('game', () => {
     winResult.value = null
     isDraw.value = false
     dragState.value = null
+    selectedPiece.value = null
+    clearSelectionHint()
     moveNumber.value = 0
     turnStartedAt.value = Date.now()
     hasServerState.value = false
@@ -172,6 +179,9 @@ export const useGameStore = defineStore('game', () => {
     if (hasServerState.value && state.moveNumber > moveNumber.value) {
       audioStore.playSfx('move')
     }
+    dragState.value     = null
+    selectedPiece.value = null
+    clearSelectionHint()
     board.value         = state.board
     inventories.value   = state.inventories as Record<Player, Piece[]>
     currentPlayer.value = state.currentPlayer
@@ -225,6 +235,44 @@ export const useGameStore = defineStore('game', () => {
 
   function setDragState(payload: DragPayload | null) {
     dragState.value = payload
+    if (payload) selectedPiece.value = null
+  }
+
+  function clearSelectionHint(): void {
+    if (selectionHintTimer) {
+      clearTimeout(selectionHintTimer)
+      selectionHintTimer = null
+    }
+    selectionHint.value = null
+  }
+
+  function selectPiece(payload: DragPayload): void {
+    const roomStore = useRoomStore()
+    if (isGameOver.value) return
+    if (payload.source !== 'inventory') return
+    if (payload.player !== currentPlayer.value) return
+    if (roomStore.roomId && (!roomStore.connected || roomStore.mySlot !== payload.player)) return
+    if (!inventories.value[payload.player]?.some(piece => piece.id === payload.pieceId)) return
+
+    clearSelectionHint()
+    dragState.value = null
+    selectedPiece.value = payload
+    audioStore.playSfx('click')
+    if (typeof navigator !== 'undefined') navigator.vibrate?.(12)
+  }
+
+  function rejectSelection(): void {
+    clearSelectionHint()
+    selectionHint.value = 'Esa casilla no está disponible.'
+    selectionHintTimer = setTimeout(() => {
+      selectionHint.value = null
+      selectionHintTimer = null
+    }, 1800)
+  }
+
+  function clearSelection(): void {
+    selectedPiece.value = null
+    clearSelectionHint()
   }
 
   // Initialize on store creation
@@ -239,6 +287,8 @@ export const useGameStore = defineStore('game', () => {
     winResult,
     isDraw,
     dragState,
+    selectedPiece,
+    selectionHint,
     lastMove,
     turnStartedAt,
     lastMoveSource,
@@ -250,6 +300,9 @@ export const useGameStore = defineStore('game', () => {
     resetGame,
     placePiece,
     setDragState,
+    selectPiece,
+    rejectSelection,
+    clearSelection,
     applyServerState,
     applyGameOver,
   }
