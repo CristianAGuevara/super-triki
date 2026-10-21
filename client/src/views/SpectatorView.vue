@@ -238,6 +238,11 @@ function goHome() {
   --spectator-gap: calc(var(--spectator-cell) * 0.11);
   --spectator-padding: calc(var(--spectator-cell) * 0.145);
   --spectator-side-width: clamp(150px, 20vw, 270px);
+  /* Keep three stacks inside the card, including borders and padding. */
+  --spectator-piece: min(
+    calc(var(--spectator-cell) * 0.69),
+    calc((var(--spectator-side-width) - 38px) / 3.13)
+  );
   display: grid;
   grid-template-columns: var(--spectator-side-width) auto var(--spectator-side-width);
   align-items: start;
@@ -261,34 +266,35 @@ function goHome() {
   width: 100%;
   min-width: 0;
   padding: 16px;
+  overflow: hidden;
 }
 
 .spectator__side :deep(.player-panel__sets) {
-  gap: calc(var(--spectator-cell) * 0.045);
+  gap: calc(var(--spectator-piece) * 0.065);
 }
 
 .spectator__side :deep(.player-panel__stack) {
-  width: calc(var(--spectator-cell) * 0.69);
-  height: calc(var(--spectator-cell) * 0.69);
+  width: var(--spectator-piece);
+  height: var(--spectator-piece);
 }
 
 .spectator__side :deep(.stack-ring--large) {
-  --light-inset: calc(var(--spectator-cell) * -0.025);
-  width: calc(var(--spectator-cell) * 0.69);
-  height: calc(var(--spectator-cell) * 0.69);
-  border-width: calc(var(--spectator-cell) * 0.05);
+  --light-inset: calc(var(--spectator-piece) * -0.036);
+  width: var(--spectator-piece);
+  height: var(--spectator-piece);
+  border-width: calc(var(--spectator-piece) * 0.0725);
 }
 
 .spectator__side :deep(.stack-ring--medium) {
-  --light-inset: calc(var(--spectator-cell) * -0.02);
-  width: calc(var(--spectator-cell) * 0.44);
-  height: calc(var(--spectator-cell) * 0.44);
-  border-width: calc(var(--spectator-cell) * 0.03);
+  --light-inset: calc(var(--spectator-piece) * -0.029);
+  width: calc(var(--spectator-piece) * 0.635);
+  height: calc(var(--spectator-piece) * 0.635);
+  border-width: calc(var(--spectator-piece) * 0.0435);
 }
 
 .spectator__side :deep(.stack-ring--small) {
-  width: calc(var(--spectator-cell) * 0.2);
-  height: calc(var(--spectator-cell) * 0.2);
+  width: calc(var(--spectator-piece) * 0.29);
+  height: calc(var(--spectator-piece) * 0.29);
   border-width: 0;
 }
 
