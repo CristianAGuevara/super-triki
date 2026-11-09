@@ -8,6 +8,7 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
 import { useTournamentStore } from '@/stores/tournamentStore'
 import type { GameSettings, PlayerColorId } from '@/types/game'
+import type { TournamentFormat } from '@/types/tournament'
 import type {
   GameControlAck,
   GameMovePayload,
@@ -229,6 +230,21 @@ export function useSocket() {
     )
   }
 
+  function emitTournamentSettings(
+    tournamentId: string,
+    format: TournamentFormat,
+    leagueRounds: number,
+  ): Promise<TournamentControlAck> {
+    return ackRequest<TournamentControlAck>(
+      'El servidor no respondió al guardar el formato',
+      done => socket.emit('tournament:set-settings', {
+        tournamentId,
+        format,
+        leagueRounds,
+      }, done),
+    )
+  }
+
   function emitStartTournament(tournamentId: string): Promise<TournamentControlAck> {
     return ackRequest<TournamentControlAck>(
       'El servidor no respondió al iniciar el torneo',
@@ -370,6 +386,7 @@ export function useSocket() {
     emitJoinTournament,
     emitReconnectTournament,
     emitLeaveTournament,
+    emitTournamentSettings,
     emitStartTournament,
     emitNextTournamentStage,
     emitRetryTournamentGroup,

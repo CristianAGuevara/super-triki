@@ -19,6 +19,9 @@ export const useTournamentStore = defineStore('tournament', () => {
   const name = ref('')
   const hostId = ref<string | null>(null)
   const phase = ref<'waiting' | 'playing' | 'finished'>('waiting')
+  const format = ref<'elimination' | 'league'>('elimination')
+  const leagueRounds = ref(3)
+  const stageKind = ref<'elimination' | 'league' | 'sudden-death'>('elimination')
   const stage = ref(0)
   const participants = ref<TournamentParticipantSnapshot[]>([])
   const groups = ref<TournamentGroupSnapshot[]>([])
@@ -26,6 +29,7 @@ export const useTournamentStore = defineStore('tournament', () => {
   const connectedCount = ref(0)
   const maxParticipants = ref(50)
   const canAdvance = ref(false)
+  const needsTiebreak = ref(false)
   const myParticipantId = ref<string | null>(null)
   const reconnectToken = ref<string | null>(null)
   const loading = ref(false)
@@ -49,6 +53,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     name.value = snapshot.name
     hostId.value = snapshot.hostId
     phase.value = snapshot.phase
+    format.value = snapshot.format
+    leagueRounds.value = snapshot.leagueRounds
+    stageKind.value = snapshot.stageKind
     stage.value = snapshot.stage
     participants.value = snapshot.participants
     groups.value = snapshot.groups
@@ -56,6 +63,7 @@ export const useTournamentStore = defineStore('tournament', () => {
     connectedCount.value = snapshot.connectedCount
     maxParticipants.value = snapshot.maxParticipants
     canAdvance.value = snapshot.canAdvance
+    needsTiebreak.value = snapshot.needsTiebreak
     error.value = null
   }
 
@@ -115,6 +123,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     name.value = ''
     hostId.value = null
     phase.value = 'waiting'
+    format.value = 'elimination'
+    leagueRounds.value = 3
+    stageKind.value = 'elimination'
     stage.value = 0
     participants.value = []
     groups.value = []
@@ -122,6 +133,7 @@ export const useTournamentStore = defineStore('tournament', () => {
     connectedCount.value = 0
     maxParticipants.value = 50
     canAdvance.value = false
+    needsTiebreak.value = false
     myParticipantId.value = null
     reconnectToken.value = null
     loading.value = false
@@ -133,6 +145,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     name,
     hostId,
     phase,
+    format,
+    leagueRounds,
+    stageKind,
     stage,
     participants,
     groups,
@@ -140,6 +155,7 @@ export const useTournamentStore = defineStore('tournament', () => {
     connectedCount,
     maxParticipants,
     canAdvance,
+    needsTiebreak,
     myParticipantId,
     reconnectToken,
     loading,

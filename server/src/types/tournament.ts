@@ -1,5 +1,8 @@
 export type TournamentPhase = 'waiting' | 'playing' | 'finished'
 
+export type TournamentFormat = 'elimination' | 'league'
+export type TournamentStageKind = 'elimination' | 'league' | 'sudden-death'
+
 export type TournamentGroupStatus = 'playing' | 'finished' | 'draw'
 
 export interface TournamentParticipant {
@@ -9,6 +12,11 @@ export interface TournamentParticipant {
   reconnectToken: string
   eliminated: boolean
   groupId: string | null
+  leaguePoints: number
+  leagueWins: number
+  leagueDraws: number
+  leagueLosses: number
+  leagueGames: number
 }
 
 export interface TournamentGroup {
@@ -27,7 +35,11 @@ export interface TournamentState {
   name: string
   hostId: string
   phase: TournamentPhase
+  format: TournamentFormat
+  leagueRounds: number
+  stageKind: TournamentStageKind
   stage: number
+  leagueOrder: string[]
   participants: TournamentParticipant[]
   groups: TournamentGroup[]
   championId: string | null
@@ -40,6 +52,11 @@ export interface TournamentParticipantSnapshot {
   connected: boolean
   eliminated: boolean
   groupId: string | null
+  leaguePoints: number
+  leagueWins: number
+  leagueDraws: number
+  leagueLosses: number
+  leagueGames: number
 }
 
 export interface TournamentGroupSnapshot {
@@ -58,6 +75,9 @@ export interface TournamentSnapshot {
   name: string
   hostId: string
   phase: TournamentPhase
+  format: TournamentFormat
+  leagueRounds: number
+  stageKind: TournamentStageKind
   stage: number
   participants: TournamentParticipantSnapshot[]
   groups: TournamentGroupSnapshot[]
@@ -65,4 +85,5 @@ export interface TournamentSnapshot {
   connectedCount: number
   maxParticipants: number
   canAdvance: boolean
+  needsTiebreak: boolean
 }

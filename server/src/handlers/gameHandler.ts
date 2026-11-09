@@ -522,6 +522,31 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     await broadcastRoomList(io)
   })
 
+  // ── tournament:set-settings ──────────────────────────────────
+  socket.on('tournament:set-settings', async (payload, ack) => {
+    if (!isRecord(payload) ||
+        typeof payload.tournamentId !== 'string' ||
+        (payload.format !== 'elimination' && payload.format !== 'league') ||
+        !Number.isInteger(payload.leagueRounds)) {
+      ack({ ok: false, error: 'Configuración de torneo inválida' })
+      return
+    }
+
+    const tournamentId = payload.tournamentId.trim().toUpperCase()
+    const result = await TournamentManager.setTournamentSettings(
+      tournamentId,
+      socket.id,
+      payload.format,
+      Number(payload.leagueRounds),
+    )
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitTournamentState(io, tournamentId)
+  })
+
   // ── tournament:start ─────────────────────────────────────────
   socket.on('tournament:start', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.tournamentId !== 'string') {

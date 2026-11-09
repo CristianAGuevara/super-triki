@@ -7,7 +7,7 @@ import type {
   Size,
   WinResult,
 } from '@/types/game'
-import type { TournamentSnapshot } from '@/types/tournament'
+import type { TournamentFormat, TournamentSnapshot } from '@/types/tournament'
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
@@ -76,6 +76,11 @@ export interface TournamentReconnectAck extends TournamentCreateAck {
   assignment?: TournamentRoomAssignment
 }
 export interface TournamentControlAck { ok: boolean; error?: string }
+export interface TournamentSettingsPayload {
+  tournamentId: string
+  format: TournamentFormat
+  leagueRounds: number
+}
 
 export interface TournamentRoomAssignment {
   tournamentId: string
@@ -95,6 +100,7 @@ export interface ClientToServerEvents {
   'tournament:create': (payload: { username: string; name: string }, ack: (res: TournamentCreateAck) => void) => void
   'tournament:join': (payload: { tournamentId: string; username: string }, ack: (res: TournamentJoinAck) => void) => void
   'tournament:reconnect': (payload: { tournamentId: string; reconnectToken: string }, ack: (res: TournamentReconnectAck) => void) => void
+  'tournament:set-settings': (payload: TournamentSettingsPayload, ack: (res: TournamentControlAck) => void) => void
   'tournament:start': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:next-stage': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:retry-group': (payload: { tournamentId: string; groupId: string }, ack: (res: TournamentControlAck) => void) => void

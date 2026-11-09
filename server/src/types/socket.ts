@@ -8,7 +8,7 @@ import type {
   WinResult,
   PlayerSlot,
 } from './game.js'
-import type { TournamentSnapshot } from './tournament.js'
+import type { TournamentFormat, TournamentSnapshot } from './tournament.js'
 
 // ── Client → Server ──────────────────────────────────────────────
 
@@ -97,6 +97,11 @@ export interface TournamentReconnectAck extends TournamentCreateAck {
   assignment?: TournamentRoomAssignment
 }
 export interface TournamentControlAck { ok: boolean; error?: string }
+export interface TournamentSettingsPayload {
+  tournamentId: string
+  format: TournamentFormat
+  leagueRounds: number
+}
 
 export interface TournamentRoomAssignment {
   tournamentId: string
@@ -119,6 +124,7 @@ export interface ClientToServerEvents {
   'tournament:create': (payload: TournamentCreatePayload, ack: (res: TournamentCreateAck) => void) => void
   'tournament:join': (payload: TournamentJoinPayload, ack: (res: TournamentJoinAck) => void) => void
   'tournament:reconnect': (payload: TournamentReconnectPayload, ack: (res: TournamentReconnectAck) => void) => void
+  'tournament:set-settings': (payload: TournamentSettingsPayload, ack: (res: TournamentControlAck) => void) => void
   'tournament:start': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:next-stage': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:retry-group': (payload: { tournamentId: string; groupId: string }, ack: (res: TournamentControlAck) => void) => void

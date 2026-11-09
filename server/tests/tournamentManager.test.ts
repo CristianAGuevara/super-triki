@@ -36,6 +36,90 @@ test('limits tournament registration to fifty participants', async () => {
   if (!rejected.ok) assert.match(rejected.error, /lleno/i)
 })
 
+test('runs a points league and resolves a top tie with sudden death', async () => {
+  const hostSocket = `tournament-league-${randomUUID()}`
+  const created = await TournamentManager.createTournament('Host', hostSocket, 'Liga de prueba')
+  const sockets = [hostSocket]
+  for (const [index, name] of ['Dos', 'Tres', 'Cuatro'].entries()) {
+    const socketId = `tournament-league-${index}-${randomUUID()}`
+    sockets.push(socketId)
+    const joined = await TournamentManager.joinTournament(created.tournament.tournamentId, name, socketId)
+    assert.equal(joined.ok, true)
+  }
+
+  const settings = await TournamentManager.setTournamentSettings(
+    created.tournament.tournamentId,
+    hostSocket,
+    'league',
+    2,
+  )
+  assert.equal(settings.ok, true)
+
+  const started = await TournamentManager.startTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(started.ok, true)
+  if (!started.ok) return
+  assert.equal(started.state.format, 'league')
+  assert.equal(started.state.stageKind, 'league')
+  assert.equal(started.state.stage, 1)
+
+  const playGroup = async (winnerSlot: 1 | 2 | 3 | 4) => {
+    const tournament = await TournamentManager.getTournament(created.tournament.tournamentId)
+    assert.ok(tournament)
+    const group = tournament.groups[0]
+    assert.ok(group?.roomId)
+    const room = await RoomManager.getRoom(group.roomId)
+    assert.ok(room)
+    const result = await TournamentManager.recordGroupResult(
+      created.tournament.tournamentId,
+      group.id,
+      room.roomId,
+      winnerSlot,
+    )
+    assert.ok(result)
+    return result.state
+  }
+
+  const afterRoundOne = await playGroup(1)
+  assert.equal(afterRoundOne.groups[0].status, 'finished')
+  assert.equal(afterRoundOne.participants.filter(participant => participant.eliminated).length, 0)
+
+  const roundTwo = await TournamentManager.advanceTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(roundTwo.ok, true)
+  if (!roundTwo.ok) return
+  assert.equal(roundTwo.state.stage, 2)
+
+  const afterRoundTwo = await playGroup(2)
+  assert.equal(afterRoundTwo.phase, 'playing')
+  assert.equal(afterRoundTwo.needsTiebreak, true)
+  assert.equal(afterRoundTwo.canAdvance, true)
+
+  const suddenDeath = await TournamentManager.advanceTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(suddenDeath.ok, true)
+  if (!suddenDeath.ok) return
+  assert.equal(suddenDeath.state.stageKind, 'sudden-death')
+  assert.equal(suddenDeath.state.groups[0].playerIds.length, 2)
+  assert.equal(suddenDeath.assignments.length, 2)
+
+  const finalTournament = await TournamentManager.getTournament(created.tournament.tournamentId)
+  assert.ok(finalTournament)
+  const finalGroup = finalTournament.groups[0]
+  assert.ok(finalGroup?.roomId)
+  const finalRoom = await RoomManager.getRoom(finalGroup.roomId)
+  assert.ok(finalRoom)
+  await TournamentManager.recordGroupResult(
+    created.tournament.tournamentId,
+    finalGroup.id,
+    finalRoom.roomId,
+    1,
+  )
+
+  const finished = await TournamentManager.getSnapshot(created.tournament.tournamentId)
+  assert.ok(finished)
+  assert.equal(finished.phase, 'finished')
+  assert.ok(finished.championId)
+  assert.equal(finished.participants.filter(participant => participant.leagueWins === 1).length, 2)
+})
+
 test('lists tournaments publicly until they finish', async () => {
   const hostSocket = `tournament-listing-${randomUUID()}`
   const created = await TournamentManager.createTournament('Host', hostSocket, 'Copa pública')

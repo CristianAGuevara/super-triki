@@ -43,13 +43,21 @@ para desarrollo con una sola instancia, pero no para producción distribuida.
 ## Torneos
 
 Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o
-unirse con un código. Al iniciar, los jugadores se reparten priorizando grupos de
-4 y después grupos de 3; solo se usa un grupo de 2 cuando es inevitable, como
-ocurre con 5 jugadores (3 + 2). El ganador de cada grupo avanza a la siguiente ronda hasta que queda un
-campeón. Los grupos empatados se pueden repetir. Las partidas de torneo usan un
-temporizador de 90 segundos por turno para que un jugador desconectado no bloquee
-la ronda. Los torneos públicos aparecen en el listado del menú principal,
-diferenciados de las salas y filtrables por tipo.
+unirse con un código. En la sala de espera, el anfitrión elige el formato:
+
+- **Eliminación directa:** el ganador de cada grupo avanza hasta la final.
+- **Todos contra todos (liga):** todos juegan todas las rondas, sin eliminarse.
+  Se puede elegir entre 1 y 10 rondas. Victoria = 3 puntos, empate = 1 punto.
+  Los grupos se mezclan en cada ronda para variar los rivales.
+  Si al terminar la liga hay empate en el liderato, los empatados juegan una
+  **muerte súbita** hasta que quede un único campeón.
+
+Al iniciar, los jugadores se reparten priorizando grupos de 4 y después grupos de
+3; solo se usa un grupo de 2 cuando es inevitable, como ocurre con 5 jugadores
+(3 + 2). Los empates de una partida de eliminación se pueden repetir. Las
+partidas de torneo usan un temporizador de 90 segundos por turno para que un
+jugador desconectado no bloquee la ronda. Los torneos públicos aparecen en el
+listado del menú principal, diferenciados de las salas y filtrables por tipo.
 
 ## Variables de entorno
 

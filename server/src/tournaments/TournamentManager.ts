@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { GameSettings, PlayerSlot } from '../types/game.js'
 import type {
+  TournamentFormat,
   TournamentGroup,
   TournamentParticipant,
   TournamentSnapshot,
+  TournamentStageKind,
   TournamentState,
 } from '../types/tournament.js'
 import type { PublicRoomInfo, TournamentRoomAssignment } from '../types/socket.js'
@@ -14,6 +16,9 @@ import { generateRoomCode } from '../rooms/roomUtils.js'
 import { distributeGroupSizes, shuffle } from './grouping.js'
 
 const MAX_PARTICIPANTS = 50
+const DEFAULT_LEAGUE_ROUNDS = 3
+const MIN_LEAGUE_ROUNDS = 1
+const MAX_LEAGUE_ROUNDS = 10
 const TOURNAMENT_TTL_SECONDS = 6 * 60 * 60
 const TOURNAMENT_INDEX_KEY = `${redisPrefix}:tournaments`
 const TOURNAMENT_GAME_SETTINGS: GameSettings = {
@@ -39,17 +44,42 @@ function tournamentKey(tournamentId: string): string {
   return `${redisPrefix}:tournament:${tournamentId}`
 }
 
+function normalizeTournament(tournament: TournamentState): TournamentState {
+  tournament.format ??= 'elimination'
+  tournament.leagueRounds = Number.isInteger(tournament.leagueRounds)
+    ? Math.min(MAX_LEAGUE_ROUNDS, Math.max(MIN_LEAGUE_ROUNDS, tournament.leagueRounds))
+    : DEFAULT_LEAGUE_ROUNDS
+  tournament.stageKind ??= tournament.format === 'league' ? 'league' : 'elimination'
+  tournament.leagueOrder ??= []
+  for (const participant of tournament.participants) {
+    participant.leaguePoints ??= 0
+    participant.leagueWins ??= 0
+    participant.leagueDraws ??= 0
+    participant.leagueLosses ??= 0
+    participant.leagueGames ??= 0
+  }
+  return tournament
+}
+
 async function loadTournament(tournamentId: string): Promise<TournamentState | undefined> {
-  if (!redis) return tournaments.get(tournamentId)
+  if (!redis) {
+    const tournament = tournaments.get(tournamentId)
+    return tournament ? normalizeTournament(tournament) : undefined
+  }
 
   try {
     const tournament = await redis.get<TournamentState>(tournamentKey(tournamentId))
-    if (tournament) tournaments.set(tournamentId, tournament)
-    else tournaments.delete(tournamentId)
+    if (tournament) {
+      normalizeTournament(tournament)
+      tournaments.set(tournamentId, tournament)
+    } else {
+      tournaments.delete(tournamentId)
+    }
     return tournament ?? undefined
   } catch (error) {
     console.error('[redis:load-tournament]', error)
-    return tournaments.get(tournamentId)
+    const tournament = tournaments.get(tournamentId)
+    return tournament ? normalizeTournament(tournament) : undefined
   }
 }
 
@@ -116,20 +146,74 @@ async function withTournamentLock<T>(
   }
 }
 
-function groupLabel(stage: number, index: number, total: number): string {
-  if (total === 1) return stage === 1 ? 'Grupo único' : 'Final'
+function groupLabel(
+  stage: number,
+  index: number,
+  total: number,
+  stageKind: TournamentStageKind,
+): string {
+  if (stageKind === 'sudden-death') {
+    return total === 1 ? 'Muerte súbita' : `Muerte súbita ${String.fromCharCode(65 + index)}`
+  }
+  if (total === 1) {
+    if (stageKind === 'league') return 'Grupo único'
+    return stage === 1 ? 'Grupo único' : 'Final'
+  }
   return `Grupo ${String.fromCharCode(65 + index)}`
 }
 
-function toSnapshot(state: TournamentState): TournamentSnapshot {
-  const allGroupsFinished = state.groups.length > 0 &&
+function allGroupsFinished(state: TournamentState): boolean {
+  return state.groups.length > 0 &&
     state.groups.every(group => group.status === 'finished')
+}
 
+function compareLeagueParticipants(
+  a: TournamentParticipant,
+  b: TournamentParticipant,
+): number {
+  return b.leaguePoints - a.leaguePoints ||
+    b.leagueWins - a.leagueWins ||
+    b.leagueDraws - a.leagueDraws ||
+    a.username.localeCompare(b.username)
+}
+
+function leagueLeaders(state: TournamentState): TournamentParticipant[] {
+  const sorted = [...state.participants].sort(compareLeagueParticipants)
+  const leader = sorted[0]
+  if (!leader) return []
+  return sorted.filter(participant =>
+    participant.leaguePoints === leader.leaguePoints &&
+    participant.leagueWins === leader.leagueWins &&
+    participant.leagueDraws === leader.leagueDraws
+  )
+}
+
+function needsTiebreak(state: TournamentState): boolean {
+  return state.phase === 'playing' &&
+    state.stageKind === 'league' &&
+    state.stage >= state.leagueRounds &&
+    allGroupsFinished(state) &&
+    leagueLeaders(state).length > 1
+}
+
+function canAdvanceTournament(state: TournamentState): boolean {
+  if (state.phase !== 'playing' || !allGroupsFinished(state)) return false
+  if (state.stageKind === 'league') {
+    if (state.stage < state.leagueRounds) return true
+    return leagueLeaders(state).length > 1
+  }
+  return state.groups.length > 1
+}
+
+function toSnapshot(state: TournamentState): TournamentSnapshot {
   return {
     tournamentId: state.tournamentId,
     name: state.name,
     hostId: state.hostId,
     phase: state.phase,
+    format: state.format,
+    leagueRounds: state.leagueRounds,
+    stageKind: state.stageKind,
     stage: state.stage,
     participants: state.participants.map(participant => ({
       id: participant.id,
@@ -137,6 +221,11 @@ function toSnapshot(state: TournamentState): TournamentSnapshot {
       connected: Boolean(participant.socketId),
       eliminated: participant.eliminated,
       groupId: participant.groupId,
+      leaguePoints: participant.leaguePoints,
+      leagueWins: participant.leagueWins,
+      leagueDraws: participant.leagueDraws,
+      leagueLosses: participant.leagueLosses,
+      leagueGames: participant.leagueGames,
     })),
     groups: state.groups.map(group => ({
       id: group.id,
@@ -151,9 +240,8 @@ function toSnapshot(state: TournamentState): TournamentSnapshot {
     championId: state.championId,
     connectedCount: state.participants.filter(participant => participant.socketId).length,
     maxParticipants: MAX_PARTICIPANTS,
-    canAdvance: state.phase === 'playing' &&
-      state.groups.length > 1 &&
-      allGroupsFinished,
+    canAdvance: canAdvanceTournament(state),
+    needsTiebreak: needsTiebreak(state),
   }
 }
 
@@ -237,22 +325,44 @@ async function createRoomForGroup(
   return assignments
 }
 
+function orderedLeagueParticipants(
+  state: TournamentState,
+  stage: number,
+): TournamentParticipant[] {
+  if (state.leagueOrder.length === 0) {
+    state.leagueOrder = shuffle(state.participants.map(participant => participant.id))
+  }
+  const offset = state.leagueOrder.length > 0
+    ? (stage - 1) % state.leagueOrder.length
+    : 0
+  const rotated = [
+    ...state.leagueOrder.slice(offset),
+    ...state.leagueOrder.slice(0, offset),
+  ]
+  return rotated
+    .map(id => state.participants.find(participant => participant.id === id))
+    .filter((participant): participant is TournamentParticipant => Boolean(participant))
+}
+
 async function buildStageGroups(
   state: TournamentState,
   participants: TournamentParticipant[],
   stage: number,
+  stageKind: TournamentStageKind,
 ): Promise<{ groups: TournamentGroup[]; assignments: TournamentRoomAssignment[] }> {
   const sizes = distributeGroupSizes(participants.length)
-  const shuffled = shuffle(participants)
+  const ordered = stageKind === 'league'
+    ? orderedLeagueParticipants(state, stage)
+    : shuffle(participants)
   const groups: TournamentGroup[] = []
   const assignments: TournamentRoomAssignment[] = []
   let offset = 0
 
   for (let index = 0; index < sizes.length; index++) {
     const size = sizes[index]
-    const groupParticipants = shuffled.slice(offset, offset + size)
+    const groupParticipants = ordered.slice(offset, offset + size)
     offset += size
-    const label = groupLabel(stage, index, sizes.length)
+    const label = groupLabel(stage, index, sizes.length, stageKind)
     const group: TournamentGroup = {
       id: randomUUID(),
       label,
@@ -314,13 +424,22 @@ export const TournamentManager = {
       reconnectToken: randomUUID(),
       eliminated: false,
       groupId: null,
+      leaguePoints: 0,
+      leagueWins: 0,
+      leagueDraws: 0,
+      leagueLosses: 0,
+      leagueGames: 0,
     }
     const tournament: TournamentState = {
       tournamentId,
       name: name.trim() || `Torneo de ${username}`,
       hostId: participant.id,
       phase: 'waiting',
+      format: 'elimination',
+      leagueRounds: DEFAULT_LEAGUE_ROUNDS,
+      stageKind: 'elimination',
       stage: 0,
+      leagueOrder: [],
       participants: [participant],
       groups: [],
       championId: null,
@@ -358,6 +477,11 @@ export const TournamentManager = {
         reconnectToken: randomUUID(),
         eliminated: false,
         groupId: null,
+        leaguePoints: 0,
+        leagueWins: 0,
+        leagueDraws: 0,
+        leagueLosses: 0,
+        leagueGames: 0,
       }
       tournament.participants.push(participant)
       socketToTournament.set(socketId, tournamentId)
@@ -455,6 +579,38 @@ export const TournamentManager = {
     })
   },
 
+  async setTournamentSettings(
+    tournamentId: string,
+    socketId: string,
+    format: TournamentFormat,
+    leagueRounds: number,
+  ): Promise<{ ok: true; state: TournamentSnapshot } | TournamentActionError> {
+    return withTournamentLock(tournamentId, async () => {
+      const tournament = await loadTournament(tournamentId)
+      if (!tournament) return { ok: false as const, error: 'Torneo no encontrado' }
+      if (tournament.phase !== 'waiting') {
+        return { ok: false as const, error: 'El torneo ya comenzó' }
+      }
+      const actor = tournament.participants.find(participant => participant.socketId === socketId)
+      if (!actor || actor.id !== tournament.hostId) {
+        return { ok: false as const, error: 'Solo el anfitrión puede cambiar el formato' }
+      }
+      if (format !== 'elimination' && format !== 'league') {
+        return { ok: false as const, error: 'Formato de torneo inválido' }
+      }
+      if (!Number.isInteger(leagueRounds) ||
+          leagueRounds < MIN_LEAGUE_ROUNDS ||
+          leagueRounds > MAX_LEAGUE_ROUNDS) {
+        return { ok: false as const, error: `Elige entre ${MIN_LEAGUE_ROUNDS} y ${MAX_LEAGUE_ROUNDS} rondas` }
+      }
+
+      tournament.format = format
+      tournament.leagueRounds = leagueRounds
+      await saveTournament(tournament)
+      return { ok: true as const, state: toSnapshot(tournament) }
+    })
+  },
+
   async startTournament(tournamentId: string, socketId: string): Promise<TournamentAction> {
     return withTournamentLock(tournamentId, async () => {
       const tournament = await loadTournament(tournamentId)
@@ -477,8 +633,27 @@ export const TournamentManager = {
 
       tournament.phase = 'playing'
       tournament.stage = 1
+      tournament.stageKind = tournament.format === 'league' ? 'league' : 'elimination'
       tournament.championId = null
-      const stage = await buildStageGroups(tournament, tournament.participants, 1)
+      tournament.leagueOrder = tournament.format === 'league'
+        ? shuffle(tournament.participants.map(participant => participant.id))
+        : []
+
+      for (const participant of tournament.participants) {
+        participant.eliminated = false
+        participant.leaguePoints = 0
+        participant.leagueWins = 0
+        participant.leagueDraws = 0
+        participant.leagueLosses = 0
+        participant.leagueGames = 0
+      }
+
+      const stage = await buildStageGroups(
+        tournament,
+        tournament.participants,
+        1,
+        tournament.stageKind,
+      )
       tournament.groups = stage.groups
       await saveTournament(tournament)
       return { ok: true as const, state: toSnapshot(tournament), assignments: stage.assignments }
@@ -494,8 +669,43 @@ export const TournamentManager = {
       }
       const actor = tournament.participants.find(participant => participant.socketId === socketId)
       if (!actor) return { ok: false as const, error: 'No perteneces a este torneo' }
-      if (tournament.groups.some(group => group.status !== 'finished')) {
+      if (!allGroupsFinished(tournament)) {
         return { ok: false as const, error: 'Todavía hay grupos sin terminar' }
+      }
+
+      if (tournament.stageKind === 'league') {
+        if (tournament.stage < tournament.leagueRounds) {
+          tournament.stage += 1
+          for (const participant of tournament.participants) participant.groupId = null
+          const stage = await buildStageGroups(
+            tournament,
+            tournament.participants,
+            tournament.stage,
+            'league',
+          )
+          tournament.groups = stage.groups
+          await saveTournament(tournament)
+          return { ok: true as const, state: toSnapshot(tournament), assignments: stage.assignments }
+        }
+
+        const leaders = leagueLeaders(tournament)
+        if (leaders.length === 1) {
+          tournament.phase = 'finished'
+          tournament.championId = leaders[0].id
+          await saveTournament(tournament)
+          return { ok: true as const, state: toSnapshot(tournament), assignments: [] }
+        }
+        if (leaders.some(leader => !leader.socketId)) {
+          return { ok: false as const, error: 'Esperando a que se reconecten los jugadores empatados' }
+        }
+
+        tournament.stageKind = 'sudden-death'
+        tournament.stage = 1
+        for (const participant of tournament.participants) participant.groupId = null
+        const stage = await buildStageGroups(tournament, leaders, 1, 'sudden-death')
+        tournament.groups = stage.groups
+        await saveTournament(tournament)
+        return { ok: true as const, state: toSnapshot(tournament), assignments: stage.assignments }
       }
 
       const winners = tournament.groups
@@ -515,8 +725,20 @@ export const TournamentManager = {
       }
 
       tournament.stage += 1
-      const stage = await buildStageGroups(tournament, winners, tournament.stage)
+      const stageKind: TournamentStageKind = tournament.stageKind === 'sudden-death'
+        ? 'sudden-death'
+        : 'elimination'
+      for (const participant of tournament.participants) {
+        if (!winners.includes(participant)) participant.groupId = null
+      }
+      const stage = await buildStageGroups(
+        tournament,
+        winners,
+        tournament.stage,
+        stageKind,
+      )
       tournament.groups = stage.groups
+      tournament.stageKind = stageKind
       await saveTournament(tournament)
       return { ok: true as const, state: toSnapshot(tournament), assignments: stage.assignments }
     })
@@ -576,23 +798,54 @@ export const TournamentManager = {
         }
       }
 
-      if (winnerSlot === null) {
+      const groupParticipants = participantsForGroup(tournament, group)
+      const winnerId = winnerSlot === null
+        ? null
+        : room?.tournament?.participantIds?.[winnerSlot] ?? null
+
+      if (tournament.stageKind === 'league') {
+        group.status = 'finished'
+        group.winnerId = winnerId
+
+        for (const participant of groupParticipants) {
+          participant.leagueGames += 1
+          if (!winnerId) {
+            participant.leagueDraws += 1
+            participant.leaguePoints += 1
+          } else if (participant.id === winnerId) {
+            participant.leagueWins += 1
+            participant.leaguePoints += 3
+          } else {
+            participant.leagueLosses += 1
+          }
+        }
+
+        if (allGroupsFinished(tournament) && tournament.stage >= tournament.leagueRounds) {
+          const leaders = leagueLeaders(tournament)
+          if (leaders.length === 1) {
+            tournament.phase = 'finished'
+            tournament.championId = leaders[0].id
+          }
+        }
+
+        await saveTournament(tournament)
+        return { state: toSnapshot(tournament), assignments: [] }
+      }
+
+      if (winnerSlot === null || !winnerId) {
         group.status = 'draw'
         group.winnerId = null
         await saveTournament(tournament)
         return { state: toSnapshot(tournament), assignments: [] }
       }
 
-      const winnerId = room?.tournament?.participantIds?.[winnerSlot]
-      if (!winnerId) return null
       group.status = 'finished'
       group.winnerId = winnerId
-      for (const participant of participantsForGroup(tournament, group)) {
+      for (const participant of groupParticipants) {
         participant.eliminated = participant.id !== winnerId
       }
 
-      const allGroupsFinished = tournament.groups.every(candidate => candidate.status === 'finished')
-      if (allGroupsFinished && tournament.groups.length === 1) {
+      if (allGroupsFinished(tournament) && tournament.groups.length === 1) {
         tournament.phase = 'finished'
         tournament.championId = winnerId
       }
