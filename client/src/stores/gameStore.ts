@@ -18,6 +18,7 @@ import { detectWin, detectDraw } from '@/composables/useWinDetection'
 import { getSocket } from '@/services/socket'
 import { useRoomStore } from '@/stores/roomStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useConnectionStore } from '@/stores/connectionStore'
 
 const PIECES_PER_SIZE = 3
 
@@ -138,6 +139,7 @@ export const useGameStore = defineStore('game', () => {
     // ── Multiplayer path: emit to server, server broadcasts back ──
     if (roomStore.roomId) {
       if (!roomStore.connected) {
+        if (useConnectionStore().rotating) return false
         roomStore.setError('Reconectando con la sala…')
         return false
       }

@@ -7,13 +7,17 @@ export const useConnectionStore = defineStore('connection', () => {
   const attempts = ref(0)
   const lastError = ref<string | null>(null)
   const blocked = ref(false)
+  const rotating = ref(false)
 
-  const showBanner = computed(() => disconnected.value && !connected.value)
+  const showBanner = computed(() =>
+    disconnected.value && !connected.value && !rotating.value
+  )
 
   function setConnected(value: boolean) {
     connected.value = value
     if (value) {
       disconnected.value = false
+      rotating.value = false
       attempts.value = 0
       lastError.value = null
       blocked.value = false
@@ -23,8 +27,18 @@ export const useConnectionStore = defineStore('connection', () => {
   function setDisconnected(message: string | null = null, shouldBlock = false) {
     connected.value = false
     disconnected.value = true
+    rotating.value = false
     blocked.value = shouldBlock
     if (message) lastError.value = message
+  }
+
+  function setRotating(value: boolean) {
+    rotating.value = value
+    if (value) disconnected.value = false
+  }
+
+  function setAttempts(value: number) {
+    attempts.value = value
   }
 
   function clearBlocked() {
@@ -33,6 +47,7 @@ export const useConnectionStore = defineStore('connection', () => {
 
   function setReconnecting(attempt = attempts.value + 1) {
     connected.value = false
+    rotating.value = false
     disconnected.value = true
     attempts.value = attempt
   }
@@ -47,6 +62,7 @@ export const useConnectionStore = defineStore('connection', () => {
     attempts.value = 0
     lastError.value = null
     blocked.value = false
+    rotating.value = false
   }
 
   return {
@@ -55,9 +71,12 @@ export const useConnectionStore = defineStore('connection', () => {
     attempts,
     lastError,
     blocked,
+    rotating,
     showBanner,
     setConnected,
     setDisconnected,
+    setRotating,
+    setAttempts,
     setReconnecting,
     clearBlocked,
     setError,

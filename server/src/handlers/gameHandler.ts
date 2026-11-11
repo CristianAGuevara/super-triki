@@ -87,6 +87,55 @@ async function broadcastRoomList(io: TypedServer) {
   await emitRoomEvent(io, 'lobby', 'rooms:list', await getPublicListings())
 }
 
+const DISCONNECT_GRACE_MS = 3_000
+
+async function processDisconnectedSocket(io: TypedServer, socketId: string) {
+  const tournamentState = await TournamentManager.disconnectSocket(socketId)
+  if (tournamentState) {
+    await emitRoomEvent(
+      io,
+      tournamentChannel(tournamentState.tournamentId),
+      'tournament:state',
+      tournamentState,
+    )
+    await broadcastRoomList(io)
+  }
+
+  const socketRoom = await RoomManager.getRoomBySocket(socketId)
+  if (!socketRoom) return
+
+  const result = await RoomManager.withRoomLock(socketRoom.roomId, async () => {
+    const disconnected = await RoomManager.removePlayer(socketId)
+    if (!disconnected?.room.game) return disconnected
+    return disconnected
+  })
+  if (!result) return
+
+  const { room, slot, player, graceMs, disconnectEpoch } = result
+
+  if (room.game) {
+    await emitRoomEvent(io, room.roomId, 'player:left', {
+      username: player.username,
+      slot,
+      permanent: false,
+    }, socketId)
+  }
+
+  await emitRoomEvent(io, room.roomId, 'room:state', RoomManager.toSnapshot(room))
+  await broadcastRoomList(io)
+
+  setTimeout(() => {
+    void RoomManager.withRoomLock(room.roomId, () =>
+      RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
+    ).then(async updatedRoom => {
+      if (!updatedRoom) clearTurnTimer(room.roomId)
+      const currentRoom = await RoomManager.getRoom(room.roomId)
+      if (currentRoom) await emitRoomEvent(io, currentRoom.roomId, 'room:state', RoomManager.toSnapshot(currentRoom))
+      return broadcastRoomList(io)
+    }).catch(error => console.error('[room:disconnect-expiry]', error))
+  }, graceMs)
+}
+
 async function emitTournamentState(io: TypedServer, tournamentId: string) {
   const state = await TournamentManager.getSnapshot(tournamentId)
   if (state) {
@@ -831,51 +880,11 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
   })
 
   // ── disconnect ───────────────────────────────────────────────
-  socket.on('disconnect', async () => {
-    RoomManager.removeSpectator(socket.id)
-    const tournamentState = await TournamentManager.disconnectSocket(socket.id)
-    if (tournamentState) {
-      await emitRoomEvent(
-        io,
-        tournamentChannel(tournamentState.tournamentId),
-        'tournament:state',
-        tournamentState,
-      )
-      await broadcastRoomList(io)
-    }
-
-    const socketRoom = await RoomManager.getRoomBySocket(socket.id)
-    if (!socketRoom) return
-
-    const result = await RoomManager.withRoomLock(socketRoom.roomId, async () => {
-      const disconnected = await RoomManager.removePlayer(socket.id)
-      if (!disconnected?.room.game) return disconnected
-      return disconnected
-    })
-    if (!result) return
-
-    const { room, slot, player, graceMs, disconnectEpoch } = result
-
-    if (room.game) {
-      await emitRoomEvent(io, room.roomId, 'player:left', {
-        username: player.username,
-        slot,
-        permanent: false,
-      }, socket.id)
-    }
-
-    await emitRoomEvent(io, room.roomId, 'room:state', RoomManager.toSnapshot(room))
-    await broadcastRoomList(io)
-
+  socket.on('disconnect', () => {
+    const socketId = socket.id
+    RoomManager.removeSpectator(socketId)
     setTimeout(() => {
-      void RoomManager.withRoomLock(room.roomId, () =>
-        RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
-      ).then(async updatedRoom => {
-        if (!updatedRoom) clearTurnTimer(room.roomId)
-        const currentRoom = await RoomManager.getRoom(room.roomId)
-        if (currentRoom) await emitRoomEvent(io, currentRoom.roomId, 'room:state', RoomManager.toSnapshot(currentRoom))
-        return broadcastRoomList(io)
-      }).catch(error => console.error('[room:disconnect-expiry]', error))
-    }, graceMs)
+      void processDisconnectedSocket(io, socketId)
+    }, DISCONNECT_GRACE_MS)
   })
 }

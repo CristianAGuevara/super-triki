@@ -68,38 +68,112 @@ const lobbyStore = useLobbyStore()
 const route = useRoute()
 const socket = getSocket()
 const isSpectatorRoute = computed(() => route.name === 'spectate')
+function envNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const ROTATION_BASE_MS = envNumber(import.meta.env.VITE_SOCKET_ROTATE_MS, 210_000)
+const ROTATION_JITTER_MS = envNumber(import.meta.env.VITE_SOCKET_ROTATE_JITTER_MS, 30_000)
+const ROTATION_SAFETY_MS = 3_500
+const DISCONNECT_BANNER_DELAY_MS = 1_500
 let healthTimer: number | undefined
+let rotationTimer: number | undefined
+let rotationSafetyTimer: number | undefined
+let disconnectBannerTimer: number | undefined
+let connectedAt = 0
+
+function clearTimer(timer: number | undefined): undefined {
+  if (timer !== undefined) window.clearTimeout(timer)
+  return undefined
+}
+
+function schedulePlannedRotation() {
+  rotationTimer = clearTimer(rotationTimer)
+  if (!socket.connected || connectionStore.blocked) return
+
+  const delay = ROTATION_BASE_MS + Math.floor(Math.random() * ROTATION_JITTER_MS)
+  rotationTimer = window.setTimeout(rotateConnection, delay)
+}
+
+function rotateConnection() {
+  if (!socket.connected || connectionStore.blocked || connectionStore.rotating) return
+  if (document.hidden) {
+    rotationTimer = window.setTimeout(rotateConnection, 15_000)
+    return
+  }
+
+  connectionStore.setRotating(true)
+  rotationSafetyTimer = clearTimer(rotationSafetyTimer)
+  rotationSafetyTimer = window.setTimeout(() => {
+    if (!socket.connected) {
+      connectionStore.setDisconnected('La reconexión programada tardó demasiado')
+      socket.connect()
+    }
+  }, ROTATION_SAFETY_MS)
+
+  socket.disconnect()
+  window.setTimeout(() => socket.connect(), 50)
+}
+
+function scheduleDisconnectBanner(
+  message: string | null = null,
+  shouldBlock = false,
+) {
+  disconnectBannerTimer = clearTimer(disconnectBannerTimer)
+  if (shouldBlock) {
+    connectionStore.setDisconnected(message, true)
+    return
+  }
+
+  disconnectBannerTimer = window.setTimeout(() => {
+    if (!socket.connected && !connectionStore.rotating) {
+      connectionStore.setDisconnected(message)
+    }
+  }, DISCONNECT_BANNER_DELAY_MS)
+}
 
 function handleConnect() {
+  rotationSafetyTimer = clearTimer(rotationSafetyTimer)
+  disconnectBannerTimer = clearTimer(disconnectBannerTimer)
   connectionStore.setConnected(true)
+  connectedAt = Date.now()
+  schedulePlannedRotation()
 }
 
 function handleDisconnect(reason: string) {
-  if (reason === 'io client disconnect') {
-    connectionStore.setConnected(false)
-    return
-  }
+  rotationTimer = clearTimer(rotationTimer)
+  disconnectBannerTimer = clearTimer(disconnectBannerTimer)
+  connectionStore.setConnected(false)
+  connectedAt = 0
+
+  if (connectionStore.rotating) return
+
+  if (reason === 'io client disconnect') return
   if (reason === 'io server disconnect') {
-    connectionStore.setDisconnected(
+    scheduleDisconnectBanner(
       'La sesión se cerró; puede estar abierta en otra pestaña.',
       true,
     )
     return
   }
-  connectionStore.setDisconnected()
+  scheduleDisconnectBanner()
 }
 
 function handleConnectError(error: Error) {
-  connectionStore.setDisconnected('No se pudo conectar con el servidor')
   connectionStore.setError(error.message)
+  if (connectionStore.rotating) return
+  connectionStore.setAttempts(Math.max(1, connectionStore.attempts))
+  scheduleDisconnectBanner('No se pudo conectar con el servidor')
 }
 
 function handleReconnectAttempt(attempt: number) {
-  connectionStore.setReconnecting(attempt)
+  connectionStore.setAttempts(attempt)
+  if (!connectionStore.rotating) scheduleDisconnectBanner()
 }
 
 function checkConnection() {
-  if (document.hidden || connectionStore.blocked) return
+  if (document.hidden || connectionStore.blocked || connectionStore.rotating) return
   if (!socket.connected) {
     connectionStore.setDisconnected()
     socket.connect()
@@ -128,18 +202,22 @@ function checkConnection() {
 }
 
 function handleVisibilityChange() {
-  if (document.hidden || connectionStore.blocked) return
+  if (document.hidden || connectionStore.blocked || connectionStore.rotating) return
   connectionStore.setConnected(socket.connected)
   if (!socket.connected) {
     connectionStore.setReconnecting()
     socket.connect()
   } else {
-    checkConnection()
+    if (connectedAt && Date.now() - connectedAt >= ROTATION_BASE_MS) {
+      rotateConnection()
+    } else {
+      checkConnection()
+    }
   }
 }
 
 function handleOnline() {
-  if (connectionStore.blocked) return
+  if (connectionStore.blocked || connectionStore.rotating) return
   if (!socket.connected) {
     connectionStore.setReconnecting()
     socket.connect()
@@ -149,6 +227,7 @@ function handleOnline() {
 }
 
 function handleOffline() {
+  rotationTimer = clearTimer(rotationTimer)
   connectionStore.setDisconnected('Sin conexión a internet')
 }
 
@@ -177,7 +256,9 @@ onMounted(() => {
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
   connectionStore.setConnected(socket.connected)
+  connectedAt = socket.connected ? Date.now() : 0
   connectSocket()
+  schedulePlannedRotation()
   healthTimer = window.setInterval(checkConnection, 15_000)
 })
 
@@ -187,6 +268,9 @@ onUnmounted(() => {
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
   if (healthTimer !== undefined) window.clearInterval(healthTimer)
+  rotationTimer = clearTimer(rotationTimer)
+  rotationSafetyTimer = clearTimer(rotationSafetyTimer)
+  disconnectBannerTimer = clearTimer(disconnectBannerTimer)
   socket.off('connect', handleConnect)
   socket.off('disconnect', handleDisconnect)
   socket.off('connect_error', handleConnectError)

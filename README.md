@@ -48,6 +48,12 @@ para reintentar. Salas y torneos se recuperan automáticamente sin recargar la
 página; si la sesión se abrió en otra pestaña, el aviso permite decidir cuándo
 volver a conectarla.
 
+Para ocultar el cierre de 300 segundos de Vercel Hobby, el cliente renueva el
+socket de forma programada entre los 3:30 y 4:00 minutos. El servidor mantiene
+un margen de 3 segundos antes de anunciar una desconexión, de modo que el relevo
+normalmente pasa inadvertido. Los tiempos se pueden ajustar con
+`VITE_SOCKET_ROTATE_MS` y `VITE_SOCKET_ROTATE_JITTER_MS`.
+
 ## Torneos
 
 Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o

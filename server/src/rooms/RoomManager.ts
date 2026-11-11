@@ -427,7 +427,10 @@ export const RoomManager = {
     if (!room) return null
 
     const player = room.players.find(p => p.socketId === socketId)
-    if (!player) return null
+    if (!player) {
+      socketToRoom.delete(socketId)
+      return null
+    }
 
     const disconnectedPlayer = { ...player }
     const graceMs = this.getReconnectGraceMs(room, player.slot)

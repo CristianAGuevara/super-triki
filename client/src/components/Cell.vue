@@ -120,13 +120,13 @@ function handleCellClick() {
     return
   }
 
-  store.placePiece({
+  const placed = store.placePiece({
     pieceId: selected.pieceId,
     targetRow: props.row,
     targetCol: props.col,
     targetSize: selected.size,
   })
-  store.clearSelection()
+  if (placed) store.clearSelection()
 }
 </script>
 
