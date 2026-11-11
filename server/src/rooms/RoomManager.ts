@@ -195,6 +195,7 @@ export const RoomManager = {
     name: string,
     isPrivate: boolean,
     password?: string,
+    userId?: string,
   ): Promise<RoomState> {
     let roomId: string
     do { roomId = generateRoomCode() } while (await loadRoom(roomId))
@@ -208,6 +209,7 @@ export const RoomManager = {
         slot: 1,
         username,
         socketId,
+        userId,
         color: DEFAULT_PLAYER_COLOR_IDS[1],
       }],
       reconnectTokens: { 1: randomUUID() },
@@ -240,6 +242,7 @@ export const RoomManager = {
     }
     players: Array<{
       participantId: string
+      userId?: string
       username: string
       socketId: string
     }>
@@ -257,6 +260,7 @@ export const RoomManager = {
         slot,
         username: player.username,
         socketId: player.socketId,
+        userId: player.userId,
         color: DEFAULT_PLAYER_COLOR_IDS[slot],
       }
     })
@@ -297,17 +301,24 @@ export const RoomManager = {
     username: string,
     socketId: string,
     password?: string,
+    userId?: string,
   ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
     const room = await loadRoom(roomId)
     if (!room)                         return { ok: false, error: 'Sala no encontrada' }
     if (room.isPrivate && room.password && room.password !== password)
                                         return { ok: false, error: 'Contraseña incorrecta' }
 
+    if (userId && room.players.some(player =>
+      player.socketId && player.userId === userId
+    )) {
+      return { ok: false, error: 'Ya estás conectado en esta sala desde otra pestaña o dispositivo' }
+    }
+
     // A refresh creates a new socket id. Keep a disconnected player briefly so
     // they can reclaim their slot instead of permanently ending the room.
     const disconnectedPlayer = room.players.find(p =>
       !p.socketId && (room.disconnectUntil[p.slot] ?? 0) > Date.now() &&
-      p.username.toLowerCase() === username.toLowerCase()
+      (userId ? p.userId === userId : p.username.toLowerCase() === username.toLowerCase())
     )
     if (disconnectedPlayer) {
       if ((room.disconnectUntil[disconnectedPlayer.slot] ?? 0) <= Date.now()) {
@@ -338,6 +349,7 @@ export const RoomManager = {
       slot,
       username,
       socketId,
+      userId,
       color: pickAvailablePlayerColor(room, slot),
     })
     room.reconnectTokens[slot] = randomUUID()

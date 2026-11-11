@@ -40,6 +40,14 @@ para desarrollo con una sola instancia, pero no para producción distribuida.
   disponibles. El color se conserva durante la partida y no puede repetirse
   entre jugadores de la misma sala.
 
+## Identidad de sesión
+
+Cada navegador guarda un identificador persistente en `localStorage`. Ese ID se
+envía al crear o unirse a una sala o torneo y el servidor rechaza una segunda
+conexión de la misma identidad en la misma sala o torneo. Así se evita que una
+misma sesión ocupe dos plazas por abrir otra pestaña. La reconexión legítima
+sigue usando el token de sesión y recupera la plaza existente.
+
 ## Conexión
 
 La aplicación mantiene la conexión con el servidor y comprueba periódicamente

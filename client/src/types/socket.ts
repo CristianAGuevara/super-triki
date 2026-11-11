@@ -93,12 +93,12 @@ export interface TournamentRoomAssignment {
 }
 
 export interface ClientToServerEvents {
-  'room:create': (payload: { username: string; name: string; isPrivate: boolean; password?: string }, ack: (res: RoomCreateAck) => void) => void
-  'room:join':   (payload: { roomId: string; username: string; password?: string }, ack: (res: RoomJoinAck) => void) => void
+  'room:create': (payload: { username: string; userId: string; name: string; isPrivate: boolean; password?: string }, ack: (res: RoomCreateAck) => void) => void
+  'room:join':   (payload: { roomId: string; username: string; userId: string; password?: string }, ack: (res: RoomJoinAck) => void) => void
   'room:reconnect': (payload: { roomId: string; reconnectToken: string }, ack: (res: RoomReconnectAck) => void) => void
   'room:set-color': (payload: RoomSetColorPayload, ack: (res: GameControlAck) => void) => void
-  'tournament:create': (payload: { username: string; name: string }, ack: (res: TournamentCreateAck) => void) => void
-  'tournament:join': (payload: { tournamentId: string; username: string }, ack: (res: TournamentJoinAck) => void) => void
+  'tournament:create': (payload: { username: string; userId: string; name: string }, ack: (res: TournamentCreateAck) => void) => void
+  'tournament:join': (payload: { tournamentId: string; username: string; userId: string }, ack: (res: TournamentJoinAck) => void) => void
   'tournament:reconnect': (payload: { tournamentId: string; reconnectToken: string }, ack: (res: TournamentReconnectAck) => void) => void
   'tournament:set-settings': (payload: TournamentSettingsPayload, ack: (res: TournamentControlAck) => void) => void
   'tournament:start': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void

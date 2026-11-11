@@ -14,6 +14,7 @@ import type { TournamentFormat, TournamentSnapshot } from './tournament.js'
 
 export interface RoomCreatePayload {
   username:  string
+  userId:    string
   name:      string
   isPrivate: boolean
   password?: string
@@ -30,6 +31,7 @@ export interface RoomCreateAck {
 export interface RoomJoinPayload {
   roomId:    string
   username:  string
+  userId:    string
   password?: string
 }
 export interface RoomJoinAck {
@@ -74,11 +76,13 @@ export interface RoomSetColorPayload {
 
 export interface TournamentCreatePayload {
   username: string
+  userId: string
   name: string
 }
 export interface TournamentJoinPayload {
   tournamentId: string
   username: string
+  userId: string
 }
 export interface TournamentReconnectPayload {
   tournamentId: string
@@ -143,6 +147,7 @@ export interface PlayerInfo {
   slot:     PlayerSlot
   username: string
   socketId: string
+  userId?:  string
   color?:   PlayerColorId
 }
 

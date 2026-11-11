@@ -7,6 +7,7 @@ export type TournamentGroupStatus = 'playing' | 'finished' | 'draw'
 
 export interface TournamentParticipant {
   id: string
+  userId?: string
   username: string
   socketId: string
   reconnectToken: string

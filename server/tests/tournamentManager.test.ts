@@ -14,6 +14,27 @@ test('leaving the waiting room releases the player socket', async () => {
   assert.ok(recreated.tournament.tournamentId)
 })
 
+test('prevents the same browser user id from joining a tournament twice', async () => {
+  const userId = randomUUID()
+  const hostSocket = `tournament-user-${randomUUID()}`
+  const guestSocket = `tournament-user-${randomUUID()}`
+  const created = await TournamentManager.createTournament(
+    'Host',
+    hostSocket,
+    'Sin clones',
+    userId,
+  )
+
+  const duplicate = await TournamentManager.joinTournament(
+    created.tournament.tournamentId,
+    'Otro nombre',
+    guestSocket,
+    userId,
+  )
+  assert.equal(duplicate.ok, false)
+  if (!duplicate.ok) assert.match(duplicate.error, /otra pestaña|dispositivo/i)
+})
+
 test('limits tournament registration to fifty participants', async () => {
   const hostSocket = `tournament-host-${randomUUID()}`
   const { tournament } = await TournamentManager.createTournament('Host', hostSocket, 'Copa llena')

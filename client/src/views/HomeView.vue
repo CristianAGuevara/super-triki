@@ -461,6 +461,7 @@ async function handleCreate() {
 
   socket.emit('room:create', {
     username:  usernameInput.value.trim(),
+    userId:    userStore.userId,
     name,
     isPrivate: createIsPrivate.value,
     password:  createIsPrivate.value ? createPasswordInput.value || undefined : undefined,
@@ -517,6 +518,7 @@ async function handleCreateTournament() {
     'El servidor no respondió al crear el torneo',
     done => socket.emit('tournament:create', {
       username: usernameInput.value.trim(),
+      userId: userStore.userId,
       name: tournamentNameInput.value.trim(),
     }, done),
   )
@@ -562,6 +564,7 @@ async function handleJoinTournamentById(tournamentId: string) {
       done => socket.emit('tournament:join', {
         tournamentId,
         username: usernameInput.value.trim(),
+        userId: userStore.userId,
       }, done),
     )
 
@@ -603,7 +606,11 @@ async function handleJoinPublic(roomId: string) {
   }
   const socket = getSocket()
 
-  socket.emit('room:join', { roomId, username: usernameInput.value.trim() }, res => {
+  socket.emit('room:join', {
+    roomId,
+    username: usernameInput.value.trim(),
+    userId: userStore.userId,
+  }, res => {
     loading.value       = false
     loadingRoomId.value = null
     if (!res.ok || !res.roomId || !res.playerSlot) {
@@ -636,6 +643,7 @@ async function handleJoinPrivate() {
   socket.emit('room:join', {
     roomId:   code,
     username: usernameInput.value.trim(),
+    userId:   userStore.userId,
     password: joinPasswordInput.value || undefined,
   }, res => {
     loading.value = false

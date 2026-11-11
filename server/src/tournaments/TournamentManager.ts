@@ -283,6 +283,7 @@ async function createRoomForGroup(
     },
     players: participants.map(participant => ({
       participantId: participant.id,
+      userId: participant.userId,
       username: participant.username,
       socketId: participant.socketId,
     })),
@@ -413,12 +414,14 @@ export const TournamentManager = {
     username: string,
     socketId: string,
     name: string,
+    userId?: string,
   ): Promise<{ tournament: TournamentState; participant: TournamentParticipant }> {
     let tournamentId: string
     do { tournamentId = generateRoomCode() } while (await loadTournament(tournamentId))
 
     const participant: TournamentParticipant = {
       id: randomUUID(),
+      userId,
       username,
       socketId,
       reconnectToken: randomUUID(),
@@ -454,6 +457,7 @@ export const TournamentManager = {
     tournamentId: string,
     username: string,
     socketId: string,
+    userId?: string,
   ): Promise<{ ok: true; tournament: TournamentState; participant: TournamentParticipant } | TournamentActionError> {
     return withTournamentLock(tournamentId, async () => {
       const tournament = await loadTournament(tournamentId)
@@ -464,6 +468,9 @@ export const TournamentManager = {
       if (tournament.participants.length >= MAX_PARTICIPANTS) {
         return { ok: false as const, error: 'El torneo está lleno (50 jugadores)' }
       }
+      if (userId && tournament.participants.some(participant => participant.userId === userId)) {
+        return { ok: false as const, error: 'Ya estás en este torneo desde otra pestaña o dispositivo' }
+      }
       if (tournament.participants.some(participant =>
         participant.username.toLowerCase() === username.toLowerCase()
       )) {
@@ -472,6 +479,7 @@ export const TournamentManager = {
 
       const participant: TournamentParticipant = {
         id: randomUUID(),
+        userId,
         username,
         socketId,
         reconnectToken: randomUUID(),

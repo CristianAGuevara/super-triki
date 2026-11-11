@@ -192,6 +192,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function normalizeUserId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const userId = value.trim()
+  if (userId.length < 6 || userId.length > 128) return null
+  return userId
+}
+
 function isSize(value: unknown): value is Size {
   return value === 'large' || value === 'medium' || value === 'small'
 }
@@ -287,6 +294,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
     const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+    const userId = normalizeUserId(payload.userId)
     const name = typeof payload.name === 'string' ? payload.name : ''
     const isPrivate = payload.isPrivate === true
     const password = typeof payload.password === 'string' ? payload.password : undefined
@@ -295,13 +303,17 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Nombre requerido' })
       return
     }
+    if (!userId) {
+      ack({ ok: false, error: 'Identificador de usuario inválido' })
+      return
+    }
     if (await RoomManager.getRoomBySocket(socket.id) ||
         RoomManager.getSpectatorRoom(socket.id) ||
         TournamentManager.getTournamentIdBySocket(socket.id)) {
       ack({ ok: false, error: 'Ya estás en una sala o torneo' })
       return
     }
-    const room = await RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password)
+    const room = await RoomManager.createRoom(username.trim(), socket.id, name, isPrivate, password, userId)
     socket.leave('lobby')
     socket.join(room.roomId)
     ack({
@@ -362,10 +374,15 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
     const roomId = typeof payload.roomId === 'string' ? payload.roomId.trim().toUpperCase() : ''
     const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+    const userId = normalizeUserId(payload.userId)
     const password = typeof payload.password === 'string' ? payload.password : undefined
 
     if (!username) {
       ack({ ok: false, error: 'Nombre requerido' })
+      return
+    }
+    if (!userId) {
+      ack({ ok: false, error: 'Identificador de usuario inválido' })
       return
     }
 
@@ -406,7 +423,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
 
     const result = await RoomManager.withRoomLock(roomId, () =>
-      RoomManager.joinRoom(roomId, username.trim(), socket.id, password)
+      RoomManager.joinRoom(roomId, username.trim(), socket.id, password, userId)
     )
     if (!result.ok) {
       ack({ ok: false, error: result.error })
@@ -466,9 +483,14 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
     const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+    const userId = normalizeUserId(payload.userId)
     const name = typeof payload.name === 'string' ? payload.name.trim() : ''
     if (!username) {
       ack({ ok: false, error: 'Nombre requerido' })
+      return
+    }
+    if (!userId) {
+      ack({ ok: false, error: 'Identificador de usuario inválido' })
       return
     }
     if (await RoomManager.getRoomBySocket(socket.id) ||
@@ -482,6 +504,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       username,
       socket.id,
       name,
+      userId,
     )
     socket.leave('lobby')
     socket.join(tournamentChannel(tournament.tournamentId))
@@ -503,8 +526,13 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     }
     const tournamentId = payload.tournamentId.trim().toUpperCase()
     const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+    const userId = normalizeUserId(payload.userId)
     if (!tournamentId || !username) {
       ack({ ok: false, error: 'Código y nombre requeridos' })
+      return
+    }
+    if (!userId) {
+      ack({ ok: false, error: 'Identificador de usuario inválido' })
       return
     }
     if (RoomManager.getSpectatorRoom(socket.id) ||
@@ -514,7 +542,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
 
-    const result = await TournamentManager.joinTournament(tournamentId, username, socket.id)
+    const result = await TournamentManager.joinTournament(tournamentId, username, socket.id, userId)
     if (!result.ok) {
       ack({ ok: false, error: result.error })
       return

@@ -234,14 +234,22 @@ export function useSocket() {
   function emitCreateTournament(username: string, name: string): Promise<TournamentCreateAck> {
     return ackRequest<TournamentCreateAck>(
       'El servidor no respondió al crear el torneo',
-      done => socket.emit('tournament:create', { username, name }, done),
+      done => socket.emit('tournament:create', {
+        username,
+        userId: userStore.userId,
+        name,
+      }, done),
     )
   }
 
   function emitJoinTournament(tournamentId: string, username: string): Promise<TournamentJoinAck> {
     return ackRequest<TournamentJoinAck>(
       'El servidor no respondió al unirse al torneo',
-      done => socket.emit('tournament:join', { tournamentId, username }, done),
+      done => socket.emit('tournament:join', {
+        tournamentId,
+        username,
+        userId: userStore.userId,
+      }, done),
     )
   }
 
@@ -312,7 +320,12 @@ export function useSocket() {
         settled = true
         resolve({ ok: false, error: 'El servidor no respondió' })
       }, 8_000)
-      socket.emit('room:join', { roomId, username, password }, result => {
+      socket.emit('room:join', {
+        roomId,
+        username,
+        userId: userStore.userId,
+        password,
+      }, result => {
         if (settled) return
         settled = true
         window.clearTimeout(timeout)

@@ -51,6 +51,42 @@ test('assigns distinct default colors and allows changing them while waiting', a
   await RoomManager.removePlayer(guestSocket)
 })
 
+test('prevents the same browser user id from joining a room twice', async () => {
+  const hostSocket = `test-host-${randomUUID()}`
+  const guestSocket = `test-guest-${randomUUID()}`
+  const userId = randomUUID()
+  const room = await RoomManager.createRoom(
+    'Anfitrión',
+    hostSocket,
+    'Sin clones',
+    false,
+    undefined,
+    userId,
+  )
+
+  const duplicate = await RoomManager.joinRoom(
+    room.roomId,
+    'Anfitrión',
+    guestSocket,
+    undefined,
+    userId,
+  )
+  assert.equal(duplicate.ok, false)
+  if (!duplicate.ok) assert.match(duplicate.error, /otra pestaña|dispositivo/i)
+
+  const differentUser = await RoomManager.joinRoom(
+    room.roomId,
+    'Invitado',
+    guestSocket,
+    undefined,
+    randomUUID(),
+  )
+  assert.equal(differentUser.ok, true)
+
+  await RoomManager.removePlayer(hostSocket)
+  await RoomManager.removePlayer(guestSocket)
+})
+
 test('rejects a private room with the wrong password', async () => {
   const hostSocket = `test-host-${randomUUID()}`
   const guestSocket = `test-guest-${randomUUID()}`
