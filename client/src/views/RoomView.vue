@@ -126,6 +126,8 @@
         </span>
       </header>
 
+      <TvGameControls v-if="tvStore.enabled && !gameStore.isGameOver" />
+
       <main class="room__main" :class="`room__main--${gameStore.players.length}p`">
         <div class="room__side room__side--left">
           <PlayerPanel class="room__player room__player--mine" :player="orderedPlayers[0]" :my-slot="roomStore.mySlot" />
@@ -218,6 +220,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useTvModeStore } from '@/stores/tvStore'
 import { useTurnClock } from '@/composables/useTurnClock'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket, disconnectSocket } from '@/services/socket'
@@ -229,6 +232,7 @@ import SelectionBar from '@/components/SelectionBar.vue'
 import PlayerColorPicker from '@/components/PlayerColorPicker.vue'
 import MatchResultOverlay from '@/components/MatchResultOverlay.vue'
 import MatchClocks from '@/components/MatchClocks.vue'
+import TvGameControls from '@/components/TvGameControls.vue'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -236,6 +240,7 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
+const tvStore = useTvModeStore()
 const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame, emitSetColor } = useSocket()
 
 const roomId = computed(() => route.params.id as string)

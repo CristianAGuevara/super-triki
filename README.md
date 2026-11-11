@@ -65,6 +65,19 @@ un margen de 3 segundos antes de anunciar una desconexión, de modo que el relev
 normalmente pasa inadvertido. Los tiempos se pueden ajustar con
 `VITE_SOCKET_ROTATE_MS` y `VITE_SOCKET_ROTATE_JITTER_MS`.
 
+## Modo TV
+
+La página detecta televisores webOS, Tizen, Android TV, Fire TV y pantallas
+grandes sin puntero fino. En ese modo aparece una insignia `TV · OK` y se puede
+navegar por todos los controles con las flechas del mando; `OK`/`Enter`
+selecciona y `Atrás` cierra los diálogos abiertos. También se aplica un foco
+visible más grande y un ligero escalado para pantallas de 10 pies.
+
+Durante una partida aparece una barra **Control TV** con las fichas disponibles
+Grande, Mediana y Pequeña. Se elige una con `OK`, se mueve el foco a una casilla
+del tablero y se coloca con `OK`. Se puede forzar el modo con `?tv=1` o
+desactivarlo con `?tv=0`.
+
 ## Torneos
 
 Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o

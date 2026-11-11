@@ -1,5 +1,10 @@
 <template>
-  <div class="group-spectator">
+  <div
+    class="group-spectator"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Partida del torneo en modo espectador"
+  >
     <header class="group-spectator__header">
       <div class="group-spectator__identity">
         <span class="group-spectator__eyebrow">Modo espectador</span>
@@ -8,7 +13,12 @@
           Turno: {{ turnLabel }}
         </span>
       </div>
-      <button type="button" class="group-spectator__back" @click="emit('close')">
+      <button
+        type="button"
+        class="group-spectator__back"
+        data-tv-close
+        @click="emit('close')"
+      >
         Volver a la sala de espera
       </button>
     </header>

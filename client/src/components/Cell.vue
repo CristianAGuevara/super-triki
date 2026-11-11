@@ -4,6 +4,9 @@
     data-board-cell
     :data-row="row"
     :data-col="col"
+    :tabindex="tvStore.enabled && !store.isGameOver ? 0 : undefined"
+    :role="tvStore.enabled ? 'button' : undefined"
+    :aria-label="cellLabel"
     :class="{
       'cell--can-drop': canDropAny,
       'cell--hover': isHovered,
@@ -13,6 +16,8 @@
     @dragenter="handleDragEnter"
     @drop="handleDrop"
     @click="handleCellClick"
+    @keydown.enter.prevent="handleCellClick"
+    @keydown.space.prevent="handleCellClick"
   >
     <div class="cell__stack">
       <!-- Rendered large→medium→small so large is painted first (back), small on top -->
@@ -49,6 +54,7 @@ import type { Size } from '@/types/game'
 import { SIZE_ORDER } from '@/types/game'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
+import { useTvModeStore } from '@/stores/tvStore'
 import { useDragDrop } from '@/composables/useDragDrop'
 import Piece from './Piece.vue'
 
@@ -59,7 +65,17 @@ const props = defineProps<{
 
 const store = useGameStore()
 const roomStore = useRoomStore()
+const tvStore = useTvModeStore()
 const { onDragOver, onDrop } = useDragDrop(props.row, props.col)
+
+const cellLabel = computed(() => {
+  const base = `Fila ${props.row + 1}, columna ${props.col + 1}`
+  if (!store.selectedPiece) return base
+  const size = store.selectedPiece.size === 'large'
+    ? 'grande'
+    : store.selectedPiece.size === 'medium' ? 'mediana' : 'pequeña'
+  return `${base}. Pulsa OK para colocar la ficha ${size}`
+})
 
 const isHovered = ref(false)
 
@@ -152,6 +168,13 @@ function handleCellClick() {
 .cell--hover {
   border-color: var(--drop-border-strong);
   box-shadow: var(--shadow-glow);
+}
+
+.cell:focus {
+  z-index: 2;
+  outline: 4px solid var(--accent-primary);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent-primary) 13%, transparent), var(--shadow-glow);
 }
 
 /* Stack: all rings share the same center */

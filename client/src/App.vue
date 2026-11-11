@@ -9,6 +9,13 @@
     </RouterLink>
 
     <div class="header-tools">
+      <span
+        v-if="tvStore.enabled"
+        class="tv-mode-badge"
+        title="Modo TV activo: flechas para moverte, OK para seleccionar. Añade ?tv=0 a la URL para desactivarlo."
+      >
+        TV · OK
+      </span>
       <div class="audio-control" role="group" aria-label="Control de sonido">
         <button
           class="audio-control__mute"
@@ -25,6 +32,7 @@
           step="0.01"
           :value="audioStore.volume"
           aria-label="Volumen"
+          data-tv-skip
           @input="setVolume"
         />
         <span class="audio-control__value">{{ Math.round(audioStore.volume * 100) }}%</span>
@@ -49,6 +57,14 @@
   </header>
 
   <ConnectionBanner />
+
+  <Transition name="tv-hint">
+    <div v-if="tvStore.hintVisible" class="tv-mode-hint" role="status">
+      <strong>Modo TV</strong>
+      <span>Flechas para moverte · OK para seleccionar</span>
+    </div>
+  </Transition>
+
   <RouterView />
 </template>
 
@@ -58,13 +74,18 @@ import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useConnectionStore } from '@/stores/connectionStore'
+import { useTvModeStore } from '@/stores/tvStore'
+import { useTvNavigation } from '@/composables/useTvNavigation'
 import { connectSocket, getSocket } from '@/services/socket'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
 
 const themeStore = useThemeStore()
 const audioStore = useAudioStore()
 const connectionStore = useConnectionStore()
+const tvStore = useTvModeStore()
 const route = useRoute()
+const TV_HINT_KEY = 'st_tv_hint_seen'
+useTvNavigation()
 const socket = getSocket()
 const isSpectatorRoute = computed(() => route.name === 'spectate')
 function envNumber(value: unknown, fallback: number): number {
@@ -353,6 +374,16 @@ function setVolume(event: Event) {
 }
 
 onMounted(() => {
+  if (tvStore.enabled) {
+    try {
+      if (!window.localStorage.getItem(TV_HINT_KEY)) {
+        tvStore.showHint()
+        window.localStorage.setItem(TV_HINT_KEY, '1')
+      }
+    } catch {
+      tvStore.showHint()
+    }
+  }
   window.addEventListener('pointerdown', activateAudio)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
@@ -401,6 +432,17 @@ onUnmounted(() => {
 :focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
+}
+
+html.tv-mode :focus {
+  outline: 3px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+@media (min-width: 1200px) {
+  html.tv-mode body {
+    zoom: 1.12;
+  }
 }
 
 body {
@@ -475,6 +517,58 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.tv-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--accent-primary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+
+.tv-mode-hint {
+  position: fixed;
+  z-index: 520;
+  bottom: 24px;
+  left: 50%;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  max-width: calc(100vw - 32px);
+  padding: 11px 16px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  color: var(--text-secondary);
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.tv-mode-hint strong {
+  color: var(--accent-primary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.tv-hint-enter-active,
+.tv-hint-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.tv-hint-enter-from,
+.tv-hint-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 10px);
 }
 
 .audio-control {
