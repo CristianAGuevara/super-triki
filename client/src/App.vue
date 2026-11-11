@@ -47,6 +47,7 @@
     </div>
   </header>
 
+  <ConnectionBanner />
   <RouterView />
 </template>
 
@@ -55,11 +56,106 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useConnectionStore } from '@/stores/connectionStore'
+import { useLobbyStore } from '@/stores/lobbyStore'
+import { connectSocket, getSocket } from '@/services/socket'
+import ConnectionBanner from '@/components/ConnectionBanner.vue'
 
 const themeStore = useThemeStore()
 const audioStore = useAudioStore()
+const connectionStore = useConnectionStore()
+const lobbyStore = useLobbyStore()
 const route = useRoute()
+const socket = getSocket()
 const isSpectatorRoute = computed(() => route.name === 'spectate')
+let healthTimer: number | undefined
+
+function handleConnect() {
+  connectionStore.setConnected(true)
+}
+
+function handleDisconnect(reason: string) {
+  if (reason === 'io client disconnect') {
+    connectionStore.setConnected(false)
+    return
+  }
+  if (reason === 'io server disconnect') {
+    connectionStore.setDisconnected(
+      'La sesión se cerró; puede estar abierta en otra pestaña.',
+      true,
+    )
+    return
+  }
+  connectionStore.setDisconnected()
+}
+
+function handleConnectError(error: Error) {
+  connectionStore.setDisconnected('No se pudo conectar con el servidor')
+  connectionStore.setError(error.message)
+}
+
+function handleReconnectAttempt(attempt: number) {
+  connectionStore.setReconnecting(attempt)
+}
+
+function checkConnection() {
+  if (document.hidden || connectionStore.blocked) return
+  if (!socket.connected) {
+    connectionStore.setDisconnected()
+    socket.connect()
+    return
+  }
+
+  let answered = false
+  const timeout = window.setTimeout(() => {
+    if (answered) return
+    answered = true
+    connectionStore.setDisconnected('La conexión dejó de responder')
+    socket.disconnect()
+    window.setTimeout(() => {
+      connectionStore.setReconnecting()
+      socket.connect()
+    }, 200)
+  }, 8_000)
+
+  socket.emit('rooms:get', rooms => {
+    if (answered) return
+    answered = true
+    window.clearTimeout(timeout)
+    lobbyStore.setRooms(rooms)
+    connectionStore.setConnected(true)
+  })
+}
+
+function handleVisibilityChange() {
+  if (document.hidden || connectionStore.blocked) return
+  connectionStore.setConnected(socket.connected)
+  if (!socket.connected) {
+    connectionStore.setReconnecting()
+    socket.connect()
+  } else {
+    checkConnection()
+  }
+}
+
+function handleOnline() {
+  if (connectionStore.blocked) return
+  if (!socket.connected) {
+    connectionStore.setReconnecting()
+    socket.connect()
+  } else {
+    checkConnection()
+  }
+}
+
+function handleOffline() {
+  connectionStore.setDisconnected('Sin conexión a internet')
+}
+
+socket.on('connect', handleConnect)
+socket.on('disconnect', handleDisconnect)
+socket.on('connect_error', handleConnectError)
+socket.io.on('reconnect_attempt', handleReconnectAttempt)
 
 function selectTheme(theme: 'neon' | 'sunset') {
   audioStore.playSfx('click')
@@ -75,8 +171,27 @@ function setVolume(event: Event) {
   audioStore.setVolume(Number((event.target as HTMLInputElement).value))
 }
 
-onMounted(() => window.addEventListener('pointerdown', activateAudio))
-onUnmounted(() => window.removeEventListener('pointerdown', activateAudio))
+onMounted(() => {
+  window.addEventListener('pointerdown', activateAudio)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('online', handleOnline)
+  window.addEventListener('offline', handleOffline)
+  connectionStore.setConnected(socket.connected)
+  connectSocket()
+  healthTimer = window.setInterval(checkConnection, 15_000)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointerdown', activateAudio)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('online', handleOnline)
+  window.removeEventListener('offline', handleOffline)
+  if (healthTimer !== undefined) window.clearInterval(healthTimer)
+  socket.off('connect', handleConnect)
+  socket.off('disconnect', handleDisconnect)
+  socket.off('connect_error', handleConnectError)
+  socket.io.off('reconnect_attempt', handleReconnectAttempt)
+})
 </script>
 
 <style>

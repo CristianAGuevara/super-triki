@@ -40,6 +40,14 @@ para desarrollo con una sola instancia, pero no para producción distribuida.
   disponibles. El color se conserva durante la partida y no puede repetirse
   entre jugadores de la misma sala.
 
+## Conexión
+
+La aplicación mantiene la conexión con el servidor y comprueba periódicamente
+que siga activa. Si se pierde, aparece un aviso global con el motivo y un botón
+para reintentar. Salas y torneos se recuperan automáticamente sin recargar la
+página; si la sesión se abrió en otra pestaña, el aviso permite decidir cuándo
+volver a conectarla.
+
 ## Torneos
 
 Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o

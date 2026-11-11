@@ -1,7 +1,5 @@
 <template>
   <div class="tournament">
-    <ConnectionBanner />
-
     <header class="tournament__header">
       <div class="tournament__identity">
         <span class="tournament__eyebrow">Modo torneo</span>
@@ -287,14 +285,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTournamentStore } from '@/stores/tournamentStore'
 import { useUserStore } from '@/stores/userStore'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket } from '@/services/socket'
 import type { TournamentFormat, TournamentGroupSnapshot } from '@/types/tournament'
-import ConnectionBanner from '@/components/ConnectionBanner.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -498,11 +495,11 @@ async function copyLink() {
   }
 }
 
-async function goHome() {
+function goHome() {
   const tournamentId = store.tournamentId
   store.clearSession()
   store.reset()
-  if (tournamentId) await emitLeaveTournament(tournamentId)
+  if (tournamentId) void emitLeaveTournament(tournamentId)
   void router.push('/')
 }
 
@@ -543,10 +540,20 @@ onMounted(async () => {
   loading.value = false
 })
 
+watch(
+  () => store.error,
+  message => {
+    if (message) actionError.value = message
+  },
+)
+
 onUnmounted(() => {
   const nextRoute = router.currentRoute.value
   if (nextRoute.name === 'room' || nextRoute.name === 'tournament') return
-  if (store.tournamentId) void emitLeaveTournament(store.tournamentId)
+  const tournamentId = store.tournamentId
+  if (tournamentId) void emitLeaveTournament(tournamentId)
+  store.clearSession()
+  store.reset()
 })
 </script>
 

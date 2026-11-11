@@ -1,6 +1,5 @@
 <template>
   <div class="room">
-    <ConnectionBanner />
     <SelectionBar />
 
     <Transition name="overlay">
@@ -214,7 +213,6 @@ import Board from '@/components/Board.vue'
 import PlayerPanel from '@/components/PlayerPanel.vue'
 import GameStatus from '@/components/GameStatus.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
-import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import SelectionBar from '@/components/SelectionBar.vue'
 import PlayerColorPicker from '@/components/PlayerColorPicker.vue'
 

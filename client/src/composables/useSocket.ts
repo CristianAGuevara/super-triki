@@ -33,10 +33,7 @@ export function useSocket() {
   const tournamentStore = useTournamentStore()
 
   async function resyncRoomAfterReconnect() {
-    if (!roomStore.roomId) {
-      roomStore.setConnection(true)
-      return
-    }
+    if (!roomStore.roomId) return
 
     if (roomStore.isSpectator) {
       const result = await emitJoinSpectator(roomStore.roomId)
@@ -66,8 +63,43 @@ export function useSocket() {
     roomStore.setConnection(true)
   }
 
-  function resumeSocketWhenVisible() {
-    if (!document.hidden && roomStore.roomId && !socket.connected) socket.connect()
+  async function resyncTournamentAfterReconnect() {
+    if (!tournamentStore.tournamentId || !tournamentStore.reconnectToken) return
+
+    const result = await emitReconnectTournament(
+      tournamentStore.tournamentId,
+      tournamentStore.reconnectToken,
+    )
+    if (!result.ok) {
+      tournamentStore.setError(result.error ?? 'No se pudo recuperar el torneo')
+      return
+    }
+    if (!result.tournamentId || !result.participantId || !result.reconnectToken || !result.state) {
+      return
+    }
+
+    tournamentStore.setFromAck(
+      result.tournamentId,
+      result.participantId,
+      result.reconnectToken,
+      result.state,
+    )
+
+    if (result.assignment) {
+      if (roomStore.roomId === result.assignment.roomId) {
+        if (result.assignment.roomState) roomStore.setRoomState(result.assignment.roomState)
+        gameStore.applyServerState(result.assignment.gameState)
+        roomStore.setPhase('playing')
+      } else {
+        await applyTournamentAssignment(result.assignment)
+      }
+    }
+  }
+
+  async function resyncAfterReconnect() {
+    roomStore.setConnection(socket.connected)
+    if (roomStore.roomId) await resyncRoomAfterReconnect()
+    await resyncTournamentAfterReconnect()
   }
 
   async function applyTournamentAssignment(assignment: TournamentRoomAssignment): Promise<boolean> {
@@ -96,12 +128,14 @@ export function useSocket() {
     return true
   }
 
+  function handleSocketDisconnect() {
+    roomStore.setConnection(false)
+  }
+
   function registerListeners() {
     roomStore.setConnection(socket.connected)
-    socket.on('connect', resyncRoomAfterReconnect)
-    socket.on('disconnect', () => roomStore.setConnection(false))
-    document.addEventListener('visibilitychange', resumeSocketWhenVisible)
-    window.addEventListener('online', resumeSocketWhenVisible)
+    socket.on('connect', resyncAfterReconnect)
+    socket.on('disconnect', handleSocketDisconnect)
 
     socket.on('rooms:list', rooms => {
       lobbyStore.setRooms(rooms)
@@ -154,10 +188,8 @@ export function useSocket() {
   }
 
   function removeListeners() {
-    socket.off('connect', resyncRoomAfterReconnect)
-    socket.off('disconnect')
-    document.removeEventListener('visibilitychange', resumeSocketWhenVisible)
-    window.removeEventListener('online', resumeSocketWhenVisible)
+    socket.off('connect', resyncAfterReconnect)
+    socket.off('disconnect', handleSocketDisconnect)
     socket.off('rooms:list')
     socket.off('room:state')
     socket.off('game:state')
