@@ -2,6 +2,15 @@
   <div class="room">
     <SelectionBar />
 
+    <MatchResultOverlay
+      v-if="showMatchResult"
+      :winner-name="resultWinnerName"
+      :is-draw="resultIsDraw"
+      :countdown="resultCountdown"
+      :accent="resultAccent"
+      :destination-label="resultDestination"
+    />
+
     <Transition name="overlay">
       <div v-if="roomStore.error" class="room__notice" role="alert">
         <span>{{ roomStore.error }}</span>
@@ -100,7 +109,7 @@
     </div>
 
     <!-- ── Game ── -->
-    <template v-else-if="roomStore.phase === 'playing' || roomStore.phase === 'finished' || (roomStore.tournament && gameStore.isGameOver)">
+    <template v-else-if="roomStore.phase === 'playing' || roomStore.phase === 'finished'">
       <header class="room__header">
         <span class="room__code">
           {{ roomStore.tournament?.name || roomStore.name || roomId }}
@@ -130,7 +139,7 @@
         </div>
       </main>
 
-      <GameStatus @rematch="handleRematch" />
+      <GameStatus v-if="!showMatchResult" @rematch="handleRematch" />
     </template>
 
     <!-- ── Rules shown when the game starts ── -->
@@ -215,6 +224,7 @@ import GameStatus from '@/components/GameStatus.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
 import SelectionBar from '@/components/SelectionBar.vue'
 import PlayerColorPicker from '@/components/PlayerColorPicker.vue'
+import MatchResultOverlay from '@/components/MatchResultOverlay.vue'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -227,7 +237,10 @@ const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame,
 const roomId = computed(() => route.params.id as string)
 const mountedRoomId = String(route.params.id).toUpperCase()
 const copied = ref<'player' | 'spectator' | null>(null)
-let tournamentRedirectTimer: ReturnType<typeof setTimeout> | null = null
+const showMatchResult = ref(false)
+const resultCountdown = ref(3)
+let resultInterval: ReturnType<typeof setInterval> | null = null
+const RESULT_SECONDS = 3
 const choosingColor = ref<PlayerColorId | null>(null)
 const showRules = ref(false)
 const RULES_STORAGE_KEY = 'st_rules_seen'
@@ -280,6 +293,24 @@ const lastGameResult = computed(() => {
     ?? (winner ? `Jugador ${winner}` : 'Partida terminada')
 })
 
+const resultIsDraw = computed(() => !gameStore.winResult)
+const resultWinnerName = computed(() => {
+  const winner = gameStore.winResult?.winner
+  if (!winner) return ''
+  return roomStore.players.find(player => player.slot === winner)?.username
+    ?? gameStore.playerMeta[winner]?.label
+    ?? `Jugador ${winner}`
+})
+const resultAccent = computed(() => {
+  const winner = gameStore.winResult?.winner
+  return winner
+    ? gameStore.playerMeta[winner]?.color ?? 'var(--accent-primary)'
+    : 'var(--accent-secondary)'
+})
+const resultDestination = computed(() =>
+  roomStore.tournament ? 'la sala de espera del torneo' : 'la sala de espera'
+)
+
 watch(() => roomStore.phase, phase => {
   if (phase !== 'playing' || roomStore.tournament ||
       rulesShownCount.value >= RULES_DISPLAY_LIMIT) return
@@ -292,17 +323,36 @@ watch(() => roomStore.phase, phase => {
   showRules.value = true
 }, { immediate: true })
 
-watch(() => gameStore.isGameOver, over => {
-  if (tournamentRedirectTimer) {
-    clearTimeout(tournamentRedirectTimer)
-    tournamentRedirectTimer = null
+function stopResultCountdown() {
+  if (resultInterval) {
+    clearInterval(resultInterval)
+    resultInterval = null
   }
-  if (!over || !roomStore.tournament) return
+}
 
-  tournamentRedirectTimer = setTimeout(() => {
-    if (!roomStore.tournament) return
+function finishMatchResult() {
+  stopResultCountdown()
+  showMatchResult.value = false
+
+  if (roomStore.tournament) {
     void router.push(`/tournament/${roomStore.tournament.id}`)
-  }, 2200)
+  }
+}
+
+watch(() => gameStore.isGameOver, over => {
+  stopResultCountdown()
+
+  if (!over) {
+    showMatchResult.value = false
+    return
+  }
+
+  showMatchResult.value = true
+  resultCountdown.value = RESULT_SECONDS
+  resultInterval = setInterval(() => {
+    resultCountdown.value -= 1
+    if (resultCountdown.value <= 0) finishMatchResult()
+  }, 1000)
 }, { immediate: true })
 
 const turnColor = computed(() => {
@@ -349,10 +399,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (tournamentRedirectTimer) {
-    clearTimeout(tournamentRedirectTimer)
-    tournamentRedirectTimer = null
-  }
+  stopResultCountdown()
 
   const nextRoute = router.currentRoute.value
   const nextRoomId = String(nextRoute.params.id ?? '').toUpperCase()
