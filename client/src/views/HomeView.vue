@@ -126,6 +126,36 @@
             <p class="home__empty-sub">{{ emptyListingSubtitle }}</p>
           </div>
         </div>
+
+        <section class="home__guide" aria-label="Cómo se juega">
+          <div class="home__guide-heading">
+            <span class="home__eyebrow">Cómo se juega</span>
+            <span class="home__guide-note">Tres formas de ganar</span>
+          </div>
+          <div class="home__guide-grid">
+            <article class="home__guide-card">
+              <span class="home__guide-icon home__guide-icon--line" aria-hidden="true">≡</span>
+              <div>
+                <strong>Mismo tamaño en línea</strong>
+                <p>Tres fichas iguales en fila, columna o diagonal.</p>
+              </div>
+            </article>
+            <article class="home__guide-card">
+              <span class="home__guide-icon home__guide-icon--order" aria-hidden="true">↗</span>
+              <div>
+                <strong>Tamaños en orden</strong>
+                <p>Grande, mediana y pequeña en secuencia.</p>
+              </div>
+            </article>
+            <article class="home__guide-card">
+              <span class="home__guide-icon home__guide-icon--stack" aria-hidden="true">◎</span>
+              <div>
+                <strong>Casilla completa</strong>
+                <p>Reúne los tres tamaños en una misma casilla.</p>
+              </div>
+            </article>
+          </div>
+        </section>
       </section>
 
       <!-- ── Right: create + join private ── -->
@@ -683,9 +713,9 @@ function showNotice(message: string) {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 24px 24px 40px;
+  padding: 26px clamp(18px, 4vw, 40px) 56px;
   gap: 24px;
-  max-width: 960px;
+  max-width: 1120px;
   margin: 0 auto;
 }
 
@@ -813,13 +843,13 @@ function showNotice(message: string) {
 /* ── Body columns ── */
 .home__body {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
   align-items: start;
   flex: 1;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 900px) {
   .home__body { grid-template-columns: 1fr; }
 }
 
@@ -1051,16 +1081,93 @@ function showNotice(message: string) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 200px;
+  min-height: 176px;
   color: var(--text-muted);
   font-size: 14px;
   text-align: center;
   border: 1.5px dashed var(--cell-border);
   border-radius: 12px;
+  background: linear-gradient(180deg, transparent, var(--surface-muted));
 }
 
 .home__empty-icon { font-size: 36px; color: var(--text-faint); line-height: 1; }
 .home__empty-sub  { font-size: 12px; color: var(--text-secondary); }
+
+/* ── Quick rules ── */
+.home__guide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.home__guide-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home__guide-note {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.home__guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.home__guide-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 98px;
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 13px;
+  background: var(--surface-muted);
+}
+
+.home__guide-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: var(--cell-bg);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.home__guide-icon--line { color: var(--player-1-color); }
+.home__guide-icon--order { color: var(--player-2-color); }
+.home__guide-icon--stack { color: var(--accent-secondary); }
+
+.home__guide-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.home__guide-card p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .home__guide-grid { grid-template-columns: 1fr; }
+  .home__guide-card { min-height: 0; }
+}
 
 /* ── Right side cards ── */
 .home__section--actions { gap: 12px; }
@@ -1222,7 +1329,12 @@ function showNotice(message: string) {
   transition: transform 0.15s, opacity 0.15s;
 }
 
-.home__btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.home__btn:disabled {
+  border: 1px solid var(--line-soft);
+  background: var(--control-bg);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
 .home__btn:not(:disabled):hover { transform: scale(1.02); }
 
 .home__btn--primary {

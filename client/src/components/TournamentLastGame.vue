@@ -62,6 +62,13 @@
           </span>
         </div>
       </div>
+
+      <div class="last-game__summary">
+        <span class="last-game__summary-label">Cómo terminó</span>
+        <strong>{{ conditionLabel }}</strong>
+        <p>{{ summaryText }}</p>
+        <small>Las fichas con brillo dorado forman la jugada ganadora.</small>
+      </div>
     </div>
   </section>
 </template>
@@ -87,6 +94,27 @@ const resultLabel = computed(() => {
     return `Ganó ${winnerName.value} por tiempo`
   }
   return `Ganó ${winnerName.value}`
+})
+
+const conditionLabel = computed(() => {
+  if (!props.result.game.winResult) return 'Tablero completo'
+  const labels = {
+    'same-size': 'Línea del mismo tamaño',
+    'ordered-sequence': 'Secuencia ordenada',
+    'complete-cell': 'Casilla completa',
+    timeout: 'Tiempo agotado',
+  }
+  return labels[props.result.game.winResult.condition]
+})
+
+const summaryText = computed(() => {
+  if (!props.result.game.winResult) {
+    return 'Ya no quedaban movimientos posibles.'
+  }
+  if (props.result.game.winResult.condition === 'timeout') {
+    return `${winnerName.value} ganó porque su rival agotó el tiempo.`
+  }
+  return `${winnerName.value} encontró la combinación ganadora.`
 })
 
 function pieceAt(row: number, col: number, size: Size): Piece | null {
@@ -160,10 +188,10 @@ function colorFor(slot: Player): string {
 }
 
 .last-game__body {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(150px, 180px) minmax(190px, 1fr);
   align-items: center;
   gap: 18px;
-  flex-wrap: wrap;
 }
 
 .last-game__board {
@@ -290,6 +318,53 @@ function colorFor(slot: Player): string {
   text-transform: uppercase;
 }
 
+.last-game__summary {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.last-game__summary-label {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.last-game__summary strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.last-game__summary p {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.last-game__summary small {
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+  .last-game__body {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .last-game__summary {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 520px) {
   .last-game {
     padding: 12px;
@@ -301,7 +376,8 @@ function colorFor(slot: Player): string {
   }
 
   .last-game__body {
-    justify-content: center;
+    grid-template-columns: 1fr;
+    justify-items: center;
   }
 
   .last-game__players {
@@ -309,6 +385,11 @@ function colorFor(slot: Player): string {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .last-game__summary {
+    width: 100%;
+    text-align: center;
   }
 
   .last-game__winner {

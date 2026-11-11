@@ -20,8 +20,10 @@
 
     <!-- ── Lobby: waiting for players ── -->
     <div v-if="roomStore.phase === 'waiting'" class="lobby">
-      <h2 class="lobby__title">Sala creada</h2>
-      <p class="lobby__hint">Comparte el código con tus amigos</p>
+      <h2 class="lobby__title">{{ gameStore.isGameOver ? 'Sala de espera' : 'Sala creada' }}</h2>
+      <p class="lobby__hint">
+        {{ gameStore.isGameOver ? 'Revisa el resultado y prepara la revancha.' : 'Comparte el código con tus amigos.' }}
+      </p>
 
       <div class="lobby__code">{{ roomId }}</div>
 
@@ -493,12 +495,30 @@ function closeRules() {
 
 /* ── Lobby ── */
 .lobby {
-  width: min(100%, 560px);
+  position: relative;
+  width: min(100%, 700px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  margin-top: 36px;
+  gap: 18px;
+  margin-top: 24px;
+  padding: clamp(22px, 4vw, 36px);
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent-primary) 9%, transparent), transparent 42%),
+    var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.lobby::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--gradient-brand);
+  opacity: 0.9;
 }
 
 .room__notice {

@@ -2,6 +2,10 @@
   <div class="spectator">
     <header class="spectator__header">
       <div class="spectator__identity">
+        <span class="spectator__eyebrow">
+          <span class="spectator__live-dot" aria-hidden="true" />
+          Modo espectador
+        </span>
         <span class="spectator__room-name">{{ roomStore.name || 'Sala en directo' }}</span>
         <span class="spectator__room-id">#{{ roomId }}</span>
       </div>
@@ -147,14 +151,19 @@ function goHome() {
 
 .spectator__header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  width: min(700px, 100%);
+  width: min(100%, 1040px);
   margin: 0 auto 14px;
 }
 
-.spectator__identity { min-width: 0; }
+.spectator__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
 
 .spectator__room-name {
   color: var(--text-secondary);
@@ -205,8 +214,9 @@ function goHome() {
 
 .spectator__header-right {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
+  padding-top: 2px;
   white-space: nowrap;
 }
 
@@ -401,13 +411,15 @@ function goHome() {
   }
 
   .spectator__header {
-    width: min(700px, 100%);
-    height: 34px;
+    width: min(100%, 1040px);
+    height: 44px;
     margin-bottom: 7px;
   }
 
   .spectator h1 { font-size: clamp(18px, 2.2vw, 28px); }
   .spectator__eyebrow { font-size: 8px; }
+  .spectator__room-name { font-size: 12px; }
+  .spectator__room-id { font-size: 9px; }
   .spectator__status { padding: 5px 10px; font-size: 8px; }
 
   .spectator__main {
@@ -417,7 +429,7 @@ function goHome() {
     gap: 24px;
     width: fit-content;
     max-width: 100%;
-    height: calc(100vh - 92px);
+    height: calc(100vh - 106px);
     margin: 0 auto;
   }
 
@@ -425,7 +437,20 @@ function goHome() {
 
 @media (max-width: 700px), (orientation: portrait) {
   .spectator { padding: 16px; }
-  .spectator__header { align-items: flex-start; }
+  .spectator__header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .spectator__identity { width: 100%; }
+  .spectator__room-name { font-size: 15px; }
+  .spectator__header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 0;
+  }
   .spectator__main { display: flex; flex-direction: column; height: auto; min-height: 0; }
   .spectator__center { order: 1; width: 100%; }
   .spectator__side--left { order: 2; width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }

@@ -37,6 +37,7 @@
         class="theme-switcher__button"
         :class="{ 'theme-switcher__button--active': themeStore.theme === option.id }"
         :aria-label="`Usar tema ${option.label}`"
+        :title="option.label"
         :aria-pressed="themeStore.theme === option.id"
         @click="selectTheme(option.id)"
       >
@@ -392,6 +393,16 @@ onUnmounted(() => {
   padding: 0;
 }
 
+::selection {
+  background: color-mix(in srgb, var(--accent-primary) 32%, transparent);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 body {
   background-color: var(--page-bg);
   background-image: var(--page-gradient);
@@ -399,6 +410,8 @@ body {
   color: var(--text-primary);
   font-family: 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   transition: background-color 0.35s ease, color 0.35s ease;
 }
 </style>
