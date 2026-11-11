@@ -32,39 +32,40 @@ export function useSocket() {
   const userStore       = useUserStore()
   const tournamentStore = useTournamentStore()
 
-  async function resyncRoomAfterReconnect() {
-    if (!roomStore.roomId) return
+  async function resyncRoomAfterReconnect(): Promise<boolean> {
+    if (!roomStore.roomId) return true
 
     if (roomStore.isSpectator) {
       const result = await emitJoinSpectator(roomStore.roomId)
       if (result.ok && result.roomState) {
         roomStore.setRoomState(result.roomState)
         roomStore.setConnection(true)
-      } else {
-        roomStore.setConnection(false)
-        if (result.error) roomStore.setError(result.error)
+        return true
       }
-      return
+      roomStore.setConnection(false)
+      if (result.error) roomStore.setError(result.error)
+      return false
     }
 
-    if (!userStore.username) return
+    if (!userStore.username) return false
     const result = roomStore.reconnectToken
       ? await emitReconnectRoom(roomStore.roomId, roomStore.reconnectToken)
       : await emitJoinRoom(roomStore.roomId, userStore.username, roomStore.roomPassword)
     if (!result.ok) {
       roomStore.setConnection(false)
       roomStore.setError(result.error ?? 'No se pudo recuperar la sala')
-      return
+      return false
     }
     if (result.roomState) roomStore.setRoomState(result.roomState)
     if (result.playerSlot && result.roomId) {
       roomStore.setFromAck(result.roomId, result.playerSlot, roomStore.roomPassword, result.reconnectToken)
     }
     roomStore.setConnection(true)
+    return true
   }
 
-  async function resyncTournamentAfterReconnect() {
-    if (!tournamentStore.tournamentId || !tournamentStore.reconnectToken) return
+  async function resyncTournamentAfterReconnect(): Promise<boolean> {
+    if (!tournamentStore.tournamentId || !tournamentStore.reconnectToken) return true
 
     const result = await emitReconnectTournament(
       tournamentStore.tournamentId,
@@ -72,10 +73,10 @@ export function useSocket() {
     )
     if (!result.ok) {
       tournamentStore.setError(result.error ?? 'No se pudo recuperar el torneo')
-      return
+      return false
     }
     if (!result.tournamentId || !result.participantId || !result.reconnectToken || !result.state) {
-      return
+      return false
     }
 
     tournamentStore.setFromAck(
@@ -91,15 +92,31 @@ export function useSocket() {
         gameStore.applyServerState(result.assignment.gameState)
         roomStore.setPhase('playing')
       } else {
-        await applyTournamentAssignment(result.assignment)
+        return applyTournamentAssignment(result.assignment)
       }
     }
+    return true
+  }
+
+  function resyncDelay(ms: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, ms))
   }
 
   async function resyncAfterReconnect() {
-    roomStore.setConnection(socket.connected)
-    if (roomStore.roomId) await resyncRoomAfterReconnect()
-    await resyncTournamentAfterReconnect()
+    if (!socket.connected) {
+      roomStore.setConnection(false)
+      return
+    }
+
+    roomStore.setConnection(true)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (!socket.connected) break
+      const roomReady = await resyncRoomAfterReconnect()
+      const tournamentReady = await resyncTournamentAfterReconnect()
+      if (roomReady && tournamentReady) return
+      if (attempt < 2) await resyncDelay(700 * (attempt + 1))
+    }
+    if (roomStore.roomId) roomStore.setConnection(false)
   }
 
   async function applyTournamentAssignment(assignment: TournamentRoomAssignment): Promise<boolean> {

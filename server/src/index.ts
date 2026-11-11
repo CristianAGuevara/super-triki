@@ -20,6 +20,11 @@ const httpServer = createServer(app)
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   path: SOCKET_PATH,
   cors: { origin: FRONTEND_URL, methods: ['GET', 'POST'] },
+  // Detect half-open connections sooner than the 25s/20s defaults. Combined
+  // with the client watchdog this keeps rooms and clocks from waiting on a
+  // socket that the network silently dropped.
+  pingInterval: 10_000,
+  pingTimeout: 20_000,
 })
 
 if (!roomRedisEnabled) {

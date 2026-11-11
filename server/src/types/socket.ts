@@ -140,6 +140,7 @@ export interface ClientToServerEvents {
   'game:rematch':(payload: RematchPayload, ack: (res: GameControlAck) => void) => void
   'game:start':  (payload: GameStartPayload, ack: (res: GameControlAck) => void) => void
   'game:finish': (payload: GameStartPayload, ack: (res: GameControlAck) => void) => void
+  'connection:ping': (ack: (res: { ok: boolean }) => void) => void
   'rooms:get':   (ack: (rooms: PublicRoomInfo[]) => void) => void
 }
 

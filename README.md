@@ -50,11 +50,14 @@ sigue usando el token de sesión y recupera la plaza existente.
 
 ## Conexión
 
-La aplicación mantiene la conexión con el servidor y comprueba periódicamente
-que siga activa. Si se pierde, aparece un aviso global con el motivo y un botón
-para reintentar. Salas y torneos se recuperan automáticamente sin recargar la
-página; si la sesión se abrió en otra pestaña, el aviso permite decidir cuándo
-volver a conectarla.
+La aplicación mantiene una única conexión global con el servidor y comprueba
+cada 10 segundos que siga activa con un latido ligero. Si el socket queda
+“medio abierto” (la red desaparece sin cerrar el WebSocket), el cliente lo
+detecta, lo reinicia y vuelve a cargar el estado de la sala o del torneo. Si se
+pierde la conexión, aparece un aviso global con el motivo y un botón para
+reintentar. Salas y torneos se recuperan automáticamente sin recargar la página;
+si la sesión se abrió en otra pestaña, el aviso permite decidir cuándo volver a
+conectarla.
 
 Para ocultar el cierre de 300 segundos de Vercel Hobby, el cliente renueva el
 socket de forma programada entre los 3:30 y 4:00 minutos. El servidor mantiene

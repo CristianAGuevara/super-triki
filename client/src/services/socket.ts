@@ -56,6 +56,9 @@ export function waitForSocketConnection(timeoutMs = 12_000): Promise<boolean> {
 }
 
 export function disconnectSocket(): void {
+  // Keep the singleton alive for the whole app lifetime. Views create and
+  // destroy room state, but App.vue monitors this exact socket. Replacing it
+  // here used to leave the global connection watchdog attached to an old,
+  // disconnected instance while the active view used a new one.
   _socket?.disconnect()
-  _socket = null
 }

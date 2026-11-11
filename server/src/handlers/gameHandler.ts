@@ -254,6 +254,12 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
   socket.join('lobby')
   void getPublicListings().then(listings => socket.emit('rooms:list', listings))
 
+  // ── connection:ping ──────────────────────────────────────────
+  // Lightweight watchdog used by the client to detect half-open sockets.
+  socket.on('connection:ping', ack => {
+    ack({ ok: true })
+  })
+
   // ── rooms:get ────────────────────────────────────────────────
   socket.on('rooms:get', async ack => {
     ack(await getPublicListings())
