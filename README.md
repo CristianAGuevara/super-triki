@@ -84,6 +84,11 @@ el turno. Al agotarse, ese jugador queda fuera de la partida y el resto continú
 si queda uno solo, gana el grupo. La duración máxima de un grupo es el tiempo por
 jugador multiplicado por sus integrantes.
 
+Cuando termina una ronda, cada jugador clasificado debe pulsar **Listo**. La
+siguiente ronda empieza automáticamente cuando todos los clasificados confirman;
+ningún jugador puede iniciarla por su cuenta. Mientras se espera, se muestra el
+tablero final de la última partida, con la jugada ganadora resaltada.
+
 Desde la sala del torneo se pueden ver las partidas de otros grupos. Mientras
 alguien está espectando, aparece un icono de ojo con el número de espectadores
 únicos. Al terminar la partida observada, el espectador vuelve automáticamente a

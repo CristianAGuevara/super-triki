@@ -695,14 +695,14 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     await broadcastRoomList(io)
   })
 
-  // ── tournament:next-stage ────────────────────────────────────
-  socket.on('tournament:next-stage', async (payload, ack) => {
+  // ── tournament:ready ─────────────────────────────────────────
+  socket.on('tournament:ready', async (payload, ack) => {
     if (!isRecord(payload) || typeof payload.tournamentId !== 'string') {
       ack({ ok: false, error: 'Datos inválidos' })
       return
     }
     const tournamentId = payload.tournamentId.trim().toUpperCase()
-    const result = await TournamentManager.advanceTournament(tournamentId, socket.id)
+    const result = await TournamentManager.markReady(tournamentId, socket.id)
     if (!result.ok) {
       ack({ ok: false, error: result.error })
       return

@@ -294,10 +294,10 @@ export function useSocket() {
     )
   }
 
-  function emitNextTournamentStage(tournamentId: string): Promise<TournamentControlAck> {
+  function emitTournamentReady(tournamentId: string): Promise<TournamentControlAck> {
     return ackRequest<TournamentControlAck>(
-      'El servidor no respondió al iniciar la siguiente ronda',
-      done => socket.emit('tournament:next-stage', { tournamentId }, done),
+      'El servidor no respondió al confirmar que estás listo',
+      done => socket.emit('tournament:ready', { tournamentId }, done),
     )
   }
 
@@ -443,7 +443,7 @@ export function useSocket() {
     emitLeaveTournament,
     emitTournamentSettings,
     emitStartTournament,
-    emitNextTournamentStage,
+    emitTournamentReady,
     emitRetryTournamentGroup,
     applyTournamentAssignment,
   }

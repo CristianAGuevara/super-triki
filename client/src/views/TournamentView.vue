@@ -252,16 +252,49 @@
           </article>
         </div>
 
+        <TournamentLastGame
+          v-if="showLastGame"
+          :result="store.lastCompletedGame!"
+        />
+
         <div v-if="store.canAdvance" class="tournament__advance">
-          <button
-            type="button"
-            class="tournament__primary"
-            :disabled="advancing"
-            @click="nextStage"
-          >
-            {{ advancing ? 'Preparando ronda…' : advanceLabel }}
-          </button>
-          <p class="tournament__note">{{ advanceNote }}</p>
+          <div class="tournament__ready-card">
+            <div class="tournament__ready-copy">
+              <span class="tournament__eyebrow">Avance de ronda</span>
+              <strong>{{ readyHeading }}</strong>
+              <p class="tournament__note">{{ readyProgressText }}</p>
+            </div>
+
+            <div class="tournament__ready-list">
+              <span
+                v-for="participantId in store.readyRequiredIds"
+                :key="participantId"
+                class="tournament__ready-chip"
+                :class="{ 'tournament__ready-chip--done': store.readyIds.includes(participantId) }"
+              >
+                <span class="tournament__ready-dot" />
+                {{ participantById(participantId)?.username || 'Jugador' }}
+                <small>{{ store.readyIds.includes(participantId) ? 'Listo' : 'Pendiente' }}</small>
+              </span>
+            </div>
+
+            <button
+              v-if="mustConfirmReady"
+              type="button"
+              class="tournament__primary"
+              :disabled="myReady || readying"
+              @click="confirmReady"
+            >
+              {{ myReady ? 'Listo ✓' : readying ? 'Confirmando…' : 'Estoy listo' }}
+            </button>
+            <p v-else class="tournament__note">
+              No participas en la siguiente ronda. Esperando a los clasificados…
+            </p>
+
+            <p class="tournament__note tournament__ready-auto-note">
+              {{ readyAutoNote }}
+            </p>
+          </div>
         </div>
         <p v-else-if="store.groups.some(group => group.status === 'draw')" class="tournament__note">
           Hay grupos empatados. Pulsa “Repetir grupo” para desempatar.
@@ -344,6 +377,7 @@ import { useSocket } from '@/composables/useSocket'
 import { connectSocket } from '@/services/socket'
 import type { TournamentFormat, TournamentGroupSnapshot } from '@/types/tournament'
 import TournamentSpectatorOverlay from '@/components/TournamentSpectatorOverlay.vue'
+import TournamentLastGame from '@/components/TournamentLastGame.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -357,7 +391,7 @@ const {
   emitLeaveTournament,
   emitTournamentSettings,
   emitStartTournament,
-  emitNextTournamentStage,
+  emitTournamentReady,
   emitRetryTournamentGroup,
   emitJoinSpectator,
   emitLeaveSpectator,
@@ -370,7 +404,7 @@ const fatalError = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const copied = ref(false)
 const starting = ref(false)
-const advancing = ref(false)
+const readying = ref(false)
 const savingSettings = ref(false)
 const retryingGroupId = ref<string | null>(null)
 const spectatingGroupId = ref<string | null>(null)
@@ -454,24 +488,45 @@ const groupHeading = computed(() => {
   return store.stageKind === 'league' ? 'Grupo único' : 'La final'
 })
 
-const advanceLabel = computed(() => {
-  if (store.needsTiebreak) return 'Iniciar muerte súbita'
-  if (store.stageKind === 'league') return 'Siguiente ronda'
-  if (store.stageKind === 'sudden-death') return 'Siguiente ronda de muerte súbita'
-  return 'Iniciar siguiente ronda'
+const myCurrentGroup = computed(() => {
+  const participant = store.participants.find(candidate => candidate.id === store.myParticipantId)
+  if (!participant?.groupId) return null
+  return store.groups.find(group => group.id === participant.groupId) ?? null
 })
-
-const advanceNote = computed(() => {
-  if (store.needsTiebreak) {
-    return 'Hay empate en el liderato: los jugadores empatados jugarán a muerte súbita.'
-  }
-  if (store.stageKind === 'league') {
-    return 'Los grupos se mezclan para que puedas enfrentarte a rivales distintos.'
-  }
-  if (store.stageKind === 'sudden-death') {
-    return 'Solo los ganadores continúan en la muerte súbita.'
-  }
-  return 'Los ganadores de cada grupo pasarán a la siguiente ronda.'
+const showLastGame = computed(() =>
+  Boolean(store.lastCompletedGame) && myCurrentGroup.value?.status !== 'playing'
+)
+const readyCount = computed(() =>
+  store.readyRequiredIds.filter(participantId => store.readyIds.includes(participantId)).length
+)
+const myReady = computed(() =>
+  Boolean(store.myParticipantId && store.readyIds.includes(store.myParticipantId))
+)
+const mustConfirmReady = computed(() =>
+  Boolean(store.myParticipantId && store.readyRequiredIds.includes(store.myParticipantId))
+)
+const allReady = computed(() =>
+  store.readyRequiredIds.length > 0 && readyCount.value === store.readyRequiredIds.length
+)
+const readyHeading = computed(() => {
+  if (store.needsTiebreak) return 'Listos para la muerte súbita'
+  if (store.stageKind === 'league') return 'Listos para la siguiente ronda'
+  if (store.stageKind === 'sudden-death') return 'Listos para la siguiente partida'
+  return 'Listos para la siguiente ronda'
+})
+const readyProgressText = computed(() => {
+  const total = store.readyRequiredIds.length
+  const pending = store.readyRequiredIds.filter(id => !store.readyIds.includes(id))
+  if (pending.length === 0) return `${readyCount.value}/${total} clasificados listos.`
+  const names = pending
+    .map(id => participantById(id)?.username)
+    .filter((name): name is string => Boolean(name))
+  const waiting = names.length > 0 ? ` Esperando a ${names.join(', ')}.` : ''
+  return `${readyCount.value}/${total} listos.${waiting}`
+})
+const readyAutoNote = computed(() => {
+  if (allReady.value) return 'Todos están listos. Comenzando la siguiente ronda…'
+  return 'La ronda comenzará automáticamente cuando todos los clasificados confirmen.'
 })
 
 const spectatingGroupLabel = computed(() =>
@@ -567,13 +622,13 @@ async function startTournament() {
   if (!result.ok) setActionError(result.error ?? 'No se pudo iniciar el torneo')
 }
 
-async function nextStage() {
-  if (advancing.value) return
-  advancing.value = true
+async function confirmReady() {
+  if (myReady.value || readying.value) return
+  readying.value = true
   setActionError(null)
-  const result = await emitNextTournamentStage(store.tournamentId ?? roomId)
-  advancing.value = false
-  if (!result.ok) setActionError(result.error ?? 'No se pudo iniciar la siguiente ronda')
+  const result = await emitTournamentReady(store.tournamentId ?? roomId)
+  readying.value = false
+  if (!result.ok) setActionError(result.error ?? 'No se pudo confirmar tu disponibilidad')
 }
 
 async function retryGroup(groupId: string) {
@@ -1052,7 +1107,83 @@ onUnmounted(() => {
 .tournament__winner-badge { color: var(--accent-primary); }
 .tournament__out-badge { color: var(--text-faint); }
 
-.tournament__advance { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 4px; }
+.tournament__advance {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.tournament__ready-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.tournament__ready-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tournament__ready-copy strong {
+  color: var(--text-primary);
+  font-size: 17px;
+}
+
+.tournament__ready-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+}
+
+.tournament__ready-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.tournament__ready-chip small {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tournament__ready-chip--done {
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, var(--line-soft));
+  color: var(--text-primary);
+}
+
+.tournament__ready-chip--done small { color: var(--accent-primary); }
+
+.tournament__ready-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.tournament__ready-chip--done .tournament__ready-dot {
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
+}
+
+.tournament__ready-auto-note { max-width: 520px; }
 
 .tournament__finished { align-items: center; text-align: center; }
 .tournament__trophy {

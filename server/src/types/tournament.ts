@@ -1,3 +1,11 @@
+import type {
+  Board,
+  LastMove,
+  PlayerColorId,
+  PlayerSlot,
+  WinResult,
+} from './game.js'
+
 export type TournamentPhase = 'waiting' | 'playing' | 'finished'
 
 export type TournamentFormat = 'elimination' | 'league'
@@ -45,8 +53,34 @@ export interface TournamentState {
   leagueOrder: string[]
   participants: TournamentParticipant[]
   groups: TournamentGroup[]
+  readyPlayerIds: string[]
+  lastCompletedGame: TournamentLastGameSnapshot | null
   championId: string | null
   createdAt: number
+}
+
+export interface TournamentLastGamePlayerSnapshot {
+  slot: PlayerSlot
+  participantId?: string
+  username: string
+  color?: PlayerColorId
+}
+
+export interface TournamentLastGameSnapshot {
+  groupId: string
+  groupLabel: string
+  stage: number
+  completedAt: number
+  winnerId: string | null
+  winnerSlot: PlayerSlot | null
+  game: {
+    board: Board
+    lastMove: LastMove | null
+    players: PlayerSlot[]
+    winResult: WinResult | null
+    isDraw: boolean
+  }
+  players: TournamentLastGamePlayerSnapshot[]
 }
 
 export interface TournamentParticipantSnapshot {
@@ -86,6 +120,9 @@ export interface TournamentSnapshot {
   stage: number
   participants: TournamentParticipantSnapshot[]
   groups: TournamentGroupSnapshot[]
+  readyIds: string[]
+  readyRequiredIds: string[]
+  lastCompletedGame: TournamentLastGameSnapshot | null
   championId: string | null
   connectedCount: number
   maxParticipants: number

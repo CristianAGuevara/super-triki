@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
   TournamentGroupSnapshot,
+  TournamentLastGameSnapshot,
   TournamentParticipantSnapshot,
   TournamentSnapshot,
 } from '@/types/tournament'
@@ -26,6 +27,9 @@ export const useTournamentStore = defineStore('tournament', () => {
   const stage = ref(0)
   const participants = ref<TournamentParticipantSnapshot[]>([])
   const groups = ref<TournamentGroupSnapshot[]>([])
+  const readyIds = ref<string[]>([])
+  const readyRequiredIds = ref<string[]>([])
+  const lastCompletedGame = ref<TournamentLastGameSnapshot | null>(null)
   const championId = ref<string | null>(null)
   const connectedCount = ref(0)
   const maxParticipants = ref(50)
@@ -61,6 +65,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     stage.value = snapshot.stage
     participants.value = snapshot.participants
     groups.value = snapshot.groups
+    readyIds.value = snapshot.readyIds ?? []
+    readyRequiredIds.value = snapshot.readyRequiredIds ?? []
+    lastCompletedGame.value = snapshot.lastCompletedGame ?? null
     championId.value = snapshot.championId
     connectedCount.value = snapshot.connectedCount
     maxParticipants.value = snapshot.maxParticipants
@@ -132,6 +139,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     stage.value = 0
     participants.value = []
     groups.value = []
+    readyIds.value = []
+    readyRequiredIds.value = []
+    lastCompletedGame.value = null
     championId.value = null
     connectedCount.value = 0
     maxParticipants.value = 50
@@ -155,6 +165,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     stage,
     participants,
     groups,
+    readyIds,
+    readyRequiredIds,
+    lastCompletedGame,
     championId,
     connectedCount,
     maxParticipants,

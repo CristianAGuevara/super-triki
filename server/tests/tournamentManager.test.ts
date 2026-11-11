@@ -3,6 +3,7 @@ import test from 'node:test'
 import { randomUUID } from 'node:crypto'
 import { TournamentManager } from '../src/tournaments/TournamentManager.js'
 import { RoomManager } from '../src/rooms/RoomManager.js'
+import { buildInitialGameState } from '../src/engine/GameEngine.js'
 
 test('leaving the waiting room releases the player socket', async () => {
   const socketId = `tournament-solo-${randomUUID()}`
@@ -176,6 +177,101 @@ test('tracks how many tournament players are watching each group', async () => {
   const stoppedWatching = await TournamentManager.stopSpectating(participant.socketId)
   assert.ok(stoppedWatching)
   assert.equal(stoppedWatching.groups.find(group => group.id === groupA.id)?.spectatorCount, 0)
+})
+
+test('only advances after every qualified player is ready', async () => {
+  const hostSocket = `tournament-ready-${randomUUID()}`
+  const created = await TournamentManager.createTournament('Host', hostSocket, 'Copa lista')
+  for (const [index, name] of ['Dos', 'Tres', 'Cuatro', 'Cinco'].entries()) {
+    const joined = await TournamentManager.joinTournament(
+      created.tournament.tournamentId,
+      name,
+      `tournament-ready-${index}-${randomUUID()}`,
+    )
+    assert.equal(joined.ok, true)
+  }
+
+  const started = await TournamentManager.startTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(started.ok, true)
+  if (!started.ok) return
+
+  for (const group of started.state.groups) {
+    const room = await RoomManager.getRoom(group.roomId!)
+    assert.ok(room)
+    const recorded = await TournamentManager.recordGroupResult(
+      created.tournament.tournamentId,
+      group.id,
+      room.roomId,
+      1,
+    )
+    assert.ok(recorded)
+  }
+
+  const waiting = await TournamentManager.getSnapshot(created.tournament.tournamentId)
+  assert.ok(waiting)
+  assert.equal(waiting.canAdvance, true)
+  assert.equal(waiting.readyRequiredIds.length, 2)
+  assert.equal(waiting.readyIds.length, 0)
+
+  let latest = waiting
+  for (let index = 0; index < waiting.readyRequiredIds.length; index++) {
+    const tournament = await TournamentManager.getTournament(created.tournament.tournamentId)
+    assert.ok(tournament)
+    const participant = tournament.participants.find(candidate =>
+      candidate.id === latest.readyRequiredIds[index]
+    )
+    assert.ok(participant?.socketId)
+    const result = await TournamentManager.markReady(
+      created.tournament.tournamentId,
+      participant.socketId,
+    )
+    assert.equal(result.ok, true)
+    if (!result.ok) return
+    latest = result.state
+  }
+
+  assert.equal(latest.stage, 2)
+  assert.equal(latest.groups.length, 1)
+  assert.equal(latest.readyIds.length, 0)
+})
+
+test('stores the last finished board for the tournament waiting room', async () => {
+  const hostSocket = `tournament-last-game-${randomUUID()}`
+  const created = await TournamentManager.createTournament('Host', hostSocket, 'Copa con historial')
+  for (const [index, name] of ['Dos', 'Tres'].entries()) {
+    const joined = await TournamentManager.joinTournament(
+      created.tournament.tournamentId,
+      name,
+      `tournament-last-game-${index}-${randomUUID()}`,
+    )
+    assert.equal(joined.ok, true)
+  }
+
+  const started = await TournamentManager.startTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(started.ok, true)
+  if (!started.ok) return
+  const group = started.state.groups[0]
+  const room = await RoomManager.getRoom(group.roomId!)
+  assert.ok(room)
+
+  const game = buildInitialGameState(room.players.map(player => player.slot), 1)
+  room.lastGame = {
+    ...game,
+    winResult: { winner: 1, condition: 'same-size', highlights: [] },
+    isDraw: false,
+  }
+  await RoomManager.persistRoom(room)
+
+  const recorded = await TournamentManager.recordGroupResult(
+    created.tournament.tournamentId,
+    group.id,
+    room.roomId,
+    1,
+  )
+  assert.ok(recorded)
+  assert.equal(recorded.state.lastCompletedGame?.groupLabel, group.label)
+  assert.equal(recorded.state.lastCompletedGame?.game.winResult?.winner, 1)
+  assert.equal(recorded.state.lastCompletedGame?.players.length, 3)
 })
 
 test('lists tournaments publicly until they finish', async () => {

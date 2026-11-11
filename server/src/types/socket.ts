@@ -131,7 +131,7 @@ export interface ClientToServerEvents {
   'tournament:reconnect': (payload: TournamentReconnectPayload, ack: (res: TournamentReconnectAck) => void) => void
   'tournament:set-settings': (payload: TournamentSettingsPayload, ack: (res: TournamentControlAck) => void) => void
   'tournament:start': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
-  'tournament:next-stage': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
+  'tournament:ready': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:retry-group': (payload: { tournamentId: string; groupId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:leave': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
