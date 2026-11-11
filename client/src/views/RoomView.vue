@@ -130,6 +130,7 @@
           <PlayerPanel v-if="orderedPlayers[2]" class="room__player" :player="orderedPlayers[2]" :my-slot="roomStore.mySlot" />
         </div>
         <div class="room__center">
+          <MatchClocks />
           <Board />
           <Scoreboard />
         </div>
@@ -225,6 +226,7 @@ import Scoreboard from '@/components/Scoreboard.vue'
 import SelectionBar from '@/components/SelectionBar.vue'
 import PlayerColorPicker from '@/components/PlayerColorPicker.vue'
 import MatchResultOverlay from '@/components/MatchResultOverlay.vue'
+import MatchClocks from '@/components/MatchClocks.vue'
 
 const route     = useRoute()
 const router    = useRouter()

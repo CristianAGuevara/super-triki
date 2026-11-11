@@ -65,7 +65,7 @@ onUnmounted(() => {
 <style scoped>
 .connection-banner {
   position: fixed;
-  z-index: 280;
+  z-index: 500;
   top: 70px;
   left: 50%;
   display: flex;

@@ -14,6 +14,12 @@
       </div>
     </header>
 
+    <TournamentSpectatorOverlay
+      v-if="spectatingGroupId && spectatingRoomId"
+      :group-label="spectatingGroupLabel"
+      @close="closeSpectate"
+    />
+
     <div v-if="fatalError" class="tournament__message tournament__message--error">
       <strong>No se pudo abrir el torneo</strong>
       <span>{{ fatalError }}</span>
@@ -86,6 +92,23 @@
             </select>
           </label>
 
+          <label v-if="isHost" class="tournament__rounds">
+            <span>Tiempo por jugador</span>
+            <select
+              :value="store.playerClockSeconds"
+              :disabled="savingSettings"
+              @change="changePlayerClock"
+            >
+              <option v-for="clock in playerClockOptions" :key="clock.value" :value="clock.value">
+                {{ clock.label }}
+              </option>
+            </select>
+          </label>
+
+          <p class="tournament__note tournament__settings-note">
+            {{ clockSummary }}
+          </p>
+
           <p class="tournament__note tournament__settings-note">
             {{ formatDescription }}
           </p>
@@ -151,17 +174,43 @@
           >
             <header class="tournament__group-header">
               <strong>{{ group.label }}</strong>
-              <span
-                class="tournament__group-status"
-                :class="`tournament__group-status--${
-                  group.status === 'finished' &&
-                  store.stageKind === 'league' &&
-                  !group.winnerId ? 'draw' : group.status
-                }`"
-              >
-                {{ groupStatusLabel(group) }}
-              </span>
+              <div class="tournament__group-tools">
+                <span
+                  v-if="group.status === 'playing'"
+                  class="tournament__max-time"
+                  :title="`Duración máxima: ${group.playerIds.length * store.playerClockSeconds} segundos`"
+                >
+                  Máx. {{ groupMaxTime(group) }}
+                </span>
+                <span
+                  v-if="group.spectatorCount > 0"
+                  class="tournament__spectator-count"
+                  :title="`${group.spectatorCount} espectador${group.spectatorCount === 1 ? '' : 'es'}`"
+                >
+                  👁 {{ group.spectatorCount }}
+                </span>
+                <span
+                  class="tournament__group-status"
+                  :class="`tournament__group-status--${
+                    group.status === 'finished' &&
+                    store.stageKind === 'league' &&
+                    !group.winnerId ? 'draw' : group.status
+                  }`"
+                >
+                  {{ groupStatusLabel(group) }}
+                </span>
+              </div>
             </header>
+
+            <button
+              v-if="canSpectateGroup(group)"
+              type="button"
+              class="tournament__watch"
+              :disabled="spectatingGroupId !== null || spectatorOpeningId !== null"
+              @click="openSpectate(group)"
+            >
+              {{ spectatorOpeningId === group.id ? 'Abriendo…' : 'Ver partida' }}
+            </button>
 
             <div class="tournament__group-players">
               <div
@@ -288,14 +337,19 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTournamentStore } from '@/stores/tournamentStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket } from '@/services/socket'
 import type { TournamentFormat, TournamentGroupSnapshot } from '@/types/tournament'
+import TournamentSpectatorOverlay from '@/components/TournamentSpectatorOverlay.vue'
 
 const route = useRoute()
 const router = useRouter()
 const store = useTournamentStore()
+const roomStore = useRoomStore()
+const gameStore = useGameStore()
 const userStore = useUserStore()
 const {
   emitJoinTournament,
@@ -305,6 +359,8 @@ const {
   emitStartTournament,
   emitNextTournamentStage,
   emitRetryTournamentGroup,
+  emitJoinSpectator,
+  emitLeaveSpectator,
   applyTournamentAssignment,
 } = useSocket()
 
@@ -317,6 +373,9 @@ const starting = ref(false)
 const advancing = ref(false)
 const savingSettings = ref(false)
 const retryingGroupId = ref<string | null>(null)
+const spectatingGroupId = ref<string | null>(null)
+const spectatingRoomId = ref<string | null>(null)
+const spectatorOpeningId = ref<string | null>(null)
 
 const formatOptions = [
   {
@@ -329,6 +388,14 @@ const formatOptions = [
     label: 'Todos contra todos',
     description: 'Todos juegan todas las rondas y suman puntos.',
   },
+]
+
+const playerClockOptions = [
+  { value: 180, label: '3 minutos' },
+  { value: 300, label: '5 minutos' },
+  { value: 480, label: '8 minutos' },
+  { value: 600, label: '10 minutos' },
+  { value: 900, label: '15 minutos' },
 ]
 
 const isHost = computed(() => store.myParticipantId !== null && store.myParticipantId === store.hostId)
@@ -358,9 +425,21 @@ const formatDescription = computed(() =>
 
 const formatSummary = computed(() =>
   store.format === 'league'
-    ? `Todos contra todos · ${store.leagueRounds} ronda${store.leagueRounds === 1 ? '' : 's'}`
-    : 'Eliminación directa'
+    ? `Todos contra todos · ${store.leagueRounds} ronda${store.leagueRounds === 1 ? '' : 's'} · ${clockLabel(store.playerClockSeconds)}`
+    : `Eliminación directa · ${clockLabel(store.playerClockSeconds)}`
 )
+
+const clockSummary = computed(() =>
+  `Reloj: ${clockLabel(store.playerClockSeconds)} por jugador. La partida dura como máximo ese tiempo multiplicado por la cantidad de jugadores del grupo.`
+)
+
+function clockLabel(seconds: number): string {
+  return `${Math.round(seconds / 60)} min`
+}
+
+function groupMaxTime(group: TournamentGroupSnapshot): string {
+  return `${Math.round((group.playerIds.length * store.playerClockSeconds) / 60)} min`
+}
 
 const stageEyebrow = computed(() => {
   if (store.stageKind === 'sudden-death') return `Muerte súbita · Ronda ${store.stage}`
@@ -395,6 +474,15 @@ const advanceNote = computed(() => {
   return 'Los ganadores de cada grupo pasarán a la siguiente ronda.'
 })
 
+const spectatingGroupLabel = computed(() =>
+  store.groups.find(group => group.id === spectatingGroupId.value)?.label ?? 'Partida del torneo'
+)
+
+function canSpectateGroup(group: TournamentGroupSnapshot): boolean {
+  if (group.status !== 'playing' || !group.roomId) return false
+  return !store.myParticipantId || !group.playerIds.includes(store.myParticipantId)
+}
+
 const standings = computed(() =>
   [...store.participants].sort((a, b) =>
     b.leaguePoints - a.leaguePoints ||
@@ -426,7 +514,11 @@ function setActionError(message: string | null) {
   store.setError(message)
 }
 
-async function saveSettings(format: TournamentFormat, leagueRounds: number): Promise<boolean> {
+async function saveSettings(
+  format: TournamentFormat,
+  leagueRounds: number,
+  playerClockSeconds: number,
+): Promise<boolean> {
   if (!isHost.value || savingSettings.value || store.phase !== 'waiting') return false
   savingSettings.value = true
   setActionError(null)
@@ -435,6 +527,7 @@ async function saveSettings(format: TournamentFormat, leagueRounds: number): Pro
       store.tournamentId ?? roomId,
       format,
       leagueRounds,
+      playerClockSeconds,
     )
     if (!result.ok) {
       setActionError(result.error ?? 'No se pudo guardar el formato')
@@ -448,14 +541,21 @@ async function saveSettings(format: TournamentFormat, leagueRounds: number): Pro
 
 async function changeFormat(format: TournamentFormat) {
   if (format === store.format) return
-  await saveSettings(format, store.leagueRounds)
+  await saveSettings(format, store.leagueRounds, store.playerClockSeconds)
 }
 
 async function changeLeagueRounds(event: Event) {
   const select = event.target as HTMLSelectElement
   const rounds = Number(select.value)
-  const saved = await saveSettings(store.format, rounds)
+  const saved = await saveSettings(store.format, rounds, store.playerClockSeconds)
   if (!saved) select.value = String(store.leagueRounds)
+}
+
+async function changePlayerClock(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const seconds = Number(select.value)
+  const saved = await saveSettings(store.format, store.leagueRounds, seconds)
+  if (!saved) select.value = String(store.playerClockSeconds)
 }
 
 async function startTournament() {
@@ -494,6 +594,46 @@ async function copyLink() {
     setActionError('No se pudo copiar el enlace')
   }
 }
+
+async function openSpectate(group: TournamentGroupSnapshot) {
+  if (!group.roomId || spectatorOpeningId.value) return
+  spectatorOpeningId.value = group.id
+  setActionError(null)
+  roomStore.reset()
+  gameStore.initGame(2)
+
+  const result = await emitJoinSpectator(group.roomId)
+  spectatorOpeningId.value = null
+
+  if (!result.ok || !result.roomId) {
+    setActionError(result.error ?? 'No se pudo abrir la partida como espectador')
+    return
+  }
+
+  roomStore.setSpectating(true)
+  roomStore.setConnection(true)
+  if (result.roomState) roomStore.setRoomState(result.roomState)
+  spectatingGroupId.value = group.id
+  spectatingRoomId.value = result.roomId
+}
+
+async function closeSpectate() {
+  if (!spectatingGroupId.value) return
+  spectatingGroupId.value = null
+  spectatingRoomId.value = null
+  await emitLeaveSpectator()
+  if (roomStore.isSpectator) {
+    roomStore.reset()
+    gameStore.initGame(2)
+  }
+}
+
+watch(
+  () => gameStore.isGameOver,
+  over => {
+    if (over && spectatingGroupId.value) void closeSpectate()
+  },
+)
 
 function goHome() {
   const tournamentId = store.tournamentId
@@ -548,8 +688,14 @@ watch(
 )
 
 onUnmounted(() => {
+  const wasSpectating = Boolean(spectatingGroupId.value)
+  if (wasSpectating) void emitLeaveSpectator()
   const nextRoute = router.currentRoute.value
   if (nextRoute.name === 'room' || nextRoute.name === 'tournament') return
+  if (wasSpectating) {
+    roomStore.reset()
+    gameStore.initGame(2)
+  }
   const tournamentId = store.tournamentId
   if (tournamentId) void emitLeaveTournament(tournamentId)
   store.clearSession()
@@ -850,9 +996,45 @@ onUnmounted(() => {
 .tournament__group--draw { border-color: color-mix(in srgb, var(--accent-secondary) 48%, var(--line-soft)); }
 .tournament__group-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tournament__group-header strong { color: var(--text-primary); font-size: 13px; }
+.tournament__group-tools { display: flex; align-items: center; gap: 7px; }
 .tournament__group-status { color: var(--text-muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px; }
 .tournament__group-status--finished { color: var(--accent-primary); }
 .tournament__group-status--draw { color: var(--accent-secondary); }
+
+.tournament__max-time {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tournament__spectator-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tournament__watch {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-primary);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.tournament__watch:hover { background: var(--control-hover); }
+.tournament__watch:disabled { opacity: 0.45; cursor: not-allowed; }
 .tournament__group-players { display: flex; flex-direction: column; gap: 6px; }
 .tournament__group-player {
   display: flex;

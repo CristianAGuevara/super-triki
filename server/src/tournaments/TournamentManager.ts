@@ -19,12 +19,16 @@ const MAX_PARTICIPANTS = 50
 const DEFAULT_LEAGUE_ROUNDS = 3
 const MIN_LEAGUE_ROUNDS = 1
 const MAX_LEAGUE_ROUNDS = 10
+const DEFAULT_PLAYER_CLOCK_SECONDS = 300
+const MIN_PLAYER_CLOCK_SECONDS = 60
+const MAX_PLAYER_CLOCK_SECONDS = 3_600
 const TOURNAMENT_TTL_SECONDS = 6 * 60 * 60
 const TOURNAMENT_INDEX_KEY = `${redisPrefix}:tournaments`
 const TOURNAMENT_GAME_SETTINGS: GameSettings = {
-  turnTimerEnabled: true,
+  turnTimerEnabled: false,
   turnDurationSeconds: 90,
   removePieceOnTimeout: false,
+  playerClockSeconds: DEFAULT_PLAYER_CLOCK_SECONDS,
 }
 const LOCK_SCRIPT = `
   if redis.call('GET', KEYS[1]) == ARGV[1] then
@@ -49,8 +53,12 @@ function normalizeTournament(tournament: TournamentState): TournamentState {
   tournament.leagueRounds = Number.isInteger(tournament.leagueRounds)
     ? Math.min(MAX_LEAGUE_ROUNDS, Math.max(MIN_LEAGUE_ROUNDS, tournament.leagueRounds))
     : DEFAULT_LEAGUE_ROUNDS
+  tournament.playerClockSeconds = Number.isInteger(tournament.playerClockSeconds)
+    ? Math.min(MAX_PLAYER_CLOCK_SECONDS, Math.max(MIN_PLAYER_CLOCK_SECONDS, tournament.playerClockSeconds))
+    : DEFAULT_PLAYER_CLOCK_SECONDS
   tournament.stageKind ??= tournament.format === 'league' ? 'league' : 'elimination'
   tournament.leagueOrder ??= []
+  for (const group of tournament.groups) group.spectatorIds ??= []
   for (const participant of tournament.participants) {
     participant.leaguePoints ??= 0
     participant.leagueWins ??= 0
@@ -213,6 +221,7 @@ function toSnapshot(state: TournamentState): TournamentSnapshot {
     phase: state.phase,
     format: state.format,
     leagueRounds: state.leagueRounds,
+    playerClockSeconds: state.playerClockSeconds,
     stageKind: state.stageKind,
     stage: state.stage,
     participants: state.participants.map(participant => ({
@@ -236,6 +245,7 @@ function toSnapshot(state: TournamentState): TournamentSnapshot {
       roomId: group.roomId,
       winnerId: group.winnerId,
       replayCount: group.replayCount,
+      spectatorCount: group.spectatorIds.length,
     })),
     championId: state.championId,
     connectedCount: state.participants.filter(participant => participant.socketId).length,
@@ -291,7 +301,10 @@ async function createRoomForGroup(
 
   const slots = room.players.map(player => player.slot)
   const startingPlayer = slots[Math.floor(Math.random() * slots.length)]
-  const game = buildInitialGameState(slots, startingPlayer, TOURNAMENT_GAME_SETTINGS)
+  const game = buildInitialGameState(slots, startingPlayer, {
+    ...TOURNAMENT_GAME_SETTINGS,
+    playerClockSeconds: state.playerClockSeconds,
+  })
   await RoomManager.setGame(room.roomId, game)
   const updatedRoom = await RoomManager.getRoom(room.roomId)
   if (!updatedRoom) throw new Error(`Tournament room ${room.roomId} disappeared`)
@@ -299,6 +312,7 @@ async function createRoomForGroup(
   group.roomId = updatedRoom.roomId
   group.status = 'playing'
   group.winnerId = null
+  group.spectatorIds = []
 
   for (const participant of participants) {
     participant.groupId = group.id
@@ -373,6 +387,7 @@ async function buildStageGroups(
       roomId: null,
       winnerId: null,
       replayCount: 0,
+      spectatorIds: [],
     }
     groups.push(group)
     assignments.push(...await createRoomForGroup(state, group, groupParticipants))
@@ -440,6 +455,7 @@ export const TournamentManager = {
       phase: 'waiting',
       format: 'elimination',
       leagueRounds: DEFAULT_LEAGUE_ROUNDS,
+      playerClockSeconds: DEFAULT_PLAYER_CLOCK_SECONDS,
       stageKind: 'elimination',
       stage: 0,
       leagueOrder: [],
@@ -543,6 +559,9 @@ export const TournamentManager = {
       if (!participant) return toSnapshot(tournament)
 
       participant.socketId = ''
+      for (const group of tournament.groups) {
+        group.spectatorIds = group.spectatorIds.filter(id => id !== participant.id)
+      }
       if (tournament.hostId === participant.id) {
         const nextHost = tournament.participants.find(candidate => candidate.socketId)
         if (nextHost) tournament.hostId = nextHost.id
@@ -582,6 +601,9 @@ export const TournamentManager = {
         }
       }
 
+      for (const group of tournament.groups) {
+        group.spectatorIds = group.spectatorIds.filter(id => id !== participant.id)
+      }
       await saveTournament(tournament)
       return toSnapshot(tournament)
     })
@@ -592,6 +614,7 @@ export const TournamentManager = {
     socketId: string,
     format: TournamentFormat,
     leagueRounds: number,
+    playerClockSeconds: number,
   ): Promise<{ ok: true; state: TournamentSnapshot } | TournamentActionError> {
     return withTournamentLock(tournamentId, async () => {
       const tournament = await loadTournament(tournamentId)
@@ -611,9 +634,15 @@ export const TournamentManager = {
           leagueRounds > MAX_LEAGUE_ROUNDS) {
         return { ok: false as const, error: `Elige entre ${MIN_LEAGUE_ROUNDS} y ${MAX_LEAGUE_ROUNDS} rondas` }
       }
+      if (!Number.isInteger(playerClockSeconds) ||
+          playerClockSeconds < MIN_PLAYER_CLOCK_SECONDS ||
+          playerClockSeconds > MAX_PLAYER_CLOCK_SECONDS) {
+        return { ok: false as const, error: 'Tiempo por jugador inválido' }
+      }
 
       tournament.format = format
       tournament.leagueRounds = leagueRounds
+      tournament.playerClockSeconds = playerClockSeconds
       await saveTournament(tournament)
       return { ok: true as const, state: toSnapshot(tournament) }
     })
@@ -814,6 +843,7 @@ export const TournamentManager = {
       if (tournament.stageKind === 'league') {
         group.status = 'finished'
         group.winnerId = winnerId
+        group.spectatorIds = []
 
         for (const participant of groupParticipants) {
           participant.leagueGames += 1
@@ -843,12 +873,14 @@ export const TournamentManager = {
       if (winnerSlot === null || !winnerId) {
         group.status = 'draw'
         group.winnerId = null
+        group.spectatorIds = []
         await saveTournament(tournament)
         return { state: toSnapshot(tournament), assignments: [] }
       }
 
       group.status = 'finished'
       group.winnerId = winnerId
+      group.spectatorIds = []
       for (const participant of groupParticipants) {
         participant.eliminated = participant.id !== winnerId
       }
@@ -859,6 +891,46 @@ export const TournamentManager = {
       }
       await saveTournament(tournament)
       return { state: toSnapshot(tournament), assignments: [] }
+    })
+  },
+
+  async startSpectating(socketId: string, groupId: string): Promise<TournamentSnapshot | null> {
+    const tournamentId = socketToTournament.get(socketId)
+    if (!tournamentId) return null
+
+    return withTournamentLock(tournamentId, async () => {
+      const tournament = await loadTournament(tournamentId)
+      if (!tournament) return null
+      const participant = tournament.participants.find(candidate => candidate.socketId === socketId)
+      if (!participant) return null
+      const group = tournament.groups.find(candidate => candidate.id === groupId)
+      if (!group || group.status !== 'playing') return null
+      if (participant.groupId === groupId) return null
+
+      for (const candidate of tournament.groups) {
+        candidate.spectatorIds = candidate.spectatorIds.filter(id => id !== participant.id)
+      }
+      group.spectatorIds.push(participant.id)
+      await saveTournament(tournament)
+      return toSnapshot(tournament)
+    })
+  },
+
+  async stopSpectating(socketId: string): Promise<TournamentSnapshot | null> {
+    const tournamentId = socketToTournament.get(socketId)
+    if (!tournamentId) return null
+
+    return withTournamentLock(tournamentId, async () => {
+      const tournament = await loadTournament(tournamentId)
+      if (!tournament) return null
+      const participant = tournament.participants.find(candidate => candidate.socketId === socketId)
+      if (!participant) return toSnapshot(tournament)
+
+      for (const group of tournament.groups) {
+        group.spectatorIds = group.spectatorIds.filter(id => id !== participant.id)
+      }
+      await saveTournament(tournament)
+      return toSnapshot(tournament)
     })
   },
 

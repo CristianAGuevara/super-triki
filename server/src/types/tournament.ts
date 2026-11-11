@@ -29,6 +29,7 @@ export interface TournamentGroup {
   roomId: string | null
   winnerId: string | null
   replayCount: number
+  spectatorIds: string[]
 }
 
 export interface TournamentState {
@@ -38,6 +39,7 @@ export interface TournamentState {
   phase: TournamentPhase
   format: TournamentFormat
   leagueRounds: number
+  playerClockSeconds: number
   stageKind: TournamentStageKind
   stage: number
   leagueOrder: string[]
@@ -69,6 +71,7 @@ export interface TournamentGroupSnapshot {
   roomId: string | null
   winnerId: string | null
   replayCount: number
+  spectatorCount: number
 }
 
 export interface TournamentSnapshot {
@@ -78,6 +81,7 @@ export interface TournamentSnapshot {
   phase: TournamentPhase
   format: TournamentFormat
   leagueRounds: number
+  playerClockSeconds: number
   stageKind: TournamentStageKind
   stage: number
   participants: TournamentParticipantSnapshot[]

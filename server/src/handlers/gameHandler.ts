@@ -14,6 +14,8 @@ import {
   buildInitialGameState,
   validateMove,
   applyMove,
+  applyClockTimeout,
+  clockRemainingForPlayer,
   skipTurn,
   toSnapshot,
 } from '../engine/GameEngine.js'
@@ -32,13 +34,15 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
   clearTurnTimer(roomId)
   void RoomManager.getRoom(roomId).then(room => {
     const game = room?.game
-    if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw ||
-        !game.settings.turnTimerEnabled) return
+    if (!room || room.phase !== 'playing' || !game || game.winResult || game.isDraw) return
+    const clockEnabled = (game.settings.playerClockSeconds ?? 0) > 0
+    if (!clockEnabled && !game.settings.turnTimerEnabled) return
     if (!room.players.some(player => player.socketId)) return
     const expectedTurnNumber = game.turnNumber
     const expectedPlayer = game.currentPlayer
-    const durationMs = game.settings.turnDurationSeconds * 1_000
-    const remaining = Math.max(0, game.turnStartedAt + durationMs - Date.now())
+    const remaining = clockEnabled
+      ? clockRemainingForPlayer(game, expectedPlayer) ?? 0
+      : Math.max(0, game.turnStartedAt + game.settings.turnDurationSeconds * 1_000 - Date.now())
     const timer = setTimeout(() => {
       void RoomManager.withRoomLock(roomId, async () => {
         const currentRoom = await RoomManager.getRoom(roomId)
@@ -47,8 +51,11 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
             currentGame.turnNumber !== expectedTurnNumber || currentGame.currentPlayer !== expectedPlayer ||
             !currentRoom.players.some(player => player.socketId)) return false
 
-        const skippedGame = skipTurn(currentGame)
-        const finished = skippedGame.isDraw
+        const clockMode = (currentGame.settings.playerClockSeconds ?? 0) > 0
+        const clockResult = clockMode ? applyClockTimeout(currentGame) : null
+        if (clockMode && !clockResult) return false
+        const skippedGame = clockResult?.game ?? skipTurn(currentGame)
+        const finished = clockResult?.finished ?? skippedGame.isDraw
         if (finished) {
           currentRoom.lastGame = skippedGame
           currentRoom.game = null
@@ -63,8 +70,13 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
         await emitRoomEvent(io, roomId, 'game:turn-timeout', { player: expectedPlayer })
         await emitRoomEvent(io, roomId, 'game:state', toSnapshot(result.game))
         if (result.finished) {
+          clearTurnTimer(roomId)
           await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(result.room))
-          await emitRoomEvent(io, roomId, 'game:over', { winResult: null, finalState: toSnapshot(result.game) })
+          await emitRoomEvent(io, roomId, 'game:over', {
+            winResult: result.game.winResult,
+            finalState: toSnapshot(result.game),
+          })
+          await completeTournamentGroup(io, result.room, result.game)
           await broadcastRoomList(io)
         } else {
           scheduleTurnTimer(io, roomId)
@@ -260,13 +272,16 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Sala no encontrada' })
       return
     }
+    const tournamentId = TournamentManager.getTournamentIdBySocket(socket.id)
     if (await RoomManager.getRoomBySocket(socket.id)) {
       ack({ ok: false, error: 'Ya estás jugando en una sala' })
       return
     }
-    if (TournamentManager.getTournamentIdBySocket(socket.id)) {
-      ack({ ok: false, error: 'Ya estás en un torneo' })
-      return
+    if (tournamentId) {
+      if (!room.tournament || room.tournament.id !== tournamentId || room.phase !== 'playing') {
+        ack({ ok: false, error: 'Solo puedes ver partidas activas de tu torneo' })
+        return
+      }
     }
 
     const currentSpectatorRoom = RoomManager.getSpectatorRoom(socket.id)
@@ -280,11 +295,47 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       ack({ ok: false, error: 'Sala no encontrada' })
       return
     }
+
+    if (tournamentId && joinedRoom.tournament) {
+      const tournamentState = await TournamentManager.startSpectating(
+        socket.id,
+        joinedRoom.tournament.groupId,
+      )
+      if (!tournamentState) {
+        RoomManager.removeSpectator(socket.id)
+        ack({ ok: false, error: 'No se pudo abrir la partida como espectador' })
+        return
+      }
+      await emitRoomEvent(
+        io,
+        tournamentChannel(tournamentId),
+        'tournament:state',
+        tournamentState,
+      )
+    }
+
     socket.leave('lobby')
     socket.join(roomId)
     ack({ ok: true, roomId, roomState: RoomManager.toSnapshot(joinedRoom) })
     emitCurrentGame(socket, joinedRoom)
     scheduleTurnTimer(io, roomId)
+  })
+
+  // ── spectate:leave ──────────────────────────────────────────
+  socket.on('spectate:leave', async (_payload, ack) => {
+    const roomId = RoomManager.getSpectatorRoom(socket.id)?.roomId
+    RoomManager.removeSpectator(socket.id)
+    if (roomId) socket.leave(roomId)
+    const tournamentState = await TournamentManager.stopSpectating(socket.id)
+    if (tournamentState) {
+      await emitRoomEvent(
+        io,
+        tournamentChannel(tournamentState.tournamentId),
+        'tournament:state',
+        tournamentState,
+      )
+    }
+    ack({ ok: true })
   })
 
   // ── room:create ──────────────────────────────────────────────
@@ -604,7 +655,8 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     if (!isRecord(payload) ||
         typeof payload.tournamentId !== 'string' ||
         (payload.format !== 'elimination' && payload.format !== 'league') ||
-        !Number.isInteger(payload.leagueRounds)) {
+        !Number.isInteger(payload.leagueRounds) ||
+        !Number.isInteger(payload.playerClockSeconds)) {
       ack({ ok: false, error: 'Configuración de torneo inválida' })
       return
     }
@@ -615,6 +667,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       socket.id,
       payload.format,
       Number(payload.leagueRounds),
+      Number(payload.playerClockSeconds),
     )
     if (!result.ok) {
       ack({ ok: false, error: result.error })
@@ -757,11 +810,18 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       const actingSlot = await RoomManager.getSlotBySocket(socket.id, normalizedPayload.roomId)
       if (!actingSlot) return { ok: false as const, error: 'No eres un jugador de esta sala' }
 
-      if (room.game.settings.turnTimerEnabled &&
-          Date.now() >= room.game.turnStartedAt + room.game.settings.turnDurationSeconds * 1_000) {
+      const clockMode = (room.game.settings.playerClockSeconds ?? 0) > 0
+      const clockExpired = clockMode &&
+        (clockRemainingForPlayer(room.game, room.game.currentPlayer) ?? 0) <= 0
+      const turnExpired = !clockMode &&
+        room.game.settings.turnTimerEnabled &&
+        Date.now() >= room.game.turnStartedAt + room.game.settings.turnDurationSeconds * 1_000
+
+      if (clockExpired || turnExpired) {
         const timedOutPlayer = room.game.currentPlayer
-        const skippedGame = skipTurn(room.game)
-        const finished = skippedGame.isDraw
+        const clockResult = clockMode ? applyClockTimeout(room.game) : null
+        const skippedGame = clockResult?.game ?? skipTurn(room.game)
+        const finished = clockResult?.finished ?? skippedGame.isDraw
         if (finished) {
           room.lastGame = skippedGame
           room.game = null
@@ -773,7 +833,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         return {
           ok: false as const,
           kind: 'timeout' as const,
-          error: 'Se agotó el tiempo; el turno pasó al siguiente jugador',
+          error: clockMode
+            ? 'Se agotó el tiempo del jugador'
+            : 'Se agotó el tiempo; el turno pasó al siguiente jugador',
           timedOutPlayer,
           game: skippedGame,
           room,
@@ -803,7 +865,10 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         if (outcome.finished) {
           clearTurnTimer(normalizedPayload.roomId)
           await emitRoomEvent(io, normalizedPayload.roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
-          await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', { winResult: null, finalState: toSnapshot(outcome.game) })
+          await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', {
+            winResult: outcome.game.winResult,
+            finalState: toSnapshot(outcome.game),
+          })
           await completeTournamentGroup(io, outcome.room, outcome.game)
           await broadcastRoomList(io)
         } else {

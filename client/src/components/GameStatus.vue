@@ -86,6 +86,7 @@ const conditionLabel = computed(() => {
     'same-size':        'Tres piezas del mismo tamaño en línea',
     'ordered-sequence': 'Secuencia ordenada en línea',
     'complete-cell':    '¡Casilla completa!',
+    'timeout':          'Tiempo agotado',
   }
   return store.winResult ? labels[store.winResult.condition] : ''
 })

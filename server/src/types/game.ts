@@ -35,12 +35,15 @@ export interface GameSettings {
   turnTimerEnabled: boolean
   turnDurationSeconds: number
   removePieceOnTimeout: boolean
+  /** Per-player total clock. 0 disables chess-clock mode. */
+  playerClockSeconds?: number
 }
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   turnTimerEnabled: false,
   turnDurationSeconds: 90,
   removePieceOnTimeout: false,
+  playerClockSeconds: 0,
 }
 
 export interface Piece {
@@ -71,6 +74,6 @@ export type Line = CellCoord[]
 
 export interface WinResult {
   winner: Player
-  condition: 'same-size' | 'ordered-sequence' | 'complete-cell'
+  condition: 'same-size' | 'ordered-sequence' | 'complete-cell' | 'timeout'
   highlights: Array<{ coord: CellCoord; size: Size }>
 }

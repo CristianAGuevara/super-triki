@@ -38,6 +38,7 @@
       </aside>
 
       <section class="spectator__center">
+        <MatchClocks />
         <div class="spectator__board">
           <Board />
         </div>
@@ -75,6 +76,7 @@ import { connectSocket, disconnectSocket } from '@/services/socket'
 import Board from '@/components/Board.vue'
 import PlayerPanel from '@/components/PlayerPanel.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
+import MatchClocks from '@/components/MatchClocks.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  applyClockTimeout,
   applyMove,
   buildInitialGameState,
   skipTurn,
@@ -63,6 +64,48 @@ test('detectDraw is true when every player has exhausted their pieces', () => {
   const game = buildInitialGameState(2)
   assert.equal(detectDraw(game.board, { 1: [], 2: [] }, [1, 2]), true)
   assert.equal(detectDraw(game.board, { 1: [], 2: game.inventories[2] }, [1, 2]), false)
+})
+
+test('a chess clock deducts time from the player who moves', () => {
+  const game = buildInitialGameState(2, 1, {
+    turnTimerEnabled: false,
+    turnDurationSeconds: 90,
+    removePieceOnTimeout: false,
+    playerClockSeconds: 60,
+  })
+  game.turnStartedAt = Date.now() - 10_000
+  const next = applyMove(game, {
+    roomId: 'ABC123',
+    pieceId: 'p1-large-0',
+    targetRow: 0,
+    targetCol: 0,
+    targetSize: 'large',
+  })
+
+  assert.ok((next.playerClocks[1] ?? 0) <= 50_000)
+  assert.equal(next.playerClocks[2], 60_000)
+})
+
+test('clock timeout eliminates one player and the last active player wins', () => {
+  const game = buildInitialGameState(3, 1, {
+    turnTimerEnabled: false,
+    turnDurationSeconds: 90,
+    removePieceOnTimeout: false,
+    playerClockSeconds: 10,
+  })
+
+  const first = applyClockTimeout(game, game.turnStartedAt + 11_000)
+  assert.ok(first)
+  assert.equal(first.timedOutPlayer, 1)
+  assert.equal(first.finished, false)
+  assert.deepEqual(first.game.eliminatedByTimeout, [1])
+  assert.notEqual(first.game.currentPlayer, 1)
+
+  const second = applyClockTimeout(first.game, first.game.turnStartedAt + 11_000)
+  assert.ok(second)
+  assert.equal(second.finished, true)
+  assert.equal(second.game.winResult?.winner, 3)
+  assert.equal(second.game.winResult?.condition, 'timeout')
 })
 
 test('skipTurn advances without penalty when the option is disabled', () => {

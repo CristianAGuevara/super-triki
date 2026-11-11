@@ -27,6 +27,8 @@ export const useGameStore = defineStore('game', () => {
   const inventories = ref<Record<Player, Piece[]>>({})
   const currentPlayer = ref<Player>(1)
   const players = ref<Player[]>([1, 2])
+  const playerClocks = ref<Partial<Record<Player, number>>>({})
+  const eliminatedByTimeout = ref<Player[]>([])
   const playerMeta = computed(() => {
     const roomStore = useRoomStore()
     const meta: Record<number, { color: string; label: string; cssVar: string }> = {}
@@ -109,6 +111,8 @@ export const useGameStore = defineStore('game', () => {
     dragState.value = null
     selectedPiece.value = null
     clearSelectionHint()
+    playerClocks.value = {}
+    eliminatedByTimeout.value = []
     moveNumber.value = 0
     turnStartedAt.value = Date.now()
     hasServerState.value = false
@@ -208,6 +212,8 @@ export const useGameStore = defineStore('game', () => {
     moveNumber.value    = state.moveNumber
     turnStartedAt.value = state.turnStartedAt ?? Date.now()
     lastMove.value      = state.lastMove ?? null
+    playerClocks.value  = state.playerClocks ?? {}
+    eliminatedByTimeout.value = state.eliminatedByTimeout ?? []
     lastMoveSource.value = null
     const roomStore = useRoomStore()
     const observedMove = state.lastMove
@@ -303,6 +309,8 @@ export const useGameStore = defineStore('game', () => {
     inventories,
     currentPlayer,
     players,
+    playerClocks,
+    eliminatedByTimeout,
     playerMeta,
     winResult,
     isDraw,

@@ -76,10 +76,21 @@ unirse con un código. En la sala de espera, el anfitrión elige el formato:
 
 Al iniciar, los jugadores se reparten priorizando grupos de 4 y después grupos de
 3; solo se usa un grupo de 2 cuando es inevitable, como ocurre con 5 jugadores
-(3 + 2). Los empates de una partida de eliminación se pueden repetir. Las
-partidas de torneo usan un temporizador de 90 segundos por turno para que un
-jugador desconectado no bloquee la ronda. Los torneos públicos aparecen en el
-listado del menú principal, diferenciados de las salas y filtrables por tipo.
+(3 + 2). Los empates de una partida de eliminación se pueden repetir.
+
+Las partidas de torneo usan un **reloj total por jugador** elegido por el
+anfitrión (3, 5, 8, 10 o 15 minutos). Solo corre el reloj del jugador que tiene
+el turno. Al agotarse, ese jugador queda fuera de la partida y el resto continúa;
+si queda uno solo, gana el grupo. La duración máxima de un grupo es el tiempo por
+jugador multiplicado por sus integrantes.
+
+Desde la sala del torneo se pueden ver las partidas de otros grupos. Mientras
+alguien está espectando, aparece un icono de ojo con el número de espectadores
+únicos. Al terminar la partida observada, el espectador vuelve automáticamente a
+la sala del torneo.
+
+Los torneos públicos aparecen en el listado del menú principal, diferenciados de
+las salas y filtrables por tipo.
 
 ## Variables de entorno
 

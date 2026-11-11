@@ -73,6 +73,7 @@ test('runs a points league and resolves a top tie with sudden death', async () =
     hostSocket,
     'league',
     2,
+    300,
   )
   assert.equal(settings.ok, true)
 
@@ -139,6 +140,42 @@ test('runs a points league and resolves a top tie with sudden death', async () =
   assert.equal(finished.phase, 'finished')
   assert.ok(finished.championId)
   assert.equal(finished.participants.filter(participant => participant.leagueWins === 1).length, 2)
+})
+
+test('tracks how many tournament players are watching each group', async () => {
+  const hostSocket = `tournament-watch-${randomUUID()}`
+  const created = await TournamentManager.createTournament('Host', hostSocket, 'Con espectadores')
+  for (let index = 2; index <= 5; index++) {
+    const joined = await TournamentManager.joinTournament(
+      created.tournament.tournamentId,
+      `Jugador ${index}`,
+      `tournament-watch-${index}-${randomUUID()}`,
+    )
+    assert.equal(joined.ok, true)
+  }
+
+  const started = await TournamentManager.startTournament(created.tournament.tournamentId, hostSocket)
+  assert.equal(started.ok, true)
+  if (!started.ok || started.state.groups.length < 2) return
+
+  const groupA = started.state.groups[0]
+  const groupB = started.state.groups[1]
+  const spectator = started.state.participants.find(participant =>
+    groupB.playerIds.includes(participant.id)
+  )
+  assert.ok(spectator?.connected)
+
+  const tournament = await TournamentManager.getTournament(created.tournament.tournamentId)
+  assert.ok(tournament)
+  const participant = tournament.participants.find(candidate => candidate.id === spectator!.id)
+  assert.ok(participant?.socketId)
+  const startedWatching = await TournamentManager.startSpectating(participant.socketId, groupA.id)
+  assert.ok(startedWatching)
+  assert.equal(startedWatching.groups.find(group => group.id === groupA.id)?.spectatorCount, 1)
+
+  const stoppedWatching = await TournamentManager.stopSpectating(participant.socketId)
+  assert.ok(stoppedWatching)
+  assert.equal(stoppedWatching.groups.find(group => group.id === groupA.id)?.spectatorCount, 0)
 })
 
 test('lists tournaments publicly until they finish', async () => {

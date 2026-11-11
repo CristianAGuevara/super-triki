@@ -274,6 +274,7 @@ export function useSocket() {
     tournamentId: string,
     format: TournamentFormat,
     leagueRounds: number,
+    playerClockSeconds: number,
   ): Promise<TournamentControlAck> {
     return ackRequest<TournamentControlAck>(
       'El servidor no respondió al guardar el formato',
@@ -281,6 +282,7 @@ export function useSocket() {
         tournamentId,
         format,
         leagueRounds,
+        playerClockSeconds,
       }, done),
     )
   }
@@ -354,6 +356,13 @@ export function useSocket() {
     })
   }
 
+  function emitLeaveSpectator(): Promise<GameControlAck> {
+    return ackRequest<GameControlAck>(
+      'El servidor no respondió al salir del modo espectador',
+      done => socket.emit('spectate:leave', {}, done),
+    )
+  }
+
   function emitMove(payload: GameMovePayload): void {
     socket.emit('game:move', payload, res => {
       if (!res.ok) roomStore.setError(res.error ?? 'Movimiento rechazado')
@@ -422,6 +431,7 @@ export function useSocket() {
     emitJoinRoom,
     emitReconnectRoom,
     emitJoinSpectator,
+    emitLeaveSpectator,
     emitMove,
     emitSetColor,
     emitRematch,

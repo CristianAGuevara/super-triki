@@ -105,6 +105,7 @@ export interface TournamentSettingsPayload {
   tournamentId: string
   format: TournamentFormat
   leagueRounds: number
+  playerClockSeconds: number
 }
 
 export interface TournamentRoomAssignment {
@@ -134,6 +135,7 @@ export interface ClientToServerEvents {
   'tournament:retry-group': (payload: { tournamentId: string; groupId: string }, ack: (res: TournamentControlAck) => void) => void
   'tournament:leave': (payload: { tournamentId: string }, ack: (res: TournamentControlAck) => void) => void
   'spectate:join': (payload: { roomId: string }, ack: (res: SpectateJoinAck) => void) => void
+  'spectate:leave': (payload: Record<string, never>, ack: (res: GameControlAck) => void) => void
   'game:move':   (payload: GameMovePayload,   ack: (res: GameMoveAck)   => void) => void
   'game:rematch':(payload: RematchPayload, ack: (res: GameControlAck) => void) => void
   'game:start':  (payload: GameStartPayload, ack: (res: GameControlAck) => void) => void
@@ -199,6 +201,8 @@ export interface GameStateSnapshot {
   turnStartedAt: number
   players:       PlayerSlot[]
   lastMove:      LastMove | null
+  playerClocks?: Partial<Record<PlayerSlot, number>>
+  eliminatedByTimeout?: PlayerSlot[]
 }
 
 export interface GameOverPayload {

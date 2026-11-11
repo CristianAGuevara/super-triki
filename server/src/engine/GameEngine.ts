@@ -20,6 +20,8 @@ export interface RoomGameState {
   players:       PlayerSlot[]
   lastMove:      LastMove | null
   settings:      GameSettings
+  playerClocks: Partial<Record<PlayerSlot, number>>
+  eliminatedByTimeout: PlayerSlot[]
 }
 
 function buildInventory(slot: PlayerSlot): Piece[] {
@@ -43,6 +45,10 @@ export function buildInitialGameState(
   const inventories = Object.fromEntries(
     players.map(slot => [slot, buildInventory(slot)])
   ) as Record<PlayerSlot, Piece[]>
+  const clockMs = (settings.playerClockSeconds ?? 0) * 1_000
+  const playerClocks = clockMs > 0
+    ? Object.fromEntries(players.map(slot => [slot, clockMs])) as Partial<Record<PlayerSlot, number>>
+    : {}
 
   return {
     board:         emptyBoard() as Board,
@@ -56,7 +62,25 @@ export function buildInitialGameState(
     players,
     lastMove:      null,
     settings:      { ...settings },
+    playerClocks,
+    eliminatedByTimeout: [],
   }
+}
+
+export function activePlayers(state: RoomGameState): PlayerSlot[] {
+  return state.players.filter(slot => !state.eliminatedByTimeout.includes(slot))
+}
+
+export function clockRemainingForPlayer(
+  state: RoomGameState,
+  slot: PlayerSlot,
+  now = Date.now(),
+): number | null {
+  if ((state.settings.playerClockSeconds ?? 0) <= 0) return null
+  const stored = state.playerClocks[slot]
+  if (stored === undefined) return null
+  if (state.winResult || state.isDraw || state.currentPlayer !== slot) return stored
+  return Math.max(0, stored - (now - state.turnStartedAt))
 }
 
 export type ValidationResult =
@@ -73,6 +97,10 @@ export function validateMove(
 
   if (actingSlot !== state.currentPlayer)
     return { valid: false, reason: 'Not your turn' }
+
+  const remainingClock = clockRemainingForPlayer(state, actingSlot)
+  if (remainingClock !== null && remainingClock <= 0)
+    return { valid: false, reason: 'Clock expired' }
 
   const { targetRow, targetCol, targetSize, pieceId } = move
 
@@ -106,6 +134,13 @@ export function applyMove(
 ): RoomGameState {
   const { pieceId, targetRow, targetCol, targetSize } = move
   const actingSlot = state.currentPlayer
+  const now = Date.now()
+  const players = activePlayers(state)
+  const playerClocks: Partial<Record<PlayerSlot, number>> = { ...state.playerClocks }
+  if ((state.settings.playerClockSeconds ?? 0) > 0) {
+    const stored = state.playerClocks[actingSlot] ?? 0
+    playerClocks[actingSlot] = Math.max(0, stored - (now - state.turnStartedAt))
+  }
 
   // Deep-copy inventories
   const newInventories = Object.fromEntries(
@@ -123,8 +158,8 @@ export function applyMove(
     [targetSize]: piece,
   }
 
-  const winResult = detectWin(newBoard, LINES, state.players)
-  const isDraw = !winResult && detectDraw(newBoard, newInventories, state.players)
+  const winResult = detectWin(newBoard, LINES, players)
+  const isDraw = !winResult && detectDraw(newBoard, newInventories, players)
 
   let nextPlayer = actingSlot
   let turnSteps = 1
@@ -132,7 +167,7 @@ export function applyMove(
     const currentIdx = state.players.indexOf(actingSlot)
     for (let step = 1; step <= state.players.length; step++) {
       const candidate = state.players[(currentIdx + step) % state.players.length]
-      if ((newInventories[candidate]?.length ?? 0) > 0) {
+      if (players.includes(candidate) && (newInventories[candidate]?.length ?? 0) > 0) {
         nextPlayer = candidate
         turnSteps = step
         break
@@ -146,11 +181,13 @@ export function applyMove(
     currentPlayer: winResult || isDraw ? actingSlot : nextPlayer,
     moveNumber:    state.moveNumber + 1,
     turnNumber:    state.turnNumber + turnSteps,
-    turnStartedAt: Date.now(),
+    turnStartedAt: now,
     winResult,
     isDraw,
     players:       state.players,
     settings:      state.settings,
+    playerClocks,
+    eliminatedByTimeout: [...state.eliminatedByTimeout],
     lastMove: {
       pieceId,
       player: piece.player,
@@ -174,14 +211,15 @@ export function skipTurn(state: RoomGameState, now = Date.now()): RoomGameState 
     else if (pieces.length > 0) pieces.pop()
   }
 
-  const isDraw = detectDraw(state.board, inventories, state.players)
+  const players = activePlayers(state)
+  const isDraw = detectDraw(state.board, inventories, players)
   const currentIdx = state.players.indexOf(state.currentPlayer)
   let nextPlayer = state.currentPlayer
   let turnSteps = 1
   if (!isDraw) {
     for (let step = 1; step <= state.players.length; step++) {
       const candidate = state.players[(currentIdx + step) % state.players.length]
-      if ((inventories[candidate]?.length ?? 0) > 0) {
+      if (players.includes(candidate) && (inventories[candidate]?.length ?? 0) > 0) {
         nextPlayer = candidate
         turnSteps = step
         break
@@ -199,6 +237,83 @@ export function skipTurn(state: RoomGameState, now = Date.now()): RoomGameState 
   }
 }
 
+export interface ClockTimeoutResult {
+  game: RoomGameState
+  timedOutPlayer: PlayerSlot
+  finished: boolean
+}
+
+export function applyClockTimeout(
+  state: RoomGameState,
+  now = Date.now(),
+): ClockTimeoutResult | null {
+  if ((state.settings.playerClockSeconds ?? 0) <= 0) return null
+  if (state.winResult || state.isDraw) return null
+
+  const timedOutPlayer = state.currentPlayer
+  const remaining = clockRemainingForPlayer(state, timedOutPlayer, now)
+  if (remaining === null || remaining > 0) return null
+
+  const eliminatedByTimeout = [...new Set([
+    ...state.eliminatedByTimeout,
+    timedOutPlayer,
+  ])]
+  const playerClocks = {
+    ...state.playerClocks,
+    [timedOutPlayer]: 0,
+  }
+  const stillActive = state.players.filter(slot => !eliminatedByTimeout.includes(slot))
+
+  if (stillActive.length <= 1) {
+    const winner = stillActive[0]
+    return {
+      game: {
+        ...state,
+        currentPlayer: timedOutPlayer,
+        turnStartedAt: now,
+        playerClocks,
+        eliminatedByTimeout,
+        winResult: winner
+          ? { winner, condition: 'timeout', highlights: [] }
+          : null,
+        isDraw: !winner,
+      },
+      timedOutPlayer,
+      finished: true,
+    }
+  }
+
+  const currentIdx = state.players.indexOf(timedOutPlayer)
+  let nextPlayer = timedOutPlayer
+  let turnSteps = 1
+  let foundNext = false
+  for (let step = 1; step <= state.players.length; step++) {
+    const candidate = state.players[(currentIdx + step) % state.players.length]
+    if (!stillActive.includes(candidate)) continue
+    if ((state.inventories[candidate]?.length ?? 0) === 0) continue
+    nextPlayer = candidate
+    turnSteps = step
+    foundNext = true
+    break
+  }
+
+  const isDraw = !foundNext && detectDraw(state.board, state.inventories, stillActive)
+  return {
+    game: {
+      ...state,
+      currentPlayer: isDraw ? timedOutPlayer : nextPlayer,
+      turnNumber: state.turnNumber + turnSteps,
+      turnStartedAt: now,
+      playerClocks,
+      eliminatedByTimeout,
+      winResult: null,
+      isDraw,
+    },
+    timedOutPlayer,
+    finished: isDraw,
+  }
+}
+
 export function toSnapshot(state: RoomGameState) {
   return {
     board:         state.board,
@@ -209,5 +324,7 @@ export function toSnapshot(state: RoomGameState) {
     turnStartedAt: state.turnStartedAt,
     players:       state.players,
     lastMove:      state.lastMove,
+    playerClocks:  state.playerClocks,
+    eliminatedByTimeout: state.eliminatedByTimeout,
   }
 }

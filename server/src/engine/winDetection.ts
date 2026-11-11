@@ -1,11 +1,12 @@
 import type { Board, Line, Piece, WinResult, Size, CellCoord } from '../types/game.js'
 import { SIZE_ORDER } from '../types/game.js'
 
-function checkSameSize(board: Board, lines: Line[]): WinResult | null {
+function checkSameSize(board: Board, lines: Line[], players: number[]): WinResult | null {
   for (const line of lines) {
     for (const size of SIZE_ORDER) {
       const pieces = line.map(([r, c]) => board[r][c][size])
-      if (pieces.every((p): p is NonNullable<typeof p> => p !== null && p.player === pieces[0]!.player)) {
+      if (pieces.every((p): p is NonNullable<typeof p> => p !== null && p.player === pieces[0]!.player) &&
+          players.includes(pieces[0]!.player)) {
         return {
           winner: pieces[0]!.player,
           condition: 'same-size',
@@ -68,7 +69,7 @@ function checkCompleteCell(board: Board, players: number[]): WinResult | null {
 export function detectWin(board: Board, lines: Line[], players: number[]): WinResult | null {
   return (
     checkCompleteCell(board, players) ??
-    checkSameSize(board, lines) ??
+    checkSameSize(board, lines, players) ??
     checkOrderedSequence(board, lines, players) ??
     null
   )
