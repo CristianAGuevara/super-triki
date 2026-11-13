@@ -640,6 +640,8 @@ onUnmounted(() => {
 
 .cine__line {
   position: absolute;
+  /* Above every cell, including the focused one (z-index 2). */
+  z-index: 6;
   inset: calc(var(--cell) * 0.13);
   width: calc(100% - var(--cell) * 0.26);
   height: calc(100% - var(--cell) * 0.26);

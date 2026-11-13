@@ -123,6 +123,7 @@ onUnmounted(() => window.clearTimeout(timer))
 
 .hero-board__line {
   position: absolute;
+  z-index: 2;
   top: calc(var(--cell) * 0.14);
   left: 50%;
   width: calc(var(--cell) * 3.18);
