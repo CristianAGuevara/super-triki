@@ -1,4 +1,16 @@
 <template>
+  <!-- Roughens ring edges and speckles the fill for the "Pizarra" theme. -->
+  <svg class="app-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="st-chalk" x="-15%" y="-15%" width="130%" height="130%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.4" xChannelSelector="R" yChannelSelector="G" result="rough" />
+        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.7 1.6" result="speckle" />
+        <feComposite in="rough" in2="speckle" operator="in" />
+      </filter>
+    </defs>
+  </svg>
+
   <div class="app-ambient" aria-hidden="true">
     <span class="app-ambient__ring app-ambient__ring--a" />
     <span class="app-ambient__ring app-ambient__ring--b" />
@@ -73,22 +85,50 @@
         />
       </div>
 
-      <button
-        class="icon-btn theme-toggle"
-        :aria-label="themeStore.theme === 'neon' ? 'Cambiar a tema de día' : 'Cambiar a tema de noche'"
-        :title="themeStore.theme === 'neon' ? 'Tema de día' : 'Tema de noche'"
-        @click="toggleTheme"
-      >
-        <Transition name="theme-icon" mode="out-in">
-          <svg v-if="themeStore.theme === 'neon'" key="moon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+      <div ref="themeMenuRoot" class="theme-picker">
+        <button
+          class="icon-btn theme-toggle"
+          aria-haspopup="menu"
+          :aria-expanded="themeMenuOpen"
+          aria-label="Cambiar tema de la interfaz"
+          title="Tema de la interfaz"
+          @click="toggleThemeMenu"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.3-4-7.8-9-7.8z" />
+            <circle cx="7.5" cy="11.5" r="1" />
+            <circle cx="10.5" cy="7.5" r="1" />
+            <circle cx="15" cy="7.5" r="1" />
           </svg>
-          <svg v-else key="sun" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="4.5" />
-            <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-          </svg>
+        </button>
+
+        <Transition name="theme-menu">
+          <div v-if="themeMenuOpen" class="theme-menu" role="menu" aria-label="Temas">
+            <span class="st-eyebrow theme-menu__title">Tema de la interfaz</span>
+            <button
+              v-for="option in themeStore.themes"
+              :key="option.id"
+              type="button"
+              role="menuitemradio"
+              class="theme-option"
+              :class="{ 'theme-option--active': themeStore.theme === option.id }"
+              :aria-checked="themeStore.theme === option.id"
+              @click="selectTheme(option.id)"
+            >
+              <span class="theme-option__swatch" :class="`theme-option__swatch--${option.id}`" aria-hidden="true">
+                <i :style="{ background: option.swatches[0] }" />
+                <i :style="{ background: option.swatches[1] }" />
+                <i :style="{ background: option.swatches[2] }" />
+              </span>
+              <span class="theme-option__copy">
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.description }}</small>
+              </span>
+              <span v-if="themeStore.theme === option.id" class="theme-option__check" aria-hidden="true">✓</span>
+            </button>
+          </div>
         </Transition>
-      </button>
+      </div>
     </div>
   </header>
 
@@ -109,9 +149,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
-import { useThemeStore } from '@/stores/themeStore'
+import { useThemeStore, type ThemeId } from '@/stores/themeStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useTvModeStore } from '@/stores/tvStore'
@@ -399,9 +439,27 @@ socket.on('disconnect', handleDisconnect)
 socket.on('connect_error', handleConnectError)
 socket.io.on('reconnect_attempt', handleReconnectAttempt)
 
-function toggleTheme() {
+const themeMenuOpen = ref(false)
+const themeMenuRoot = ref<HTMLElement | null>(null)
+
+function toggleThemeMenu() {
   audioStore.playSfx('click')
-  themeStore.setTheme(themeStore.theme === 'neon' ? 'sunset' : 'neon')
+  themeMenuOpen.value = !themeMenuOpen.value
+}
+
+function selectTheme(theme: ThemeId) {
+  themeStore.setTheme(theme)
+  audioStore.playSfx('select')
+  themeMenuOpen.value = false
+}
+
+function closeThemeMenuOnOutside(event: Event) {
+  if (!themeMenuOpen.value) return
+  if (event instanceof KeyboardEvent) {
+    if (event.key === 'Escape') themeMenuOpen.value = false
+    return
+  }
+  if (!themeMenuRoot.value?.contains(event.target as Node)) themeMenuOpen.value = false
 }
 
 function toggleMusic() {
@@ -430,6 +488,8 @@ onMounted(() => {
     }
   }
   window.addEventListener('pointerdown', activateAudio)
+  document.addEventListener('pointerdown', closeThemeMenuOnOutside)
+  document.addEventListener('keydown', closeThemeMenuOnOutside)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
@@ -443,6 +503,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('pointerdown', activateAudio)
+  document.removeEventListener('pointerdown', closeThemeMenuOnOutside)
+  document.removeEventListener('keydown', closeThemeMenuOnOutside)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
@@ -463,6 +525,7 @@ onUnmounted(() => {
 <style>
 @import '@/assets/variables.css';
 @import '@/assets/base.css';
+@import '@/assets/themes.css';
 </style>
 
 <style scoped>
@@ -568,9 +631,9 @@ onUnmounted(() => {
   transition: transform 0.6s var(--ease-spring);
 }
 
-.app-logo__ring--l { stroke: var(--accent-primary); stroke-width: 8; }
-.app-logo__ring--m { stroke: var(--accent-secondary); stroke-width: 6; }
-.app-logo__dot { fill: var(--player-2-color); }
+.app-logo__ring--l { stroke: var(--accent-primary); stroke-width: 6; }
+.app-logo__ring--m { stroke: var(--accent-secondary); stroke-width: 5; }
+.app-logo__dot { fill: var(--win-gold); }
 
 .app-logo:hover .app-logo__ring--l { transform: rotate(90deg) scale(1.06); }
 .app-logo:hover .app-logo__ring--m { transform: scale(0.86); }
@@ -691,9 +754,76 @@ onUnmounted(() => {
   height: 44px;
 }
 
-.theme-icon-enter-active, .theme-icon-leave-active { transition: opacity 0.2s ease, transform 0.35s var(--ease-spring); }
-.theme-icon-enter-from { opacity: 0; transform: rotate(-90deg) scale(0.5); }
-.theme-icon-leave-to { opacity: 0; transform: rotate(90deg) scale(0.5); }
+.app-defs { position: absolute; }
+
+.theme-picker { position: relative; }
+
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  width: min(320px, calc(100vw - 24px));
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card), 0 24px 50px -20px rgba(0, 0, 0, 0.7);
+}
+
+.theme-menu__title { padding: 4px 8px 6px; }
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-option:hover { background: var(--control-hover); }
+
+.theme-option--active {
+  border-color: var(--accent-primary);
+  background: var(--control-bg);
+}
+
+.theme-option__swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.theme-option__swatch i { position: absolute; border-radius: 50%; }
+.theme-option__swatch i:nth-child(1) { inset: 0; border-radius: 12px; border: 1px solid var(--line-strong); }
+.theme-option__swatch i:nth-child(2) { width: 26px; height: 26px; -webkit-mask: radial-gradient(farthest-side, transparent 58%, #000 60%); mask: radial-gradient(farthest-side, transparent 58%, #000 60%); }
+.theme-option__swatch i:nth-child(3) { width: 9px; height: 9px; }
+
+/* Each swatch previews its own theme, whichever one is active. */
+.theme-option__swatch--pixel i { border-radius: 0 !important; }
+.theme-option__swatch--pixel i:nth-child(2) { -webkit-mask: linear-gradient(#000, #000) center / 100% 100%, linear-gradient(#000, #000) center / 46% 46% no-repeat; -webkit-mask-composite: xor; mask: linear-gradient(#000, #000) center / 100% 100% exclude, linear-gradient(#000, #000) center / 46% 46% no-repeat; }
+.theme-option__swatch--chalk i:nth-child(1) { border: 1.5px dashed rgba(243, 239, 226, 0.6); }
+.theme-option__swatch--chalk i:nth-child(2) { -webkit-mask: radial-gradient(farthest-side, transparent 74%, #000 76%); mask: radial-gradient(farthest-side, transparent 74%, #000 76%); }
+
+.theme-option__copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
+.theme-option__copy strong { color: var(--text-primary); font-family: var(--font-display); font-size: 16px; }
+.theme-option__copy small { color: var(--text-muted); font-size: 12.5px; line-height: 1.3; }
+.theme-option__check { color: var(--accent-primary); font-weight: 900; }
+
+.theme-menu-enter-active, .theme-menu-leave-active { transition: opacity 0.18s ease, transform 0.25s var(--ease-spring); transform-origin: top right; }
+.theme-menu-enter-from, .theme-menu-leave-to { opacity: 0; transform: translateY(-6px) scale(0.96); }
 
 .audio-control__range {
   --fill: 60%;

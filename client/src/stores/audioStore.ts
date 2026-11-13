@@ -15,8 +15,11 @@ export type SfxName =
   | 'join'
   | 'leave'
   | 'start'
+  | 'freeze'
+  | 'heartbeat'
   | 'riser'
   | 'impact'
+  | 'chord'
   | 'chime'
   | 'whoosh'
   | 'fanfare'
@@ -25,6 +28,8 @@ interface SfxOptions {
   size?: Size
   /** Position in a sequence (cinematic chimes climb the scale). */
   step?: number
+  /** Length in seconds for sounds that stretch (the suspense riser). */
+  duration?: number
 }
 
 const VOLUME_KEY = 'st_audio_volume'
@@ -82,6 +87,12 @@ export const useAudioStore = defineStore('audio', () => {
   const muted = ref(readMuted())
   const musicEnabled = ref(readMusic())
   const musicPlaying = ref(false)
+  /** 'chip' swaps every voice for square/triangle waves (pixel theme). */
+  const style = ref<'soft' | 'chip'>('soft')
+
+  function setStyle(value: 'soft' | 'chip') {
+    style.value = value
+  }
 
   let context: AudioContext | null = null
   let masterGain: GainNode | null = null
@@ -181,7 +192,16 @@ export const useAudioStore = defineStore('audio', () => {
     const end = start + dur
     const osc = audio.createOscillator()
     const env = audio.createGain()
-    osc.type = type
+    if (style.value === 'chip') {
+      // Console sound chip: pulse leads, triangle bass, no detune.
+      const bass = freq < 180
+      osc.type = bass ? 'triangle' : 'square'
+      gain *= bass ? 1.25 : 0.42
+      detune = 0
+      attack = Math.min(attack, 0.02)
+    } else {
+      osc.type = type
+    }
     osc.detune.value = detune
     osc.frequency.setValueAtTime(freq, start)
     if (to) osc.frequency.exponentialRampToValueAtTime(to, end)
@@ -380,26 +400,50 @@ export const useAudioStore = defineStore('audio', () => {
         for (let i = 0; i < 6; i++) noise(0.12, 0.05, 6000 + i * 600, 6, 0.46 + i * 0.07)
         break
       }
+      case 'freeze':
+        // Time slows down: everything sinks in pitch.
+        tone({ freq: 1200, to: 90, dur: 0.75, type: 'sawtooth', gain: 0.07, dest })
+        tone({ freq: 600, to: 45, dur: 0.9, type: 'sine', gain: 0.2, dest })
+        noise(0.8, 0.2, 6000, 1.2, 0, undefined, { to: 200 })
+        break
+      case 'heartbeat':
+        tone({ freq: 62, to: 40, dur: 0.16, type: 'sine', gain: 0.5, dest })
+        tone({ freq: 56, to: 36, dur: 0.2, type: 'sine', gain: 0.38, delay: 0.19, dest })
+        noise(0.08, 0.12, 120, 0.8, 0, undefined, { type: 'lowpass' })
+        break
       case 'riser': {
-        // Suspense: rising filtered noise, a drone and an accelerating snare roll.
-        noise(1.5, 0.16, 300, 1.2, 0, undefined, { to: 4200, attack: 1.3 })
-        tone({ freq: 55, to: 98, dur: 1.55, type: 'sawtooth', gain: 0.05, attack: 1.2, dest })
-        tone({ freq: 110, to: 196, dur: 1.55, type: 'sine', gain: 0.06, attack: 1.2, dest })
+        // Suspense: rising filtered noise, a climbing drone and a snare roll
+        // that starts sparse and ends as a buzz.
+        const dur = options.duration ?? 1.5
+        noise(dur, 0.2, 250, 1.2, 0, undefined, { to: 5200, attack: dur * 0.9 })
+        tone({ freq: 55, to: 110, dur, type: 'sawtooth', gain: 0.06, attack: dur * 0.85, dest })
+        tone({ freq: 110, to: 330, dur, type: 'sine', gain: 0.08, attack: dur * 0.85, dest })
+        tone({ freq: 220, to: 880, dur, type: 'triangle', gain: 0.04, attack: dur * 0.9, dest })
         let t = 0
-        let gap = 0.16
-        while (t < 1.42) {
-          noise(0.05, 0.05 + t * 0.09, 1800, 1, t)
+        let gap = Math.min(0.34, dur / 9)
+        while (t < dur - 0.04) {
+          const progress = t / dur
+          noise(0.05, 0.04 + progress * 0.16, 1700 + progress * 900, 1, t)
           t += gap
-          gap = Math.max(0.035, gap * 0.86)
+          gap = Math.max(0.03, gap * 0.9)
         }
         break
       }
       case 'impact':
-        tone({ freq: 150, to: 36, dur: 0.75, type: 'sine', gain: 0.55, dest })
-        tone({ freq: 75, to: 30, dur: 0.9, type: 'triangle', gain: 0.25, dest })
-        noise(0.4, 0.45, 900, 0.7, 0, undefined, { type: 'lowpass', to: 120 })
-        noise(0.09, 0.3, 2400, 1.4)
-        tone({ freq: 1320, dur: 0.12, type: 'triangle', gain: 0.06, delay: 0.01, dest })
+        tone({ freq: 170, to: 32, dur: 1.1, type: 'sine', gain: 0.7, dest })
+        tone({ freq: 85, to: 28, dur: 1.3, type: 'triangle', gain: 0.32, dest })
+        noise(0.5, 0.55, 900, 0.7, 0, undefined, { type: 'lowpass', to: 110 })
+        noise(0.09, 0.35, 2400, 1.4)
+        // Crash cymbal tail.
+        noise(1.6, 0.16, 6500, 0.5, 0, undefined, { type: 'highpass' })
+        tone({ freq: 1320, dur: 0.12, type: 'triangle', gain: 0.07, delay: 0.01, dest })
+        break
+      case 'chord':
+        // The whole winning line rings together.
+        ;[587.33, 739.99, 880, 1174.66].forEach((freq, index) => {
+          tone({ freq, dur: 1.1, type: 'triangle', gain: 0.07, delay: index * 0.02, dest })
+          tone({ freq: freq * 2, dur: 0.7, type: 'sine', gain: 0.02, delay: index * 0.02, dest })
+        })
         break
       case 'chime': {
         const step = Math.min(options.step ?? 0, CHIME_SCALE.length - 1)
@@ -452,6 +496,8 @@ export const useAudioStore = defineStore('audio', () => {
     muted,
     musicEnabled,
     musicPlaying,
+    style,
+    setStyle,
     setVolume,
     toggleMute,
     toggleMusic,

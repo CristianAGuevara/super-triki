@@ -371,8 +371,9 @@ useGameShortcuts(() => roomStore.phase === 'playing' && !showRules.value)
 const lastGameResult = computed(() => {
   if (gameStore.isDraw) return 'Empate'
   const winner = gameStore.winResult?.winner
-  return roomStore.players.find(player => player.slot === winner)?.username
-    ?? (winner ? `Jugador ${winner}` : 'Partida terminada')
+  const name = roomStore.players.find(player => player.slot === winner)?.username
+    ?? (winner ? `Jugador ${winner}` : null)
+  return name ? `Ganó ${name}` : 'Partida terminada'
 })
 
 const resultIsDraw = computed(() => !gameStore.winResult)

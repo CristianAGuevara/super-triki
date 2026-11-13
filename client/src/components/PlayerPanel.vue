@@ -128,7 +128,7 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 
 <style scoped>
 .player-panel {
-  --stack: 76px;
+  --stack: clamp(68px, 9.5vh, 94px);
   display: flex;
   flex-direction: column;
   gap: 14px;

@@ -1643,7 +1643,7 @@ onUnmounted(() => {
 .t-ready__chip.is-ready small { color: var(--accent-success); }
 
 .t-ready__btn { min-width: min(300px, 100%); min-height: 56px; font-size: 17px; }
-.t-ready__btn.is-done { background: var(--accent-success); opacity: 1; }
+.t-ready__btn.is-done { background: var(--accent-success); box-shadow: none; color: #06120b; opacity: 1; text-shadow: none; }
 
 /* ── Champion ── */
 .t-champion {

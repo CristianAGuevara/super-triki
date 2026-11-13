@@ -135,7 +135,7 @@ watch(() => store.selectionHint, hint => {
   .board { --cell: min(112px, calc((100vw - 32px) / 3.45)); }
 }
 
-@media (min-width: 1280px) and (min-height: 860px) {
-  .board { --cell: 124px; }
+@media (min-width: 701px) {
+  .board { --cell: clamp(96px, min(14.5vh, 10.5vw), 150px); }
 }
 </style>

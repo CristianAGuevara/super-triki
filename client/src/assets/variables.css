@@ -1,159 +1,97 @@
 /*
- * Super Triki — "mesa de juego nocturna".
- * Layout concept: a lacquered game tray sits at the centre of every screen;
- * glossy acrylic rings are the only saturated objects, everything else is ink.
+ * Super Triki — base theme "Neón".
+ * Layout concept: a dark room lit only by neon signs. Every piece and frame is
+ * a bent glass tube: white-hot core, coloured halo. Surfaces are black glass.
+ * Other themes (themes.css) re-skin these same tokens.
  */
 :root {
   color-scheme: dark;
 
   /* Type */
-  --font-display: 'Bricolage Grotesque', 'Figtree', 'Segoe UI', system-ui, sans-serif;
-  --font-body: 'Figtree', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Tilt Neon', 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Outfit', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
   /* Shape + motion */
-  --radius-xs: 8px;
-  --radius-s: 12px;
-  --radius-m: 18px;
-  --radius-l: 26px;
+  --radius-xs: 6px;
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 20px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1.25);
 
-  --player-color-coral: #ff5c7c;
-  --player-color-cyan: #3fd8ff;
-  --player-color-magenta: #ff5ce0;
-  --player-color-amber: #ffcf4a;
-  --player-color-emerald: #46e0a0;
-  --player-color-violet: #a98bff;
-  --player-color-orange: #ff9a4d;
-  --player-color-blue: #5b8fff;
+  --player-color-coral: #ff4d6d;
+  --player-color-cyan: #22e8ff;
+  --player-color-magenta: #ff3df0;
+  --player-color-amber: #ffe600;
+  --player-color-emerald: #39ff88;
+  --player-color-violet: #a56bff;
+  --player-color-orange: #ff8a1f;
+  --player-color-blue: #3d7bff;
 
-  --player-1-color: #ff5c7c;
-  --player-2-color: #3fd8ff;
-  --player-3-color: #ff5ce0;
-  --player-4-color: #ffcf4a;
+  --player-1-color: #ff4d6d;
+  --player-2-color: #22e8ff;
+  --player-3-color: #ff3df0;
+  --player-4-color: #ffe600;
 
   /* Legacy piece sizes (pieces now scale with --cell, see Board.vue). */
   --size-large: 76px;
   --size-medium: 48px;
   --size-small: 22px;
 
-  --slot-win-glow: 0 0 14px 4px #ffd970;
-  --win-gold: #ffd970;
+  --win-gold: #ffe600;
+  --slot-win-glow: 0 0 16px 4px #ffe600;
 
-  --page-bg: #0e0b1e;
+  --page-bg: #05040d;
   --page-gradient:
-    radial-gradient(60rem 36rem at 8% -10%, rgba(255, 207, 74, 0.09), transparent 60%),
-    radial-gradient(50rem 34rem at 100% 0%, rgba(255, 93, 143, 0.1), transparent 60%),
-    radial-gradient(70rem 40rem at 50% 120%, rgba(139, 108, 255, 0.12), transparent 60%);
-  --header-bg: rgba(14, 11, 30, 0.74);
-  --surface: #17132c;
-  --surface-raised: #221c3f;
-  --surface-muted: rgba(244, 240, 255, 0.035);
-  --board-bg: #1f1a3c;
-  --board-rim: #2d2654;
-  --cell-bg: #130f27;
-  --cell-border: #2e2753;
-  --groove: rgba(0, 0, 0, 0.55);
-  --groove-light: rgba(255, 255, 255, 0.06);
-  --text-primary: #f4f0ff;
-  --text-secondary: #bdb3dc;
-  --text-muted: #8c82b0;
-  --text-faint: #5f5686;
-  --text-on-accent: #1b1206;
-  --accent-primary: #ffcf4a;
-  --accent-secondary: #ff5d8f;
-  --accent-tertiary: #8b6cff;
-  --accent-danger: #ff5a6e;
-  --accent-success: #46e0a0;
-  --gradient-brand: linear-gradient(115deg, #ffcf4a 0%, #ff8a5c 48%, #ff5d8f 100%);
-  --gradient-primary: linear-gradient(180deg, #ffdb70 0%, #ffbf2e 100%);
-  --gradient-secondary: linear-gradient(180deg, #8ee9ff 0%, #3fc6f0 100%);
-  --line-soft: rgba(205, 192, 255, 0.12);
-  --line-strong: rgba(205, 192, 255, 0.24);
-  --control-bg: rgba(244, 240, 255, 0.05);
-  --control-hover: rgba(244, 240, 255, 0.1);
-  --drop-border: rgba(255, 207, 74, 0.4);
-  --drop-border-strong: rgba(255, 207, 74, 0.85);
-  --placeholder-border: rgba(255, 255, 255, 0.07);
-  --placeholder-hover: rgba(255, 207, 74, 0.08);
-  --ghost-piece: rgba(255, 255, 255, 0.14);
-  --overlay-bg: rgba(6, 4, 16, 0.72);
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 22px 50px -18px rgba(0, 0, 0, 0.6);
-  --shadow-glow: 0 0 36px rgba(255, 207, 74, 0.1);
-  --shadow-tray:
-    0 2px 0 rgba(255, 255, 255, 0.06) inset,
-    0 -3px 0 rgba(0, 0, 0, 0.35) inset,
-    0 30px 60px -20px rgba(0, 0, 0, 0.75),
-    0 0 0 1px rgba(255, 255, 255, 0.03);
-  --btn-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, 0 -2px 0 rgba(0, 0, 0, 0.18) inset, 0 8px 22px -8px rgba(255, 191, 46, 0.55);
-}
-
-:root[data-theme='sunset'] {
-  color-scheme: light;
-
-  --player-color-coral: #e63963;
-  --player-color-cyan: #0a91bd;
-  --player-color-magenta: #c026a6;
-  --player-color-amber: #d99400;
-  --player-color-emerald: #13895a;
-  --player-color-violet: #6d4bd1;
-  --player-color-orange: #db6a1c;
-  --player-color-blue: #2857c9;
-
-  --player-1-color: #e63963;
-  --player-2-color: #0a91bd;
-  --player-3-color: #c026a6;
-  --player-4-color: #d99400;
-
-  --win-gold: #e6a400;
-  --slot-win-glow: 0 0 14px 4px #ffc93d;
-
-  --page-bg: #f4f1fb;
-  --page-gradient:
-    radial-gradient(60rem 36rem at 6% -10%, rgba(91, 61, 245, 0.1), transparent 60%),
-    radial-gradient(50rem 34rem at 100% 0%, rgba(227, 61, 119, 0.09), transparent 60%),
-    radial-gradient(70rem 40rem at 50% 120%, rgba(255, 191, 46, 0.12), transparent 60%);
-  --header-bg: rgba(244, 241, 251, 0.8);
-  --surface: #ffffff;
-  --surface-raised: #ece7fa;
-  --surface-muted: rgba(91, 61, 245, 0.035);
-  --board-bg: #e3dcf6;
-  --board-rim: #cfc4ee;
-  --cell-bg: #f8f6fe;
-  --cell-border: #d6ccf0;
-  --groove: rgba(61, 40, 140, 0.2);
-  --groove-light: rgba(255, 255, 255, 0.9);
-  --text-primary: #1d1735;
-  --text-secondary: #4d4470;
-  --text-muted: #776d98;
-  --text-faint: #a99fc6;
+    radial-gradient(48rem 30rem at 0% -5%, rgba(255, 46, 151, 0.16), transparent 62%),
+    radial-gradient(46rem 30rem at 100% 0%, rgba(34, 232, 255, 0.13), transparent 62%),
+    radial-gradient(60rem 36rem at 50% 115%, rgba(165, 107, 255, 0.18), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 4px);
+  --header-bg: rgba(5, 4, 13, 0.76);
+  --surface: #0d0b1d;
+  --surface-raised: #17142e;
+  --surface-muted: rgba(130, 140, 255, 0.055);
+  --board-bg: #07061a;
+  --board-rim: #0b0922;
+  --cell-bg: #080719;
+  --cell-border: #2c2678;
+  --groove: rgba(0, 0, 0, 0.65);
+  --groove-light: rgba(130, 120, 255, 0.1);
+  --text-primary: #f3f5ff;
+  --text-secondary: #b5bae3;
+  --text-muted: #8086ba;
+  --text-faint: #50558a;
   --text-on-accent: #ffffff;
-  --accent-primary: #5b3df5;
-  --accent-secondary: #e33d77;
-  --accent-tertiary: #0a91bd;
-  --accent-danger: #d42f4e;
-  --accent-success: #13895a;
-  --gradient-brand: linear-gradient(115deg, #5b3df5 0%, #b23fd6 52%, #e33d77 100%);
-  --gradient-primary: linear-gradient(180deg, #7257ff 0%, #5131e8 100%);
-  --gradient-secondary: linear-gradient(180deg, #ec5e90 0%, #d22d68 100%);
-  --line-soft: rgba(61, 40, 140, 0.12);
-  --line-strong: rgba(61, 40, 140, 0.24);
-  --control-bg: rgba(61, 40, 140, 0.05);
-  --control-hover: rgba(61, 40, 140, 0.1);
-  --drop-border: rgba(91, 61, 245, 0.38);
-  --drop-border-strong: rgba(91, 61, 245, 0.8);
-  --placeholder-border: rgba(61, 40, 140, 0.16);
-  --placeholder-hover: rgba(91, 61, 245, 0.08);
-  --ghost-piece: rgba(61, 40, 140, 0.18);
-  --overlay-bg: rgba(29, 23, 53, 0.5);
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 20px 44px -22px rgba(52, 33, 120, 0.35);
-  --shadow-glow: 0 0 36px rgba(91, 61, 245, 0.1);
+  --accent-primary: #22e8ff;
+  --accent-secondary: #ff2e97;
+  --accent-tertiary: #a56bff;
+  --accent-danger: #ff4d6d;
+  --accent-success: #39ff88;
+  --gradient-brand: linear-gradient(100deg, #22e8ff 0%, #a56bff 50%, #ff2e97 100%);
+  --gradient-primary: linear-gradient(120deg, #ff2e97 0%, #b23cff 100%);
+  --gradient-secondary: linear-gradient(120deg, #1790ff 0%, #6a4dff 100%);
+  --line-soft: rgba(130, 140, 255, 0.17);
+  --line-strong: rgba(130, 140, 255, 0.38);
+  --control-bg: rgba(130, 140, 255, 0.07);
+  --control-hover: rgba(130, 140, 255, 0.15);
+  --drop-border: rgba(34, 232, 255, 0.45);
+  --drop-border-strong: rgba(34, 232, 255, 0.9);
+  --placeholder-border: rgba(130, 140, 255, 0.15);
+  --placeholder-hover: rgba(34, 232, 255, 0.08);
+  --ghost-piece: rgba(130, 140, 255, 0.2);
+  --overlay-bg: rgba(3, 2, 10, 0.8);
+  --shadow-card: 0 0 0 1px rgba(130, 140, 255, 0.05) inset, 0 26px 60px -30px rgba(0, 0, 0, 0.95);
+  --shadow-glow: 0 0 30px rgba(34, 232, 255, 0.18);
+  /* The board frame is itself a neon tube. */
   --shadow-tray:
-    0 2px 0 rgba(255, 255, 255, 0.8) inset,
-    0 -3px 0 rgba(61, 40, 140, 0.12) inset,
-    0 30px 60px -24px rgba(52, 33, 120, 0.4),
-    0 0 0 1px rgba(61, 40, 140, 0.06);
-  --btn-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 -2px 0 rgba(0, 0, 0, 0.15) inset, 0 8px 22px -8px rgba(81, 49, 232, 0.55);
+    0 0 0 2px rgba(34, 232, 255, 0.85),
+    0 0 18px 1px rgba(34, 232, 255, 0.45),
+    0 0 80px -10px rgba(165, 107, 255, 0.55),
+    inset 0 0 34px rgba(34, 232, 255, 0.09);
+  --btn-shadow:
+    0 0 16px -2px rgba(255, 46, 151, 0.75),
+    0 0 44px -8px rgba(178, 60, 255, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }

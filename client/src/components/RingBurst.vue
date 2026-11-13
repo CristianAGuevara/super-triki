@@ -6,7 +6,10 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 
 /** Celebration burst of small acrylic rings, drawn on a canvas. */
-const props = withDefaults(defineProps<{ colors: string[]; count?: number }>(), { count: 110 })
+const props = withDefaults(
+  defineProps<{ colors: string[]; count?: number; mode?: 'sides' | 'radial' }>(),
+  { count: 110, mode: 'sides' },
+)
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let frame = 0
@@ -51,12 +54,15 @@ onMounted(() => {
   const w = el.clientWidth
   const h = el.clientHeight
   const particles: Particle[] = Array.from({ length: props.count }, (_, index) => {
+    const radial = props.mode === 'radial'
     const fromLeft = index % 2 === 0
-    const angle = (fromLeft ? -Math.PI / 3 : -2 * Math.PI / 3) + (Math.random() - 0.5) * 0.7
-    const speed = 9 + Math.random() * 9
+    const angle = radial
+      ? Math.random() * Math.PI * 2
+      : (fromLeft ? -Math.PI / 3 : -2 * Math.PI / 3) + (Math.random() - 0.5) * 0.7
+    const speed = radial ? 5 + Math.random() * 17 : 9 + Math.random() * 9
     return {
-      x: fromLeft ? -10 : w + 10,
-      y: h * (0.55 + Math.random() * 0.3),
+      x: radial ? w / 2 : fromLeft ? -10 : w + 10,
+      y: radial ? h / 2 : h * (0.55 + Math.random() * 0.3),
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       r: 4 + Math.random() * 7,

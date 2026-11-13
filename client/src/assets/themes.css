@@ -1,0 +1,452 @@
+/*
+ * Interface themes. "neon" takes its tokens from variables.css; the other
+ * themes re-skin those tokens. Each one adds a few structural overrides.
+ * Selectors use :root[data-theme] so they outrank the components' scoped rules.
+ */
+
+/* ════════════════════════════════════════════════════════════════════
+   NEÓN — the default: glass tubes glowing in a dark room.
+   Its tokens live in variables.css; these are the structural touches.
+   ════════════════════════════════════════════════════════════════════ */
+:root[data-theme='neon'] body {
+  /* Tilt Neon ships one weight; faux-bold would fatten the tube. */
+  font-synthesis: none;
+}
+
+:root[data-theme='neon'] :is(h1, h2, h3, h4) {
+  font-weight: 400;
+  letter-spacing: 0 !important;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--accent-primary) 70%, transparent),
+    0 0 26px color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+/* Gradient text can't take a text-shadow (it would show through), so the
+   glow comes from a filter, and the sign flickers like a tired transformer. */
+:root[data-theme='neon'] .home__hero h1 em {
+  text-shadow: none;
+  filter: drop-shadow(0 0 10px rgba(255, 46, 151, 0.65));
+  animation: neon-flicker 7s linear infinite;
+}
+
+@keyframes neon-flicker {
+  0%, 18%, 20%, 21.5%, 23%, 62%, 63.5%, 100% { opacity: 1; }
+  19%, 22%, 63% { opacity: 0.55; }
+}
+
+:root[data-theme='neon'] .app-logo__name {
+  text-shadow: 0 0 8px rgba(255, 46, 151, 0.8), 0 0 24px rgba(255, 46, 151, 0.5);
+}
+
+:root[data-theme='neon'] .app-logo__mark {
+  filter: drop-shadow(0 0 5px rgba(34, 232, 255, 0.7));
+}
+
+:root[data-theme='neon'] .app-header {
+  border-bottom-color: rgba(34, 232, 255, 0.35);
+  box-shadow: 0 1px 18px -2px rgba(34, 232, 255, 0.35);
+}
+
+:root[data-theme='neon'] .st-eyebrow {
+  text-shadow: 0 0 10px color-mix(in srgb, currentColor 60%, transparent);
+}
+
+/* Board: black glass inside a tube frame; cells are thin violet outlines. */
+:root[data-theme='neon'] :is(.board, .hero-board__grid, .cine__board, .last-game__board, .rules-mini) {
+  background: var(--board-bg);
+}
+
+:root[data-theme='neon'] .board::before { display: none; }
+
+:root[data-theme='neon'] :is(.cell, .cine__cell, .hero-board__cell, .last-game__cell, .rules-mini__cell) {
+  background: var(--cell-bg);
+  box-shadow:
+    inset 0 0 0 1.5px var(--cell-border),
+    inset 0 0 22px rgba(108, 92, 255, 0.14);
+}
+
+:root[data-theme='neon'] .cell--can-drop {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--armed-color) 75%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--armed-color) 16%, transparent);
+}
+
+:root[data-theme='neon'] .cell--hover {
+  background: color-mix(in srgb, var(--armed-color) 9%, var(--cell-bg));
+  box-shadow:
+    inset 0 0 0 2px var(--armed-color),
+    inset 0 0 26px color-mix(in srgb, var(--armed-color) 30%, transparent),
+    0 0 26px -2px var(--armed-color);
+}
+
+:root[data-theme='neon'] :is(.cell--win, .cine__cell.has-lit) {
+  box-shadow:
+    inset 0 0 0 2px var(--win-gold),
+    inset 0 0 26px color-mix(in srgb, var(--win-gold) 28%, transparent),
+    0 0 30px -4px var(--win-gold);
+}
+
+:root[data-theme='neon'] .cell__groove {
+  border: 1px solid var(--placeholder-border);
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme='neon'] .cell__ring--target .cell__groove {
+  border-color: var(--armed-color);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--armed-color) 70%, transparent), inset 0 0 8px color-mix(in srgb, var(--armed-color) 35%, transparent);
+}
+
+/* Black-glass cards with a faint tube edge. */
+:root[data-theme='neon'] :is(.player-panel, .scoreboard, .home__card, .t-panel, .t-group, .t-invite, .lobby__invite, .lobby__setup, .lobby__last-game, .room-card, .rules-card) {
+  background:
+    linear-gradient(180deg, rgba(130, 140, 255, 0.07), transparent 42%),
+    var(--surface);
+}
+
+:root[data-theme='neon'] .st-btn {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+}
+
+:root[data-theme='neon'] .st-btn--ghost {
+  border-color: color-mix(in srgb, var(--accent-primary) 60%, transparent);
+  box-shadow: 0 0 14px -4px var(--accent-primary), inset 0 0 12px -6px var(--accent-primary);
+  color: var(--accent-primary);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary) 70%, transparent);
+}
+
+:root[data-theme='neon'] :is(.lobby__code-char, .t-invite__code span) {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent-primary) 55%, transparent), 0 0 14px -4px var(--accent-primary);
+  text-shadow: 0 0 10px var(--accent-primary);
+}
+
+:root[data-theme='neon'] .app-ambient__ring {
+  border-color: rgba(165, 107, 255, 0.22);
+  box-shadow: 0 0 30px -6px rgba(165, 107, 255, 0.35), inset 0 0 30px -6px rgba(165, 107, 255, 0.25);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PIXEL — 8-bit console: hard edges, flat fills, stepped motion.
+   ════════════════════════════════════════════════════════════════════ */
+:root[data-theme='pixel'] {
+  --font-display: 'Pixelify Sans', 'Silkscreen', 'Courier New', monospace;
+  --font-body: 'Pixelify Sans', 'Courier New', monospace;
+  --font-mono: 'Silkscreen', 'Pixelify Sans', 'Courier New', monospace;
+
+  --radius-xs: 0px;
+  --radius-s: 0px;
+  --radius-m: 0px;
+  --radius-l: 0px;
+  /* Motion snaps between frames instead of gliding. */
+  --ease-out: steps(5, end);
+  --ease-spring: steps(4, end);
+  --ease-snap: steps(4, end);
+
+  --player-color-coral: #ff3b5c;
+  --player-color-cyan: #2ce8f5;
+  --player-color-magenta: #e86de0;
+  --player-color-amber: #fee761;
+  --player-color-emerald: #63c74d;
+  --player-color-violet: #9b7bff;
+  --player-color-orange: #f77622;
+  --player-color-blue: #3a8dff;
+
+  --player-1-color: #ff3b5c;
+  --player-2-color: #2ce8f5;
+  --player-3-color: #e86de0;
+  --player-4-color: #fee761;
+
+  --win-gold: #fee761;
+  --slot-win-glow: 0 0 0 4px #fee761;
+
+  --page-bg: #181425;
+  --page-gradient:
+    linear-gradient(rgba(255, 255, 255, 0.035) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 2px, transparent 2px);
+  --header-bg: #181425;
+  --surface: #262b44;
+  --surface-raised: #3a4466;
+  --surface-muted: #1f2338;
+  --board-bg: #3a4466;
+  --board-rim: #5a6988;
+  --cell-bg: #181425;
+  --cell-border: #5a6988;
+  --groove: #0b0914;
+  --groove-light: transparent;
+  --text-primary: #ffffff;
+  --text-secondary: #c0cbdc;
+  --text-muted: #8b9bb4;
+  --text-faint: #5a6988;
+  --text-on-accent: #181425;
+  --accent-primary: #feae34;
+  --accent-secondary: #ff3b5c;
+  --accent-tertiary: #2ce8f5;
+  --accent-danger: #ff3b5c;
+  --accent-success: #63c74d;
+  --gradient-brand: linear-gradient(180deg, #fee761 0 50%, #f77622 50% 100%);
+  --gradient-primary: linear-gradient(180deg, #fee761 0 50%, #feae34 50% 100%);
+  --gradient-secondary: linear-gradient(180deg, #8ff6ff 0 50%, #2ce8f5 50% 100%);
+  --line-soft: #3a4466;
+  --line-strong: #5a6988;
+  --control-bg: #1f2338;
+  --control-hover: #3a4466;
+  --drop-border: #feae34;
+  --drop-border-strong: #fee761;
+  --placeholder-border: #3a4466;
+  --placeholder-hover: #262b44;
+  --ghost-piece: #3a4466;
+  --overlay-bg: rgba(11, 9, 20, 0.86);
+  --shadow-card: 4px 4px 0 #0b0914;
+  --shadow-glow: 0 0 0 transparent;
+  --shadow-tray: 0 0 0 4px #0b0914, 10px 10px 0 4px rgba(0, 0, 0, 0.55), inset 4px 4px 0 rgba(255, 255, 255, 0.12), inset -4px -4px 0 rgba(0, 0, 0, 0.3);
+  --btn-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.25), inset 4px 4px 0 rgba(255, 255, 255, 0.4), 4px 4px 0 #0b0914;
+}
+
+:root[data-theme='pixel'] *,
+:root[data-theme='pixel'] *::before,
+:root[data-theme='pixel'] *::after {
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root[data-theme='pixel'] body {
+  background-size: 32px 32px;
+  font-size: 16px;
+  /* Only the regular cut is loaded: its bold closes the counter of "C". */
+  font-synthesis: none;
+  text-rendering: optimizeSpeed;
+}
+
+:root[data-theme='pixel'] :is(h1, h2, h3, h4) {
+  letter-spacing: 0 !important;
+  line-height: 1.05;
+  text-shadow: 3px 3px 0 #0b0914;
+}
+
+:root[data-theme='pixel'] .app-ambient { display: none; }
+
+/* Pieces: flat three-tone fill cut by a pixel-grid mask. */
+:root[data-theme='pixel'] .st-ring {
+  filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, 0.8));
+}
+
+:root[data-theme='pixel'] .st-ring::before {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ring-color) 55%, #fff) 0 32%,
+    var(--ring-color) 32% 68%,
+    color-mix(in srgb, var(--ring-color) 62%, #000) 68% 100%
+  );
+  -webkit-mask: var(--pixel-mask) center / 100% 100% no-repeat;
+  mask: var(--pixel-mask) center / 100% 100% no-repeat;
+}
+
+:root[data-theme='pixel'] .st-ring,
+:root[data-theme='pixel'] .st-ring--large {
+  --pixel-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' shape-rendering='crispEdges'%3E%3Cpath d='M7 0h4v1h-4zM4 1h10v1h-10zM3 2h4v1h-4zM11 2h4v1h-4zM2 3h3v1h-3zM13 3h3v1h-3zM1 4h3v1h-3zM14 4h3v1h-3zM1 5h2v1h-2zM15 5h2v1h-2zM1 6h2v1h-2zM15 6h2v1h-2zM0 7h2v1h-2zM16 7h2v1h-2zM0 8h2v1h-2zM16 8h2v1h-2zM0 9h2v1h-2zM16 9h2v1h-2zM0 10h2v1h-2zM16 10h2v1h-2zM1 11h2v1h-2zM15 11h2v1h-2zM1 12h2v1h-2zM15 12h2v1h-2zM1 13h3v1h-3zM14 13h3v1h-3zM2 14h3v1h-3zM13 14h3v1h-3zM3 15h4v1h-4zM11 15h4v1h-4zM4 16h10v1h-10zM7 17h4v1h-4z'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='pixel'] .st-ring--medium {
+  --pixel-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13' shape-rendering='crispEdges'%3E%3Cpath d='M4 0h5v1h-5zM3 1h7v1h-7zM2 2h2v1h-2zM9 2h2v1h-2zM1 3h2v1h-2zM10 3h2v1h-2zM0 4h2v1h-2zM11 4h2v1h-2zM0 5h2v1h-2zM11 5h2v1h-2zM0 6h2v1h-2zM11 6h2v1h-2zM0 7h2v1h-2zM11 7h2v1h-2zM0 8h2v1h-2zM11 8h2v1h-2zM1 9h2v1h-2zM10 9h2v1h-2zM2 10h2v1h-2zM9 10h2v1h-2zM3 11h7v1h-7zM4 12h5v1h-5z'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='pixel'] .st-ring--small {
+  --pixel-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'%3E%3Cpath d='M2 0h3v1h-3zM1 1h5v1h-5zM0 2h7v1h-7zM0 3h7v1h-7zM0 4h7v1h-7zM1 5h5v1h-5zM2 6h3v1h-3z'/%3E%3C/svg%3E");
+}
+
+/* Board and cells: flat tiles with a hard inner shadow. */
+:root[data-theme='pixel'] :is(.board, .hero-board__grid, .cine__board, .last-game__board, .rules-mini) {
+  background: var(--board-bg);
+}
+
+:root[data-theme='pixel'] .board::before { display: none; }
+
+:root[data-theme='pixel'] :is(.cell, .cine__cell, .hero-board__cell, .last-game__cell, .rules-mini__cell) {
+  background: var(--cell-bg);
+  box-shadow: inset 4px 4px 0 var(--groove);
+}
+
+:root[data-theme='pixel'] .cell--can-drop {
+  box-shadow: inset 4px 4px 0 var(--groove), inset 0 0 0 3px color-mix(in srgb, var(--armed-color) 70%, transparent);
+}
+
+:root[data-theme='pixel'] .cell--hover {
+  background: color-mix(in srgb, var(--armed-color) 22%, var(--cell-bg));
+  box-shadow: inset 0 0 0 4px var(--armed-color);
+}
+
+:root[data-theme='pixel'] :is(.cell--win, .cine__cell.has-lit) {
+  box-shadow: inset 0 0 0 4px var(--win-gold);
+}
+
+:root[data-theme='pixel'] .cell__groove {
+  border: 2px dashed var(--placeholder-border);
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme='pixel'] .cell__ring--target .cell__groove {
+  border: 3px dashed var(--armed-color);
+  box-shadow: none;
+}
+
+/* Buttons press down like cartridge-era UI. */
+:root[data-theme='pixel'] .st-btn {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme='pixel'] .st-btn:hover:not(:disabled) { transform: translate(-2px, -2px); }
+:root[data-theme='pixel'] .st-btn:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: none; }
+
+:root[data-theme='pixel'] :is(.home__input, .home__username-field, .st-kbd, .player-panel, .scoreboard, .room-card, .home__card, .t-panel, .t-group) {
+  border-width: 3px;
+}
+
+:root[data-theme='pixel'] .home__hero h1 em {
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(3px 3px 0 #0b0914);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PIZARRA — coloured chalk on a green board, drawn by hand.
+   ════════════════════════════════════════════════════════════════════ */
+:root[data-theme='chalk'] {
+  --font-display: 'Caveat Brush', 'Patrick Hand', 'Comic Sans MS', cursive;
+  --font-body: 'Patrick Hand', 'Comic Sans MS', cursive;
+  --font-mono: 'Patrick Hand', 'Comic Sans MS', cursive;
+
+  /* Slightly lopsided corners, as if traced freehand. */
+  --radius-xs: 7px 10px 6px 11px / 10px 6px 11px 7px;
+  --radius-s: 12px 16px 10px 18px / 16px 10px 18px 12px;
+  --radius-m: 18px 24px 16px 26px / 24px 16px 26px 18px;
+  --radius-l: 26px 34px 22px 38px / 34px 22px 38px 26px;
+
+  --player-color-coral: #ff9a9a;
+  --player-color-cyan: #93e4ff;
+  --player-color-magenta: #ffa3f1;
+  --player-color-amber: #ffe58a;
+  --player-color-emerald: #a4f2b9;
+  --player-color-violet: #cdbcff;
+  --player-color-orange: #ffbe8f;
+  --player-color-blue: #a3c4ff;
+
+  --player-1-color: #ff9a9a;
+  --player-2-color: #93e4ff;
+  --player-3-color: #ffa3f1;
+  --player-4-color: #ffe58a;
+
+  --win-gold: #fff3a8;
+  --slot-win-glow: 0 0 12px 3px #fff3a8;
+
+  --page-bg: #22332e;
+  --page-gradient:
+    radial-gradient(60rem 30rem at 15% 0%, rgba(255, 255, 255, 0.07), transparent 60%),
+    radial-gradient(50rem 30rem at 90% 80%, rgba(255, 255, 255, 0.05), transparent 60%),
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.014) 0 3px, transparent 3px 11px);
+  --header-bg: rgba(29, 44, 39, 0.9);
+  --surface: #283b35;
+  --surface-raised: #32483f;
+  --surface-muted: rgba(243, 239, 226, 0.05);
+  --board-bg: transparent;
+  --board-rim: transparent;
+  --cell-bg: #1f2f2a;
+  --cell-border: rgba(243, 239, 226, 0.5);
+  --groove: transparent;
+  --groove-light: transparent;
+  --text-primary: #f3efe2;
+  --text-secondary: #cdd6cb;
+  --text-muted: #9cada2;
+  --text-faint: #71857a;
+  --text-on-accent: #1d2b27;
+  --accent-primary: #ffe58a;
+  --accent-secondary: #ff9a9a;
+  --accent-tertiary: #93e4ff;
+  --accent-danger: #ff8f8f;
+  --accent-success: #a4f2b9;
+  --gradient-brand: linear-gradient(115deg, #ffe58a 0%, #ffbe8f 50%, #ff9a9a 100%);
+  --gradient-primary: linear-gradient(180deg, #ffe58a, #ffe58a);
+  --gradient-secondary: linear-gradient(180deg, #93e4ff, #93e4ff);
+  --line-soft: rgba(243, 239, 226, 0.2);
+  --line-strong: rgba(243, 239, 226, 0.45);
+  --control-bg: rgba(243, 239, 226, 0.06);
+  --control-hover: rgba(243, 239, 226, 0.13);
+  --drop-border: rgba(255, 229, 138, 0.5);
+  --drop-border-strong: #ffe58a;
+  --placeholder-border: rgba(243, 239, 226, 0.22);
+  --placeholder-hover: rgba(255, 229, 138, 0.08);
+  --ghost-piece: rgba(243, 239, 226, 0.18);
+  --overlay-bg: rgba(16, 26, 23, 0.82);
+  --shadow-card: 0 0 0 transparent;
+  --shadow-glow: 0 0 0 transparent;
+  --shadow-tray: 0 0 0 transparent;
+  --btn-shadow: 0 0 0 transparent;
+}
+
+:root[data-theme='chalk'] body { font-size: 17px; }
+
+:root[data-theme='chalk'] :is(h1, h2, h3, h4) {
+  font-weight: 400;
+  letter-spacing: 0 !important;
+}
+
+/* Pieces: a single chalk stroke, roughened by the #st-chalk SVG filter. */
+:root[data-theme='chalk'] .st-ring { filter: url(#st-chalk); }
+:root[data-theme='chalk'] .st-ring::before { background: var(--ring-color); }
+:root[data-theme='chalk'] .st-ring--large { --ring-thick: 15%; }
+:root[data-theme='chalk'] .st-ring--medium { --ring-thick: 20%; }
+
+/* Board: nine boxes sketched straight onto the slate. */
+:root[data-theme='chalk'] :is(.board, .hero-board__grid, .cine__board, .last-game__board, .rules-mini) {
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme='chalk'] .board::before {
+  border: 2px dashed var(--line-soft);
+  box-shadow: none;
+}
+
+:root[data-theme='chalk'] :is(.cell, .cine__cell, .hero-board__cell, .last-game__cell, .rules-mini__cell) {
+  border: 2.5px solid var(--cell-border);
+  border-radius: 16px 22px 14px 24px / 22px 14px 24px 16px;
+  background: color-mix(in srgb, var(--cell-bg) 55%, transparent);
+  box-shadow: none;
+}
+
+:root[data-theme='chalk'] :is(.cell, .cine__cell, .hero-board__cell):nth-child(even) {
+  border-radius: 22px 15px 24px 14px / 15px 24px 14px 22px;
+}
+
+:root[data-theme='chalk'] .cell--can-drop { border-color: color-mix(in srgb, var(--armed-color) 80%, transparent); border-style: dashed; }
+:root[data-theme='chalk'] .cell--hover { border-color: var(--armed-color); border-style: solid; background: color-mix(in srgb, var(--armed-color) 12%, transparent); }
+:root[data-theme='chalk'] :is(.cell--win, .cine__cell.has-lit) { border-color: var(--win-gold); box-shadow: 0 0 22px -6px var(--win-gold); }
+
+:root[data-theme='chalk'] .cell__groove {
+  border: 1.5px dashed var(--placeholder-border);
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme='chalk'] .cell__ring--target .cell__groove {
+  border: 2px dashed var(--armed-color);
+  box-shadow: none;
+  animation: none;
+}
+
+/* Buttons: chalk-filled blobs with the classic wobbly outline. */
+:root[data-theme='chalk'] .st-btn {
+  border-radius: 255px 18px 225px 18px / 18px 225px 18px 255px;
+  font-size: 19px;
+  font-weight: 400;
+}
+
+:root[data-theme='chalk'] .st-btn--ghost { border: 2px solid var(--line-strong); }
+
+:root[data-theme='chalk'] :is(.player-panel, .scoreboard, .room-card, .home__card, .t-panel, .t-group, .t-invite, .lobby__invite, .lobby__setup, .rules-card, .match-result__card, .overlay__card) {
+  border: 2px solid var(--line-strong);
+}
+
+:root[data-theme='chalk'] .home__hero h1 em { -webkit-text-fill-color: transparent; }
