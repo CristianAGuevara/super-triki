@@ -22,7 +22,7 @@
         :title="isTaken(color.id) ? `${color.label} (ocupado)` : color.label"
         @click="emit('select', color.id)"
       >
-        <span class="color-picker__swatch" aria-hidden="true">
+        <span class="color-picker__swatch" :class="{ 'is-active': color.id === modelValue }" aria-hidden="true">
           <span v-if="color.id === modelValue" class="color-picker__check">✓</span>
         </span>
         <span class="color-picker__label">{{ color.label }}</span>
@@ -56,14 +56,15 @@ function isTaken(color: PlayerColorId): boolean {
 .color-picker {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 9px;
-  width: min(100%, 430px);
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
 }
 
 .color-picker__heading {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
 }
 
@@ -71,13 +72,14 @@ function isTaken(color: PlayerColorId): boolean {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .color-picker__current {
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -95,10 +97,10 @@ function isTaken(color: PlayerColorId): boolean {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 7px 4px;
+  padding: 9px 4px;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: var(--control-bg);
+  border-radius: var(--radius-s);
+  background: var(--surface-muted);
   color: var(--text-secondary);
   cursor: pointer;
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s, transform 0.18s;
@@ -135,11 +137,12 @@ function isTaken(color: PlayerColorId): boolean {
   position: relative;
   display: grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--swatch-color);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--swatch-color) 45%, transparent);
+  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.7) 0 6%, transparent 26%), var(--swatch-color);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--swatch-color) 50%, #000), 0 0 12px color-mix(in srgb, var(--swatch-color) 40%, transparent);
+  transition: transform 0.3s var(--ease-spring);
   color: #fff;
   font-size: 14px;
   font-weight: 900;
@@ -157,10 +160,12 @@ function isTaken(color: PlayerColorId): boolean {
   transform: rotate(45deg);
 }
 
+.color-picker__swatch.is-active { transform: scale(1.12); }
+
 .color-picker__label {
   max-width: 100%;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.1;
   text-overflow: ellipsis;

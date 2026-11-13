@@ -9,12 +9,17 @@
     :aria-label="cellLabel"
     :class="{
       'cell--can-drop': canDropAny,
+      'cell--blocked': armedSize !== null && !canDropAny && !store.isGameOver,
       'cell--hover': isHovered,
+      'cell--win': hasWin,
     }"
+    :style="armedColor ? { '--armed-color': armedColor } : undefined"
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
     @dragenter="handleDragEnter"
     @drop="handleDrop"
+    @mouseenter="handleMouseEnter"
+    @mouseleave="handleMouseLeave"
     @click="handleCellClick"
     @keydown.enter.prevent="handleCellClick"
     @keydown.space.prevent="handleCellClick"
@@ -28,8 +33,8 @@
         :class="[
           `cell__ring--${size}`,
           {
-            'cell__ring--win':   isHighlighted(size),
-            'cell__ring--hover': isHovered && hoveredSize === size && !store.pieceAt(row, col, size),
+            'cell__ring--win': isHighlighted(size),
+            'cell__ring--target': canDropAny && armedSize === size,
           }
         ]"
       >
@@ -41,8 +46,14 @@
           :animate-entry="shouldAnimateLastMove(size)"
           :entry-from="store.lastMoveSource"
         />
-        <!-- Empty placeholder circle -->
-        <div v-else class="cell__ring-empty" />
+        <template v-else>
+          <span class="cell__groove" :class="`cell__groove--${size}`" />
+          <span
+            v-if="canDropAny && armedSize === size"
+            class="cell__ghost st-ring"
+            :class="[`st-ring--${size}`, `cell__ghost--${size}`]"
+          />
+        </template>
       </div>
     </div>
   </div>
@@ -68,23 +79,28 @@ const roomStore = useRoomStore()
 const tvStore = useTvModeStore()
 const { onDragOver, onDrop } = useDragDrop(props.row, props.col)
 
+const SIZE_NAMES: Record<Size, string> = { large: 'grande', medium: 'mediana', small: 'pequeña' }
+
 const cellLabel = computed(() => {
   const base = `Fila ${props.row + 1}, columna ${props.col + 1}`
   if (!store.selectedPiece) return base
-  const size = store.selectedPiece.size === 'large'
-    ? 'grande'
-    : store.selectedPiece.size === 'medium' ? 'mediana' : 'pequeña'
-  return `${base}. Pulsa OK para colocar la ficha ${size}`
+  return `${base}. Pulsa OK para colocar la ficha ${SIZE_NAMES[store.selectedPiece.size]}`
 })
 
 const isHovered = ref(false)
 
-const hoveredSize = computed<Size | null>(() => store.dragState?.size ?? null)
+const activePiece = computed(() => store.dragState ?? store.selectedPiece)
+const armedSize = computed<Size | null>(() => activePiece.value?.size ?? null)
+const armedColor = computed(() =>
+  activePiece.value ? store.playerMeta[activePiece.value.player]?.color : null
+)
 
 const canDropAny = computed(() => {
-  const size = store.dragState?.size
+  const size = armedSize.value
   return !!size && store.canDrop(props.row, props.col, size)
 })
+
+const hasWin = computed(() => SIZE_ORDER.some(size => isHighlighted(size)))
 
 function isHighlighted(size: Size) {
   return store.highlightedSlots.has(`${props.row},${props.col},${size}`)
@@ -127,6 +143,14 @@ function handleDrop(e: DragEvent) {
   onDrop(e)
 }
 
+function handleMouseEnter() {
+  if (store.selectedPiece && canDropAny.value) isHovered.value = true
+}
+
+function handleMouseLeave() {
+  if (!store.dragState) isHovered.value = false
+}
+
 function handleCellClick() {
   const selected = store.selectedPiece
   if (!selected) return
@@ -136,6 +160,7 @@ function handleCellClick() {
     return
   }
 
+  isHovered.value = false
   const placed = store.placePiece({
     pieceId: selected.pieceId,
     targetRow: props.row,
@@ -148,40 +173,64 @@ function handleCellClick() {
 
 <style scoped>
 .cell {
-  width: 110px;
-  height: 110px;
-  background: var(--cell-bg);
-  border: 2px solid var(--cell-border);
-  border-radius: 12px;
+  --cell-size: var(--cell, 112px);
+  --armed-color: var(--accent-primary);
+  position: relative;
+  width: var(--cell-size);
+  height: var(--cell-size);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border-radius: calc(var(--cell-size) * 0.22);
+  background:
+    radial-gradient(circle at 50% 45%, transparent 55%, color-mix(in srgb, var(--groove) 40%, transparent) 100%),
+    var(--cell-bg);
+  box-shadow:
+    inset 0 2px 5px var(--groove),
+    0 1px 0 var(--groove-light);
   cursor: default;
+  transition: box-shadow 0.2s ease, transform 0.25s var(--ease-spring), opacity 0.2s ease, background-color 0.2s;
 }
 
 .cell--can-drop {
-  border-color: var(--drop-border);
   cursor: pointer;
+  box-shadow:
+    inset 0 2px 5px var(--groove),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--armed-color) 45%, transparent),
+    0 1px 0 var(--groove-light);
+}
+
+.cell--blocked {
+  opacity: 0.55;
 }
 
 .cell--hover {
-  border-color: var(--drop-border-strong);
-  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+  background-color: color-mix(in srgb, var(--armed-color) 8%, var(--cell-bg));
+  box-shadow:
+    inset 0 2px 5px var(--groove),
+    inset 0 0 0 2px var(--armed-color),
+    0 0 26px -4px color-mix(in srgb, var(--armed-color) 60%, transparent);
+}
+
+.cell--win {
+  box-shadow:
+    inset 0 2px 5px var(--groove),
+    inset 0 0 0 2px color-mix(in srgb, var(--win-gold) 70%, transparent),
+    0 0 30px -6px var(--win-gold);
 }
 
 .cell:focus {
   z-index: 2;
   outline: 4px solid var(--accent-primary);
   outline-offset: 4px;
-  box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent-primary) 13%, transparent), var(--shadow-glow);
 }
 
 /* Stack: all rings share the same center */
 .cell__stack {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: 76%;
+  height: 76%;
 }
 
 .cell__ring {
@@ -195,40 +244,73 @@ function handleCellClick() {
   justify-content: center;
   /* pointer-events off so drag events reach the .cell parent */
   pointer-events: none;
-  transition: filter 0.15s;
 }
 
 /* Z-index: large at back, small at front */
-.cell__ring--large  { width: 84px; height: 84px; z-index: 1; }
-.cell__ring--medium { width: 56px; height: 56px; z-index: 2; }
-.cell__ring--small  { width: 28px; height: 28px; z-index: 3; }
+.cell__ring--large  { width: 100%;  height: 100%;  z-index: 1; }
+.cell__ring--medium { width: 66.7%; height: 66.7%; z-index: 2; }
+.cell__ring--small  { width: 33.3%; height: 33.3%; z-index: 3; }
 
-/* Empty placeholder — subtle dashed circle */
-.cell__ring-empty {
-  width: 100%;
-  height: 100%;
+/* Empty slot: an engraved groove in the tray. */
+.cell__groove {
+  position: absolute;
   border-radius: 50%;
-  border: 2px dashed var(--placeholder-border);
-  box-sizing: border-box;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-/* Hover: highlight the ring matching the dragged size */
-.cell__ring--hover .cell__ring-empty {
-  border: 2px dashed var(--drop-border-strong);
-  background: var(--placeholder-hover);
+.cell__groove--large,
+.cell__groove--medium {
+  inset: 6%;
+  border: 1px solid var(--placeholder-border);
+  box-shadow: inset 0 1px 2px var(--groove), 0 1px 0 var(--groove-light);
+}
+
+.cell__groove--small {
+  inset: 14%;
+  background: color-mix(in srgb, var(--groove) 35%, transparent);
+  box-shadow: inset 0 1px 3px var(--groove), 0 1px 0 var(--groove-light);
+}
+
+.cell__ring--target .cell__groove {
+  border-color: color-mix(in srgb, var(--armed-color) 70%, transparent);
+  box-shadow:
+    inset 0 1px 2px var(--groove),
+    0 0 10px color-mix(in srgb, var(--armed-color) 55%, transparent);
+  animation: groove-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes groove-breathe {
+  50% { box-shadow: inset 0 1px 2px var(--groove), 0 0 16px color-mix(in srgb, var(--armed-color) 80%, transparent); }
+}
+
+/* Translucent preview of the piece about to land. */
+.cell__ghost {
+  --piece-color: var(--armed-color);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.18s ease, transform 0.25s var(--ease-spring);
+}
+
+.cell__ghost--large  { width: 90%; height: 90%; }
+.cell__ghost--medium { width: 86%; height: 86%; }
+.cell__ghost--small  { width: 78%; height: 78%; }
+
+.cell--hover .cell__ghost {
+  opacity: 0.55;
+  transform: scale(1);
+}
+
+@media (hover: none) {
+  .cell__ghost { opacity: 0.22; transform: scale(1); }
 }
 
 /* Win highlight */
-.cell__ring--win .piece--large,
-.cell__ring--win .piece--medium,
-.cell__ring--win .piece--small {
-  filter: drop-shadow(0 0 6px gold);
-  animation: pulse-win 0.8s ease-in-out infinite alternate;
+.cell__ring--win :deep(.piece) {
+  animation: pulse-win 0.9s ease-in-out infinite alternate;
 }
 
 @keyframes pulse-win {
-  from { filter: drop-shadow(0 0 4px gold); }
-  to   { filter: drop-shadow(0 0 14px gold) brightness(1.3); }
+  from { filter: drop-shadow(0 0 3px var(--win-gold)); }
+  to   { filter: drop-shadow(0 0 12px var(--win-gold)) brightness(1.25); }
 }
-
 </style>

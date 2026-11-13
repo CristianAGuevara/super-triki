@@ -1,0 +1,203 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent-primary) 34%, transparent);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+html.tv-mode :focus {
+  outline: 3px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+@media (min-width: 1200px) {
+  html.tv-mode body { zoom: 1.12; }
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  min-height: 100vh;
+  background-color: var(--page-bg);
+  background-image: var(--page-gradient);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+code, kbd { font-family: var(--font-mono); }
+
+select {
+  appearance: none;
+  padding-right: 30px !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%) !important;
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52% !important;
+  background-size: 5px 5px, 5px 5px !important;
+  background-repeat: no-repeat !important;
+  cursor: pointer;
+}
+
+input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* ── Acrylic ring graphic, shared by board pieces and racks ──────────
+   The element itself carries the shadow (so it isn't masked away);
+   ::before paints the glossy body and is masked into a ring. */
+.st-ring {
+  --ring-color: var(--piece-color, var(--accent-primary));
+  --ring-thick: 27%;
+  position: relative;
+  border-radius: 50%;
+  filter:
+    drop-shadow(0 2px 0 color-mix(in srgb, var(--ring-color) 40%, #000))
+    drop-shadow(0 0 7px color-mix(in srgb, var(--ring-color) 42%, transparent));
+}
+
+.st-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.85) 0 3%, transparent 14%),
+    conic-gradient(
+      from 210deg,
+      color-mix(in srgb, var(--ring-color) 55%, #fff) 0deg,
+      var(--ring-color) 70deg,
+      color-mix(in srgb, var(--ring-color) 70%, #000) 170deg,
+      var(--ring-color) 260deg,
+      color-mix(in srgb, var(--ring-color) 55%, #fff) 360deg
+    );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-thick) - 0.6px), #000 calc(100% - var(--ring-thick)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-thick) - 0.6px), #000 calc(100% - var(--ring-thick)));
+}
+
+.st-ring--large { --ring-thick: 25%; }
+.st-ring--medium { --ring-thick: 31%; }
+
+.st-ring--small::before {
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.85) 0 7%, transparent 26%),
+    radial-gradient(circle at 50% 50%, var(--ring-color) 0 52%, color-mix(in srgb, var(--ring-color) 68%, #000) 100%);
+  -webkit-mask: none;
+  mask: none;
+}
+
+/* ── Shared controls ────────────────────────────────────────────── */
+.st-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gradient-primary);
+  box-shadow: var(--btn-shadow);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  transition: transform 0.18s var(--ease-spring), filter 0.18s ease, box-shadow 0.18s ease;
+}
+
+.st-btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.05); }
+.st-btn:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
+.st-btn:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
+
+.st-btn--ghost {
+  border: 1px solid var(--line-strong);
+  background: var(--control-bg);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.st-btn--ghost:hover:not(:disabled) { background: var(--control-hover); }
+
+.st-eyebrow {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.st-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+@keyframes st-pop-in {
+  0% { opacity: 0; transform: translateY(10px) scale(0.96); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes st-spin { to { transform: rotate(360deg); } }
+
+@keyframes st-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+/* Route transition */
+.page-enter-active { transition: opacity 0.35s var(--ease-out), transform 0.35s var(--ease-out); }
+.page-leave-active { transition: opacity 0.15s ease; }
+.page-enter-from { opacity: 0; transform: translateY(12px); }
+.page-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

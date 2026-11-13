@@ -166,9 +166,11 @@ function goHome() {
 }
 
 .spectator__room-name {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .spectator__eyebrow {
@@ -176,9 +178,10 @@ function goHome() {
   align-items: center;
   gap: 7px;
   color: var(--accent-primary);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1.6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .spectator__live-dot {
@@ -192,9 +195,9 @@ function goHome() {
 
 .spectator__room-id {
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
 }
 
 .spectator__status {
@@ -204,9 +207,9 @@ function goHome() {
   border-radius: 999px;
   background: var(--surface-muted);
   color: var(--text-secondary);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .spectator__status--playing { color: var(--accent-primary); border-color: var(--accent-primary); }
@@ -222,7 +225,7 @@ function goHome() {
 
 .spectator__turn-inline {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .spectator__turn-inline strong { font-weight: 900; }
@@ -235,8 +238,9 @@ function goHome() {
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   color: var(--text-secondary);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
+  font-weight: 700;
   text-align: center;
 }
 
@@ -250,7 +254,7 @@ function goHome() {
   /* Keep three stacks inside the card, including borders and padding. */
   --spectator-piece: min(
     calc(var(--spectator-cell) * 0.69),
-    calc((var(--spectator-side-width) - 38px) / 3.13)
+    calc((var(--spectator-side-width) - 36px) / 3.4)
   );
   display: grid;
   grid-template-columns: var(--spectator-side-width) auto var(--spectator-side-width);
@@ -272,39 +276,11 @@ function goHome() {
 }
 
 .spectator__side :deep(.player-panel) {
+  --stack: var(--spectator-piece);
   width: 100%;
   min-width: 0;
   padding: 16px;
   overflow: hidden;
-}
-
-.spectator__side :deep(.player-panel__sets) {
-  gap: calc(var(--spectator-piece) * 0.065);
-}
-
-.spectator__side :deep(.player-panel__stack) {
-  width: var(--spectator-piece);
-  height: var(--spectator-piece);
-}
-
-.spectator__side :deep(.stack-ring--large) {
-  --light-inset: calc(var(--spectator-piece) * -0.036);
-  width: var(--spectator-piece);
-  height: var(--spectator-piece);
-  border-width: calc(var(--spectator-piece) * 0.0725);
-}
-
-.spectator__side :deep(.stack-ring--medium) {
-  --light-inset: calc(var(--spectator-piece) * -0.029);
-  width: calc(var(--spectator-piece) * 0.635);
-  height: calc(var(--spectator-piece) * 0.635);
-  border-width: calc(var(--spectator-piece) * 0.0435);
-}
-
-.spectator__side :deep(.stack-ring--small) {
-  width: calc(var(--spectator-piece) * 0.29);
-  height: calc(var(--spectator-piece) * 0.29);
-  border-width: 0;
 }
 
 .spectator__center {
@@ -317,21 +293,7 @@ function goHome() {
   min-height: 0;
 }
 
-.spectator__board {
-  width: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
-  height: calc(var(--spectator-cell) * 3 + var(--spectator-gap) * 2 + var(--spectator-padding) * 2);
-  filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.2));
-}
-
-.spectator__board :deep(.board) { gap: var(--spectator-gap); padding: var(--spectator-padding); }
-.spectator__board :deep(.cell) { width: var(--spectator-cell); height: var(--spectator-cell); }
-.spectator__board :deep(.cell__stack) { width: calc(var(--spectator-cell) * .76); height: calc(var(--spectator-cell) * .76); }
-.spectator__board :deep(.cell__ring--large) { width: calc(var(--spectator-cell) * .76); height: calc(var(--spectator-cell) * .76); }
-.spectator__board :deep(.cell__ring--medium) { width: calc(var(--spectator-cell) * .51); height: calc(var(--spectator-cell) * .51); }
-.spectator__board :deep(.cell__ring--small) { width: calc(var(--spectator-cell) * .255); height: calc(var(--spectator-cell) * .255); }
-.spectator__board :deep(.piece--large) { width: calc(var(--spectator-cell) * .69); height: calc(var(--spectator-cell) * .69); }
-.spectator__board :deep(.piece--medium) { width: calc(var(--spectator-cell) * .44); height: calc(var(--spectator-cell) * .44); }
-.spectator__board :deep(.piece--small) { width: calc(var(--spectator-cell) * .2); height: calc(var(--spectator-cell) * .2); }
+.spectator__board :deep(.board) { --cell: var(--spectator-cell); }
 
 .spectator__center > :deep(.scoreboard) { width: min(100%, 220px); min-width: 0; padding: 8px; }
 .spectator__center > :deep(.scoreboard__header) { margin-bottom: 5px; }
@@ -344,9 +306,9 @@ function goHome() {
   align-items: center;
   gap: 3px;
   color: var(--accent-secondary);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1.3px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
   text-align: center;
 }
 
@@ -356,8 +318,8 @@ function goHome() {
   width: min(100%, 320px);
   padding: 10px 14px;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: var(--surface-muted);
+  border-radius: var(--radius-m);
+  background: var(--surface);
   text-align: center;
 }
 
@@ -370,14 +332,14 @@ function goHome() {
 
 .spectator__last-game span {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 
 .spectator__last-game strong { color: var(--text-primary); font-size: 16px; }
-.spectator__last-game small { display: block; margin-top: 5px; color: var(--text-secondary); font-size: 10px; }
+.spectator__last-game small { display: block; margin-top: 5px; color: var(--text-secondary); font-size: 12px; }
 
 .spectator__rules {
   padding: 10px 12px;
@@ -393,11 +355,11 @@ function goHome() {
 .spectator__rules small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 7px; letter-spacing: 1px; }
 
 .spectator__message { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 45vh; margin: 10vh auto 0; color: var(--text-secondary); text-align: center; }
-.spectator__message strong { color: var(--text-primary); font-size: 22px; }
+.spectator__message strong { color: var(--text-primary); font-family: var(--font-display); font-size: 26px; }
 .spectator__message--error strong { color: var(--accent-danger); }
-.spectator__waiting-mark { color: var(--accent-primary); font-size: 60px; }
+.spectator__waiting-mark { width: 64px; height: 64px; border: 3px dashed var(--accent-primary); border-radius: 50%; color: transparent; font-size: 0; animation: spectator-spin 12s linear infinite; }
 .spectator__loader { width: 34px; height: 34px; border: 3px solid var(--line-soft); border-top-color: var(--accent-primary); border-radius: 50%; animation: spectator-spin .8s linear infinite; }
-.spectator__back { padding: 10px 18px; border: 1px solid var(--cell-border); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); cursor: pointer; }
+.spectator__back { min-height: 44px; padding: 10px 20px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface-raised); color: var(--text-primary); cursor: pointer; font-weight: 700; }
 
 @keyframes spectator-spin { to { transform: rotate(360deg); } }
 @keyframes spectator-pulse { from { opacity: .45; } to { opacity: 1; } }
@@ -417,10 +379,8 @@ function goHome() {
   }
 
   .spectator h1 { font-size: clamp(18px, 2.2vw, 28px); }
-  .spectator__eyebrow { font-size: 8px; }
-  .spectator__room-name { font-size: 12px; }
-  .spectator__room-id { font-size: 9px; }
-  .spectator__status { padding: 5px 10px; font-size: 8px; }
+  .spectator__room-name { font-size: 18px; }
+  .spectator__status { padding: 5px 10px; }
 
   .spectator__main {
     --spectator-cell: clamp(72px, 18vh, 110px);
@@ -455,6 +415,6 @@ function goHome() {
   .spectator__center { order: 1; width: 100%; }
   .spectator__side--left { order: 2; width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }
   .spectator__side--right { order: 3; width: min(100%, 300px); }
-  .spectator__board { --spectator-cell: clamp(52px, 19vw, 82px); }
+  .spectator__board { --spectator-cell: clamp(52px, calc((100vw - 32px) / 3.45), 96px); }
 }
 </style>

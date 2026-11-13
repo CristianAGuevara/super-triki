@@ -7,57 +7,59 @@
       </div>
     </Transition>
 
-    <!-- ── Username bar ── -->
-    <div class="home__username-bar">
-      <label class="home__username-label" for="username">Tu nombre</label>
-      <input
-        id="username"
-        v-model="usernameInput"
-        class="home__username-input"
-        type="text"
-        placeholder="¿Cómo te llamas?"
-        maxlength="20"
-        autocomplete="off"
-      />
-    </div>
-
     <section class="home__hero">
-      <div>
-        <span class="home__eyebrow">TABLETOP STRATEGY / ONLINE</span>
-        <h1>Arma tu línea. <em>Rompe el patrón.</em></h1>
-        <p>Combina tamaños, lee el tablero y encuentra una victoria que nadie vio venir.</p>
+      <div class="home__hero-copy">
+        <span class="st-eyebrow home__eyebrow">Triqui para 2 a 4 jugadores · 27 huecos</span>
+        <h1>Tres anillos.<br /><em>Una línea.</em></h1>
+        <p>
+          Grande, mediano y pequeño. Apílalos en el tablero de 3×3, lee las jugadas de tus rivales y cierra la línea antes que nadie.
+        </p>
+
+        <div class="home__username" :class="{ 'home__username--ready': canProceed }">
+          <label class="home__username-label" for="username">Tu nombre de jugador</label>
+          <div class="home__username-field">
+            <span class="home__username-ring st-ring st-ring--large" aria-hidden="true" />
+            <input
+              id="username"
+              ref="usernameField"
+              v-model="usernameInput"
+              class="home__username-input"
+              type="text"
+              placeholder="¿Cómo te llamas?"
+              maxlength="20"
+              autocomplete="nickname"
+            />
+            <span v-if="canProceed" class="home__username-ok" aria-hidden="true">✓</span>
+          </div>
+          <small v-if="!canProceed" class="home__username-hint">Escribe al menos 2 letras para crear o unirte.</small>
+        </div>
       </div>
-      <div class="home__hero-mark" role="img" aria-label="Tablero de 3 por 3 por 3, 27 posiciones">
-        <strong>3×3×3</strong>
-        <span>STACK ARENA</span>
-        <small>27 SLOTS</small>
-      </div>
+
+      <HeroBoard class="home__hero-board" />
     </section>
 
     <div class="home__body">
-
       <!-- ── Left: public rooms and tournaments ── -->
-      <section class="home__section">
+      <section class="home__section home__section--lobby">
         <div class="home__section-header">
-          <h2 class="home__section-title">Salas y torneos</h2>
-          <span class="home__section-count">
-            {{ filteredListings.length }} resultado{{ filteredListings.length !== 1 ? 's' : '' }}
-          </span>
-        </div>
-
-        <div class="home__filters" role="group" aria-label="Filtrar salas y torneos">
-          <button
-            v-for="option in listingFilters"
-            :key="option.id"
-            type="button"
-            class="home__filter"
-            :class="{ 'home__filter--active': listingFilter === option.id }"
-            :aria-pressed="listingFilter === option.id"
-            @click="listingFilter = option.id"
-          >
-            {{ option.label }}
-            <span>{{ option.count }}</span>
-          </button>
+          <h2 class="home__section-title">
+            <span class="home__live-dot" aria-hidden="true" />
+            Salas abiertas
+          </h2>
+          <div class="home__filters" role="group" aria-label="Filtrar salas y torneos">
+            <button
+              v-for="option in listingFilters"
+              :key="option.id"
+              type="button"
+              class="home__filter"
+              :class="{ 'home__filter--active': listingFilter === option.id }"
+              :aria-pressed="listingFilter === option.id"
+              @click="listingFilter = option.id"
+            >
+              {{ option.label }}
+              <span>{{ option.count }}</span>
+            </button>
+          </div>
         </div>
 
         <div class="home__rooms">
@@ -71,15 +73,15 @@
                 'room-card--tournament': room.kind === 'tournament',
               }"
             >
+              <span class="room-card__badge" :class="`room-card__badge--${room.kind}`" aria-hidden="true">
+                {{ room.kind === 'tournament' ? '★' : room.playerCount }}
+              </span>
               <div class="room-card__info">
                 <div class="room-card__heading">
-                  <span
-                    class="room-card__kind"
-                    :class="`room-card__kind--${room.kind}`"
-                  >
+                  <span class="room-card__name">{{ room.name }}</span>
+                  <span class="room-card__kind" :class="`room-card__kind--${room.kind}`">
                     {{ room.kind === 'tournament' ? 'Torneo' : 'Sala' }}
                   </span>
-                  <span class="room-card__name">{{ room.name }}</span>
                 </div>
                 <span class="room-card__meta">
                   <span v-if="room.kind === 'room'" class="room-card__dots">
@@ -91,8 +93,8 @@
                     />
                   </span>
                   {{ room.playerCount }}/{{ room.maxPlayers }}
-                  <span class="room-card__phase">
-                    · {{ room.phase === 'playing' ? 'En juego' : 'Esperando' }}
+                  <span class="room-card__phase" :class="{ 'room-card__phase--live': room.phase === 'playing' }">
+                    {{ room.phase === 'playing' ? 'En juego' : 'Esperando' }}
                     <template v-if="room.kind === 'tournament' && room.stage">
                       · Ronda {{ room.stage }}
                     </template>
@@ -101,6 +103,14 @@
               </div>
               <div class="room-card__actions">
                 <button
+                  v-if="room.kind === 'room'"
+                  class="room-card__spectator-btn"
+                  :disabled="loading"
+                  @click="handleSpectatePublic(room.roomId)"
+                >
+                  Ver
+                </button>
+                <button
                   class="room-card__btn"
                   :disabled="isListingDisabled(room)"
                   :title="listingJoinTitle(room)"
@@ -108,246 +118,272 @@
                 >
                   {{ listingButtonLabel(room) }}
                 </button>
-                <button
-                  v-if="room.kind === 'room'"
-                  class="room-card__spectator-btn"
-                  :disabled="loading"
-                  @click="handleSpectatePublic(room.roomId)"
-                >
-                  Espectar
-                </button>
               </div>
             </div>
           </TransitionGroup>
 
           <div v-if="filteredListings.length === 0" class="home__empty">
-            <span class="home__empty-icon">◎</span>
+            <span class="home__empty-rings" aria-hidden="true">
+              <i /><i /><i />
+            </span>
             <p>{{ emptyListingTitle }}</p>
             <p class="home__empty-sub">{{ emptyListingSubtitle }}</p>
           </div>
         </div>
 
         <section class="home__guide" aria-label="Cómo se juega">
-          <div class="home__guide-heading">
-            <span class="home__eyebrow">Cómo se juega</span>
-            <span class="home__guide-note">Tres formas de ganar</span>
-          </div>
+          <h2 class="home__section-title">Cómo se gana</h2>
           <div class="home__guide-grid">
             <article class="home__guide-card">
-              <span class="home__guide-icon home__guide-icon--line" aria-hidden="true">≡</span>
+              <span class="home__guide-visual" aria-hidden="true">
+                <i class="st-ring st-ring--medium" /><i class="st-ring st-ring--medium" /><i class="st-ring st-ring--medium" />
+              </span>
               <div>
                 <strong>Mismo tamaño en línea</strong>
-                <p>Tres fichas iguales en fila, columna o diagonal.</p>
+                <p>Tres anillos iguales en fila, columna o diagonal.</p>
               </div>
             </article>
             <article class="home__guide-card">
-              <span class="home__guide-icon home__guide-icon--order" aria-hidden="true">↗</span>
+              <span class="home__guide-visual home__guide-visual--order" aria-hidden="true">
+                <i class="st-ring st-ring--large" /><i class="st-ring st-ring--medium" /><i class="st-ring st-ring--small" />
+              </span>
               <div>
                 <strong>Tamaños en orden</strong>
-                <p>Grande, mediana y pequeña en secuencia.</p>
+                <p>Grande, mediano y pequeño seguidos en una línea.</p>
               </div>
             </article>
             <article class="home__guide-card">
-              <span class="home__guide-icon home__guide-icon--stack" aria-hidden="true">◎</span>
+              <span class="home__guide-visual home__guide-visual--stack" aria-hidden="true">
+                <i class="st-ring st-ring--large" /><i class="st-ring st-ring--medium" /><i class="st-ring st-ring--small" />
+              </span>
               <div>
                 <strong>Casilla completa</strong>
-                <p>Reúne los tres tamaños en una misma casilla.</p>
+                <p>Tus tres tamaños dentro de la misma casilla.</p>
               </div>
             </article>
           </div>
         </section>
       </section>
 
-      <!-- ── Right: create + join private ── -->
+      <!-- ── Right: create / join / tournament / watch ── -->
       <section class="home__section home__section--actions">
+        <div class="home__tabs" role="tablist" aria-label="¿Qué quieres hacer?">
+          <button
+            v-for="tab in actionTabs"
+            :id="`tab-${tab.id}`"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            class="home__tab"
+            :class="{ 'home__tab--active': activeTab === tab.id }"
+            :aria-selected="activeTab === tab.id"
+            :aria-controls="`panel-${tab.id}`"
+            @click="selectTab(tab.id)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
 
-        <!-- Create room -->
         <div class="home__card">
-          <h3 class="home__card-title">Nueva sala</h3>
+          <Transition name="panel" mode="out-in">
+            <!-- Create room -->
+            <div v-if="activeTab === 'create'" id="panel-create" key="create" class="home__panel" role="tabpanel" aria-labelledby="tab-create">
+              <div class="home__panel-head">
+                <h3 class="home__card-title">Nueva sala</h3>
+                <p class="home__card-sub">Invita a hasta 3 amigos con un código.</p>
+              </div>
 
-          <div class="home__field">
-            <label class="home__label">Nombre</label>
-            <input
-              v-model="roomNameInput"
-              class="home__input"
-              type="text"
-              :placeholder="`Sala de ${usernameInput || 'jugador'}`"
-              maxlength="30"
-              autocomplete="off"
-            />
-          </div>
+              <div class="home__field">
+                <label class="home__label" for="room-name">Nombre de la sala</label>
+                <input
+                  id="room-name"
+                  v-model="roomNameInput"
+                  class="home__input"
+                  type="text"
+                  :placeholder="`Sala de ${usernameInput || 'jugador'}`"
+                  maxlength="30"
+                  autocomplete="off"
+                />
+              </div>
 
-          <div class="home__toggle-row">
-            <button
-              class="home__toggle-btn"
-              :class="{ 'home__toggle-btn--active': !createIsPrivate }"
-              @click="createIsPrivate = false"
-            >
-              Pública
-            </button>
-            <button
-              class="home__toggle-btn"
-              :class="{ 'home__toggle-btn--active': createIsPrivate }"
-              @click="createIsPrivate = true"
-            >
-              Privada
-            </button>
-          </div>
+              <div class="home__toggle-row" role="group" aria-label="Visibilidad">
+                <button
+                  type="button"
+                  class="home__toggle-btn"
+                  :class="{ 'home__toggle-btn--active': !createIsPrivate }"
+                  :aria-pressed="!createIsPrivate"
+                  @click="createIsPrivate = false"
+                >
+                  Pública
+                </button>
+                <button
+                  type="button"
+                  class="home__toggle-btn"
+                  :class="{ 'home__toggle-btn--active': createIsPrivate }"
+                  :aria-pressed="createIsPrivate"
+                  @click="createIsPrivate = true"
+                >
+                  Privada
+                </button>
+              </div>
 
-          <Transition name="slide">
-            <div v-if="createIsPrivate" class="home__field">
-              <label class="home__label">Contraseña</label>
-              <input
-                v-model="createPasswordInput"
-                class="home__input"
-                type="text"
-                placeholder="Contraseña de la sala..."
-                maxlength="20"
-                autocomplete="off"
-              />
+              <Transition name="slide">
+                <div v-if="createIsPrivate" class="home__field">
+                  <label class="home__label" for="room-password">Contraseña</label>
+                  <input
+                    id="room-password"
+                    v-model="createPasswordInput"
+                    class="home__input"
+                    type="text"
+                    placeholder="Contraseña de la sala"
+                    maxlength="20"
+                    autocomplete="off"
+                  />
+                </div>
+              </Transition>
+
+              <button
+                class="st-btn home__btn"
+                :disabled="!canProceed || loading"
+                @click="handleCreate"
+              >
+                {{ loading && action === 'create' ? 'Creando…' : 'Crear sala' }}
+              </button>
+            </div>
+
+            <!-- Join private room -->
+            <div v-else-if="activeTab === 'join'" id="panel-join" key="join" class="home__panel" role="tabpanel" aria-labelledby="tab-join">
+              <div class="home__panel-head">
+                <h3 class="home__card-title">Unirse con código</h3>
+                <p class="home__card-sub">Pide el código de 6 letras a quien creó la sala.</p>
+              </div>
+
+              <div class="home__field">
+                <label class="home__label" for="room-code">Código</label>
+                <input
+                  id="room-code"
+                  v-model="roomCodeInput"
+                  class="home__input home__input--code"
+                  type="text"
+                  placeholder="XK7F2A"
+                  maxlength="6"
+                  autocomplete="off"
+                  @input="roomCodeInput = roomCodeInput.toUpperCase()"
+                  @keydown.enter="handleJoinPrivate"
+                />
+              </div>
+
+              <div class="home__field">
+                <label class="home__label" for="join-password">Contraseña <span class="home__label-opt">(si la sala es privada)</span></label>
+                <input
+                  id="join-password"
+                  v-model="joinPasswordInput"
+                  class="home__input"
+                  type="text"
+                  placeholder="Opcional"
+                  maxlength="20"
+                  autocomplete="off"
+                  @keydown.enter="handleJoinPrivate"
+                />
+              </div>
+
+              <button
+                class="st-btn home__btn"
+                :disabled="!canJoin || loading"
+                @click="handleJoinPrivate"
+              >
+                {{ loading && action === 'join' ? 'Entrando…' : 'Entrar a la sala' }}
+              </button>
+            </div>
+
+            <!-- Tournament -->
+            <div v-else-if="activeTab === 'tournament'" id="panel-tournament" key="tournament" class="home__panel" role="tabpanel" aria-labelledby="tab-tournament">
+              <div class="home__panel-head">
+                <h3 class="home__card-title">Torneo <span class="home__tournament-badge">hasta 50</span></h3>
+                <p class="home__card-sub">Grupos de 3 o 4 jugadores. Los ganadores avanzan hasta la final.</p>
+              </div>
+
+              <div class="home__field">
+                <label class="home__label" for="tournament-name">Nombre del torneo</label>
+                <input
+                  id="tournament-name"
+                  v-model="tournamentNameInput"
+                  class="home__input"
+                  type="text"
+                  :placeholder="`Torneo de ${usernameInput || 'jugador'}`"
+                  maxlength="30"
+                  autocomplete="off"
+                />
+              </div>
+
+              <button
+                class="st-btn home__btn"
+                :disabled="!canProceed || tournamentLoading"
+                @click="handleCreateTournament"
+              >
+                {{ tournamentAction === 'create' ? 'Creando torneo…' : 'Crear torneo' }}
+              </button>
+
+              <div class="home__separator"><span>o únete con un código</span></div>
+
+              <div class="home__inline-join">
+                <label class="home__label home__sr" for="tournament-code">Código de torneo</label>
+                <input
+                  id="tournament-code"
+                  v-model="tournamentCodeInput"
+                  class="home__input home__input--code"
+                  type="text"
+                  placeholder="XK7F2A"
+                  maxlength="6"
+                  autocomplete="off"
+                  @input="tournamentCodeInput = tournamentCodeInput.toUpperCase()"
+                  @keydown.enter="handleJoinTournament"
+                />
+                <button
+                  class="st-btn st-btn--ghost"
+                  :disabled="!canJoinTournament || tournamentLoading"
+                  @click="handleJoinTournament"
+                >
+                  {{ tournamentAction === 'join' ? '…' : 'Unirse' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Spectator mode -->
+            <div v-else id="panel-watch" key="watch" class="home__panel" role="tabpanel" aria-labelledby="tab-watch">
+              <div class="home__panel-head">
+                <h3 class="home__card-title">Modo espectador <span class="home__live-badge">En directo</span></h3>
+                <p class="home__card-sub">Muestra una partida en la tele o en un proyector. No necesitas nombre.</p>
+              </div>
+
+              <div class="home__field">
+                <label class="home__label" for="spectator-code">Código de sala</label>
+                <input
+                  id="spectator-code"
+                  v-model="spectatorCodeInput"
+                  class="home__input home__input--code"
+                  type="text"
+                  placeholder="XK7F2A"
+                  maxlength="6"
+                  autocomplete="off"
+                  @input="spectatorCodeInput = spectatorCodeInput.toUpperCase()"
+                  @keydown.enter="handleSpectate"
+                />
+              </div>
+
+              <button
+                class="st-btn home__btn home__btn--watch"
+                :disabled="!canSpectate"
+                @click="handleSpectate"
+              >
+                Ver partida en directo
+              </button>
             </div>
           </Transition>
-
-          <button
-            class="home__btn home__btn--primary"
-            :disabled="!canProceed || loading"
-            @click="handleCreate"
-          >
-            {{ loading && action === 'create' ? 'Creando...' : 'Crear sala' }}
-          </button>
         </div>
 
-        <!-- Join private room -->
-        <div class="home__card home__card--secondary">
-          <h3 class="home__card-title">Sala privada</h3>
-          <p class="home__card-sub">Únete con un código</p>
-
-          <div class="home__field">
-            <label class="home__label">Código</label>
-            <input
-              v-model="roomCodeInput"
-              class="home__input home__input--code"
-              type="text"
-              placeholder="XK7F2A"
-              maxlength="6"
-              autocomplete="off"
-              @input="roomCodeInput = roomCodeInput.toUpperCase()"
-              @keydown.enter="handleJoinPrivate"
-            />
-          </div>
-
-          <div class="home__field">
-            <label class="home__label">Contraseña <span class="home__label-opt">(si aplica)</span></label>
-            <input
-              v-model="joinPasswordInput"
-              class="home__input"
-              type="text"
-              placeholder="Opcional..."
-              maxlength="20"
-              autocomplete="off"
-              @keydown.enter="handleJoinPrivate"
-            />
-          </div>
-
-          <button
-            class="home__btn home__btn--secondary"
-            :disabled="!canJoin || loading"
-            @click="handleJoinPrivate"
-          >
-            {{ loading && action === 'join' ? 'Uniéndose...' : 'Unirse' }}
-          </button>
-        </div>
-
-        <!-- Tournament -->
-        <div class="home__card home__card--tournament">
-          <div class="home__tournament-heading">
-            <h3 class="home__card-title">Torneo</h3>
-            <span class="home__tournament-badge">Hasta 50</span>
-          </div>
-          <p class="home__card-sub">
-            Grupos de 4 o 3 jugadores. Los ganadores avanzan hasta la final.
-          </p>
-
-          <div class="home__field">
-            <label class="home__label">Nombre del torneo</label>
-            <input
-              v-model="tournamentNameInput"
-              class="home__input"
-              type="text"
-              :placeholder="`Torneo de ${usernameInput || 'jugador'}`"
-              maxlength="30"
-              autocomplete="off"
-            />
-          </div>
-
-          <button
-            class="home__btn home__btn--primary"
-            :disabled="!canProceed || tournamentLoading"
-            @click="handleCreateTournament"
-          >
-            {{ tournamentAction === 'create' ? 'Creando torneo...' : 'Crear torneo' }}
-          </button>
-
-          <div class="home__tournament-separator"><span>o únete con un código</span></div>
-
-          <div class="home__field">
-            <label class="home__label">Código de torneo</label>
-            <input
-              v-model="tournamentCodeInput"
-              class="home__input home__input--code"
-              type="text"
-              placeholder="XK7F2A"
-              maxlength="6"
-              autocomplete="off"
-              @input="tournamentCodeInput = tournamentCodeInput.toUpperCase()"
-              @keydown.enter="handleJoinTournament"
-            />
-          </div>
-
-          <button
-            class="home__btn home__btn--secondary"
-            :disabled="!canJoinTournament || tournamentLoading"
-            @click="handleJoinTournament"
-          >
-            {{ tournamentAction === 'join' ? 'Uniéndose...' : 'Unirse al torneo' }}
-          </button>
-        </div>
-
-        <!-- Spectator mode -->
-        <div class="home__card home__card--spectator">
-          <div class="home__spectator-heading">
-            <h3 class="home__card-title">Modo espectador</h3>
-            <span class="home__live-badge">LIVE</span>
-          </div>
-          <p class="home__card-sub">Muestra una partida en una pantalla grande</p>
-
-          <div class="home__field">
-            <label class="home__label">Código de sala</label>
-            <input
-              v-model="spectatorCodeInput"
-              class="home__input home__input--code"
-              type="text"
-              placeholder="XK7F2A"
-              maxlength="6"
-              autocomplete="off"
-              @input="spectatorCodeInput = spectatorCodeInput.toUpperCase()"
-              @keydown.enter="handleSpectate"
-            />
-          </div>
-
-          <button
-            class="home__btn home__btn--spectator"
-            :disabled="!canSpectate"
-            @click="handleSpectate"
-          >
-            Ver partida en directo
-          </button>
-        </div>
-
-        <p v-if="!canProceed" class="home__hint">Escribe tu nombre para continuar</p>
-        <p v-if="errorMsg" class="home__error">{{ errorMsg }}</p>
+        <p v-if="errorMsg" class="home__error" role="alert">{{ errorMsg }}</p>
       </section>
-
     </div>
   </div>
 </template>
@@ -362,6 +398,7 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useTournamentStore } from '@/stores/tournamentStore'
 import { connectSocket, getSocket, waitForSocketConnection } from '@/services/socket'
 import type { TournamentCreateAck, TournamentJoinAck } from '@/types/socket'
+import HeroBoard from '@/components/HeroBoard.vue'
 
 const router     = useRouter()
 const route      = useRoute()
@@ -390,6 +427,22 @@ const listingFilter       = ref<'all' | 'room' | 'tournament'>('all')
 const errorMsg            = ref<string | null>(null)
 const notice              = ref<string | null>(null)
 let noticeTimer: number | undefined
+const usernameField = ref<HTMLInputElement | null>(null)
+
+type ActionTab = 'create' | 'join' | 'tournament' | 'watch'
+const actionTabs: Array<{ id: ActionTab; label: string }> = [
+  { id: 'create', label: 'Crear' },
+  { id: 'join', label: 'Unirse' },
+  { id: 'tournament', label: 'Torneo' },
+  { id: 'watch', label: 'Ver' },
+]
+const activeTab = ref<ActionTab>(route.query.code ? 'join' : 'create')
+
+function selectTab(tab: ActionTab) {
+  if (tab === activeTab.value) return
+  audioStore.playSfx('click')
+  activeTab.value = tab
+}
 
 const publicListings = computed(() => lobbyStore.publicRooms)
 const roomListings = computed(() => publicListings.value.filter(listing => listing.kind === 'room'))
@@ -462,9 +515,15 @@ onMounted(() => {
   const next = route.query.next as string | undefined
   if (next) {
     const roomMatch = next.match(/\/room\/([A-Z0-9]+)/)
-    if (roomMatch) roomCodeInput.value = roomMatch[1]
+    if (roomMatch) {
+      roomCodeInput.value = roomMatch[1]
+      activeTab.value = 'join'
+    }
     const tournamentMatch = next.match(/\/tournament\/([A-Z0-9]+)/)
-    if (tournamentMatch) tournamentCodeInput.value = tournamentMatch[1]
+    if (tournamentMatch) {
+      tournamentCodeInput.value = tournamentMatch[1]
+      activeTab.value = 'tournament'
+    }
   }
 })
 
@@ -700,6 +759,7 @@ function handleSpectatePublic(roomId: string) {
 
 function showNotice(message: string) {
   notice.value = message
+  if (!canProceed.value) usernameField.value?.focus()
   if (noticeTimer) window.clearTimeout(noticeTimer)
   noticeTimer = window.setTimeout(() => {
     notice.value = null
@@ -710,18 +770,21 @@ function showNotice(message: string) {
 
 <style scoped>
 .home {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 26px clamp(18px, 4vw, 40px) 56px;
-  gap: 24px;
-  max-width: 1120px;
+  gap: clamp(28px, 5vw, 48px);
+  width: 100%;
+  max-width: 1160px;
+  min-height: 100vh;
   margin: 0 auto;
+  padding: clamp(20px, 4vw, 44px) max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
+  padding-left: max(clamp(16px, 4vw, 40px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(16px, 4vw, 40px), env(safe-area-inset-right, 0px));
 }
 
 .home__notice {
   position: fixed;
-  top: 72px;
+  top: 78px;
   left: 50%;
   z-index: 300;
   display: flex;
@@ -730,157 +793,196 @@ function showNotice(message: string) {
   max-width: calc(100vw - 32px);
   padding: 11px 16px 11px 12px;
   border: 1px solid var(--accent-secondary);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--surface-raised);
-  box-shadow: var(--shadow-card), var(--shadow-glow);
+  box-shadow: var(--shadow-card);
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   transform: translateX(-50%);
 }
 
 .home__notice-icon {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--accent-secondary);
-  color: var(--text-on-accent);
+  color: #fff;
   font-size: 12px;
   font-weight: 900;
 }
 
-.toast-enter-active, .toast-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.toast-enter-active, .toast-leave-active { transition: opacity 0.2s, transform 0.3s var(--ease-spring); }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, -10px); }
-
-/* ── Username bar ── */
-.home__username-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--cell-bg);
-  border: 1.5px solid var(--cell-border);
-  border-radius: 12px;
-  padding: 10px 16px;
-}
-
-.home__username-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-
-.home__username-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.home__username-input::placeholder { color: var(--text-faint); }
 
 /* ── Hero ── */
 .home__hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 10px 4px 2px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: center;
+  gap: clamp(24px, 5vw, 64px);
 }
 
-.home__eyebrow {
-  color: var(--accent-primary);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 2px;
+.home__hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: st-pop-in 0.6s var(--ease-out) both;
 }
+
+.home__eyebrow { color: var(--accent-primary); }
 
 .home__hero h1 {
-  max-width: 680px;
-  margin-top: 8px;
   color: var(--text-primary);
-  font-size: clamp(30px, 5vw, 52px);
-  line-height: 0.98;
-  letter-spacing: -2px;
+  font-size: clamp(44px, 7.4vw, 88px);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.045em;
 }
 
 .home__hero h1 em {
-  color: var(--accent-secondary);
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-style: normal;
 }
 
 .home__hero p {
-  max-width: 510px;
-  margin-top: 14px;
+  max-width: 52ch;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: clamp(15px, 1.6vw, 17px);
+  line-height: 1.55;
 }
 
-.home__hero-mark {
-  display: grid;
-  place-items: center;
-  min-width: 86px;
-  min-height: 86px;
-  border: 1px solid var(--accent-primary);
-  border-radius: 22px;
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-glow);
-  color: var(--accent-primary);
-  transform: rotate(4deg);
+.home__hero-board {
+  justify-self: center;
+  animation: st-pop-in 0.7s 0.15s var(--ease-out) both;
 }
 
-.home__hero-mark strong { font-size: 24px; line-height: 1; letter-spacing: -1px; }
-.home__hero-mark span { font-size: 8px; font-weight: 900; letter-spacing: 1.5px; }
-.home__hero-mark small { color: var(--text-muted); font-size: 7px; font-weight: 800; letter-spacing: 1px; }
+/* Username */
+.home__username {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 440px;
+  margin-top: 6px;
+}
+
+.home__username-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home__username-field {
+  --piece-color: var(--text-faint);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 10px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.home__username-field:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-card), 0 0 0 4px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
+.home__username--ready .home__username-field { --piece-color: var(--accent-primary); }
+
+.home__username-ring {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  transition: transform 0.5s var(--ease-spring);
+}
+
+.home__username--ready .home__username-ring { transform: rotate(180deg); }
+
+.home__username-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.home__username-input::placeholder { color: var(--text-faint); font-weight: 500; }
+
+.home__username-ok {
+  color: var(--accent-success);
+  font-size: 18px;
+  font-weight: 900;
+  animation: st-pop-in 0.3s var(--ease-spring);
+}
+
+.home__username-hint { color: var(--text-muted); font-size: 13px; }
 
 /* ── Body columns ── */
 .home__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 28px;
   align-items: start;
-  flex: 1;
 }
 
-@media (max-width: 900px) {
-  .home__body { grid-template-columns: 1fr; }
-}
-
-/* ── Section ── */
 .home__section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .home__section-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .home__section-title {
-  font-size: 15px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--text-primary);
+  font-size: 22px;
 }
 
-.home__section-count {
-  font-size: 12px;
-  color: var(--text-muted);
+.home__live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  animation: live-ping 1.8s ease-out infinite;
+}
+
+@keyframes live-ping {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-success) 70%, transparent); }
+  100% { box-shadow: 0 0 0 9px transparent; }
 }
 
 .home__filters {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface-muted);
 }
 
 .home__filter {
@@ -888,45 +990,38 @@ function showNotice(message: string) {
   align-items: center;
   gap: 6px;
   min-height: 32px;
-  padding: 5px 11px;
-  border: 1px solid var(--cell-border);
+  padding: 4px 12px;
+  border: 0;
   border-radius: 999px;
-  background: var(--control-bg);
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .home__filter span {
-  display: inline-grid;
-  place-items: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--surface-muted);
   color: var(--text-muted);
-  font-size: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
-.home__filter:hover { background: var(--control-hover); }
+.home__filter:hover { color: var(--text-primary); }
+
 .home__filter--active {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.25);
 }
-.home__filter--active span {
-  background: var(--accent-primary);
-  color: var(--text-on-accent);
-}
+
+.home__filter--active span { color: var(--accent-primary); }
 
 /* ── Room list ── */
-.home__rooms {
-  display: flex;
-  flex-direction: column;
-}
+.home__rooms { display: flex; flex-direction: column; }
 
 .home__rooms-inner {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -935,33 +1030,44 @@ function showNotice(message: string) {
 .room-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--cell-bg);
-  border: 1.5px solid var(--cell-border);
-  border-radius: 12px;
-  transition: border-color 0.2s;
+  gap: 14px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  transition: border-color 0.2s ease, transform 0.25s var(--ease-spring), box-shadow 0.25s ease;
 }
 
 .room-card:not(.room-card--playing):hover {
-  border-color: var(--drop-border);
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
 }
 
-.room-card--playing { opacity: 0.5; }
+.room-card--playing { opacity: 0.6; }
 
-.room-card--tournament {
-  border-color: color-mix(in srgb, var(--accent-secondary) 48%, var(--cell-border));
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-secondary) 12%, transparent), transparent 45%),
-    var(--cell-bg);
+.room-card__badge {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 5px solid var(--player-2-color);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
 }
-.room-card--tournament:not(.room-card--playing):hover {
+
+.room-card__badge--tournament {
   border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+  font-size: 16px;
 }
 
 .room-card__info {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
@@ -970,44 +1076,44 @@ function showNotice(message: string) {
 .room-card__heading {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
 .room-card__kind {
   flex: 0 0 auto;
-  padding: 2px 6px;
+  padding: 1px 7px;
   border: 1px solid var(--line-soft);
-  border-radius: 5px;
+  border-radius: 999px;
   color: var(--text-muted);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 0.5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .room-card__kind--tournament {
-  border-color: var(--accent-secondary);
+  border-color: color-mix(in srgb, var(--accent-secondary) 55%, transparent);
   color: var(--accent-secondary);
 }
 
 .room-card__name {
-  flex: 1;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  white-space: nowrap;
   overflow: hidden;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .room-card__meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 7px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .room-card__dots { display: flex; gap: 3px; }
@@ -1016,26 +1122,13 @@ function showNotice(message: string) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--cell-border);
-  transition: background 0.2s;
+  border: 1.5px solid var(--line-strong);
 }
 
-.room-card__dot--filled { background: var(--player-2-color); }
-.room-card__phase { color: var(--text-muted); }
+.room-card__dot--filled { border-color: var(--player-2-color); background: var(--player-2-color); }
 
-.room-card__btn {
-  padding: 7px 16px;
-  border: none;
-  border-radius: 8px;
-  background: var(--gradient-secondary);
-  color: var(--text-on-accent);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: transform 0.15s, opacity 0.15s;
-}
+.room-card__phase { font-family: var(--font-body); }
+.room-card__phase--live { color: var(--accent-secondary); font-weight: 700; }
 
 .room-card__actions {
   display: flex;
@@ -1044,35 +1137,37 @@ function showNotice(message: string) {
   flex-shrink: 0;
 }
 
+.room-card__btn,
 .room-card__spectator-btn {
-  padding: 7px 10px;
-  border: 1px solid var(--accent-primary);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--accent-primary);
-  font-size: 11px;
-  font-weight: 800;
+  min-height: 38px;
+  padding: 7px 16px;
+  border-radius: 999px;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
   white-space: nowrap;
-  transition: background 0.2s, transform 0.15s, opacity 0.15s;
+  transition: transform 0.2s var(--ease-spring), background 0.2s ease, opacity 0.2s ease;
 }
 
-.room-card__spectator-btn:not(:disabled):hover {
-  background: var(--control-hover);
-  transform: translateY(-1px);
+.room-card__btn {
+  border: 0;
+  background: var(--gradient-primary);
+  color: var(--text-on-accent);
 }
 
-.room-card__spectator-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.room-card__btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.room-card__btn:not(:disabled):hover { transform: scale(1.04); }
 .room-card--tournament .room-card__btn { background: var(--gradient-brand); }
+.room-card__btn:not(:disabled):hover { transform: translateY(-1px) scale(1.03); }
 
-@media (max-width: 520px) {
-  .room-card { align-items: flex-start; flex-wrap: wrap; }
-  .room-card__info { flex: 1 1 100%; }
-  .room-card__actions { width: 100%; justify-content: flex-end; }
+.room-card__spectator-btn {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text-secondary);
 }
+
+.room-card__spectator-btn:not(:disabled):hover { background: var(--control-hover); color: var(--text-primary); }
+
+.room-card__btn:disabled,
+.room-card__spectator-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Empty state */
 .home__empty {
@@ -1080,305 +1175,340 @@ function showNotice(message: string) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 176px;
-  color: var(--text-muted);
-  font-size: 14px;
+  gap: 4px;
+  min-height: 190px;
+  padding: 24px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-m);
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
   text-align: center;
-  border: 1.5px dashed var(--cell-border);
-  border-radius: 12px;
-  background: linear-gradient(180deg, transparent, var(--surface-muted));
 }
 
-.home__empty-icon { font-size: 36px; color: var(--text-faint); line-height: 1; }
-.home__empty-sub  { font-size: 12px; color: var(--text-secondary); }
+.home__empty-rings {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 10px;
+}
+
+.home__empty-rings i {
+  position: absolute;
+  border: 2px dashed var(--line-strong);
+  border-radius: 50%;
+  animation: st-spin 18s linear infinite;
+}
+
+.home__empty-rings i:nth-child(1) { inset: 0; }
+.home__empty-rings i:nth-child(2) { inset: 12px; animation-direction: reverse; }
+.home__empty-rings i:nth-child(3) { inset: 22px; border-style: solid; background: var(--line-soft); }
+
+.home__empty-sub { color: var(--text-muted); font-size: 13px; font-weight: 400; }
 
 /* ── Quick rules ── */
 .home__guide {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 8px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.home__guide-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.home__guide-note {
-  color: var(--text-muted);
-  font-size: 11px;
+  gap: 14px;
+  margin-top: 18px;
 }
 
 .home__guide-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
+  gap: 10px;
 }
 
 .home__guide-card {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 98px;
-  padding: 13px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 13px;
+  border-radius: var(--radius-m);
   background: var(--surface-muted);
 }
 
-.home__guide-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--line-soft);
-  border-radius: 11px;
-  background: var(--cell-bg);
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1;
+.home__guide-visual {
+  --piece-color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
 }
 
-.home__guide-icon--line { color: var(--player-1-color); }
-.home__guide-icon--order { color: var(--player-2-color); }
-.home__guide-icon--stack { color: var(--accent-secondary); }
+.home__guide-visual i { width: 24px; height: 24px; }
+.home__guide-visual--order { --piece-color: var(--player-2-color); }
+.home__guide-visual--order i:nth-child(2) { width: 17px; height: 17px; }
+.home__guide-visual--order i:nth-child(3) { width: 10px; height: 10px; }
+
+.home__guide-visual--stack {
+  --piece-color: var(--accent-secondary);
+  position: relative;
+  width: 30px;
+}
+
+.home__guide-visual--stack i { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.home__guide-visual--stack i:nth-child(1) { width: 30px; height: 30px; }
+.home__guide-visual--stack i:nth-child(2) { width: 18px; height: 18px; }
+.home__guide-visual--stack i:nth-child(3) { width: 8px; height: 8px; }
 
 .home__guide-card strong {
   display: block;
   color: var(--text-primary);
-  font-size: 12px;
-  line-height: 1.25;
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.2;
 }
 
 .home__guide-card p {
   margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  line-height: 1.4;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-@media (max-width: 640px) {
-  .home__guide-grid { grid-template-columns: 1fr; }
-  .home__guide-card { min-height: 0; }
-}
-
-/* ── Right side cards ── */
-.home__section--actions { gap: 12px; }
-
-.home__card {
-  background: var(--cell-bg);
-  border: 1.5px solid var(--cell-border);
-  border-radius: 16px;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.home__card--secondary {
-  background: var(--surface-muted);
-}
-
-.home__card--spectator {
-  border-color: color-mix(in srgb, var(--accent-primary) 38%, var(--cell-border));
-  background: linear-gradient(145deg, var(--surface), var(--surface-raised));
-}
-
-.home__card--tournament {
-  border-color: color-mix(in srgb, var(--accent-secondary) 42%, var(--cell-border));
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-secondary) 12%, transparent), transparent 38%),
-    var(--cell-bg);
-}
-
-.home__tournament-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ── Actions ── */
+.home__section--actions {
+  position: sticky;
+  top: 84px;
   gap: 10px;
 }
 
-.home__tournament-badge {
-  padding: 3px 8px;
-  border: 1px solid var(--accent-secondary);
+.home__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
-  color: var(--accent-secondary);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  background: var(--surface-muted);
 }
 
-.home__tournament-separator {
+.home__tab {
+  min-height: 38px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.home__tab:hover { color: var(--text-primary); }
+
+.home__tab--active {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.25);
+}
+
+.home__card {
+  padding: 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.home__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home__panel-head { display: flex; flex-direction: column; gap: 4px; }
+
+.home__card-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-faint);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  font-size: 22px;
 }
 
-.home__tournament-separator::before,
-.home__tournament-separator::after {
+.home__card-sub {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.home__tournament-badge,
+.home__live-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home__tournament-badge { background: color-mix(in srgb, var(--accent-secondary) 18%, transparent); color: var(--accent-secondary); }
+.home__live-badge { background: color-mix(in srgb, var(--accent-danger) 18%, transparent); color: var(--accent-danger); }
+
+.home__separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.home__separator::before,
+.home__separator::after {
   content: '';
   flex: 1;
   height: 1px;
   background: var(--line-soft);
 }
 
-.home__spectator-heading {
+.home__inline-join {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
-.home__live-badge {
-  padding: 4px 7px;
-  border: 1px solid var(--accent-danger);
-  border-radius: 6px;
-  color: var(--accent-danger);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
-}
+.home__inline-join .home__input { flex: 1; min-width: 0; }
+.home__inline-join .st-btn { min-height: 44px; padding: 8px 18px; }
 
-.home__card-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.home__card-sub {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: -6px;
+.home__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* ── Fields ── */
-.home__field { display: flex; flex-direction: column; gap: 5px; }
+.home__field { display: flex; flex-direction: column; gap: 6px; }
 
 .home__label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.home__label-opt { text-transform: none; font-size: 10px; color: var(--text-faint); }
+.home__label-opt { color: var(--text-muted); font-weight: 400; }
 
 .home__input {
-  background: var(--control-bg);
-  border: 1.5px solid var(--cell-border);
-  border-radius: 8px;
-  padding: 9px 12px;
-  color: var(--text-primary);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
   width: 100%;
-  box-sizing: border-box;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  outline: none;
+  background: var(--cell-bg);
+  color: var(--text-primary);
+  font-size: 15px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.home__input:focus { border-color: var(--accent-primary); }
-.home__input--code { text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
+.home__input::placeholder { color: var(--text-faint); }
+
+.home__input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary) 16%, transparent);
+}
+
+.home__input--code {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
 
 /* ── Toggle ── */
 .home__toggle-row {
-  display: flex;
-  background: var(--control-bg);
-  border: 1.5px solid var(--cell-border);
-  border-radius: 8px;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-s);
+  background: var(--surface-muted);
 }
 
 .home__toggle-btn {
-  flex: 1;
-  padding: 8px;
+  min-height: 36px;
   border: none;
+  border-radius: var(--radius-xs);
   background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--text-secondary);
   cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
   transition: background 0.15s, color 0.15s;
 }
 
 .home__toggle-btn--active {
-  background: var(--control-hover);
+  background: var(--surface-raised);
   color: var(--text-primary);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.25);
 }
 
-/* ── Buttons ── */
-.home__btn {
-  padding: 10px 16px;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s, opacity 0.15s;
-}
+.home__btn { width: 100%; margin-top: 2px; }
 
-.home__btn:disabled {
-  border: 1px solid var(--line-soft);
-  background: var(--control-bg);
-  color: var(--text-faint);
-  cursor: not-allowed;
-}
-.home__btn:not(:disabled):hover { transform: scale(1.02); }
-
-.home__btn--primary {
-  background: var(--gradient-primary);
-  color: var(--text-on-accent);
-}
-
-.home__btn--secondary {
+.home__btn--watch {
   background: var(--gradient-secondary);
-  color: var(--text-on-accent);
 }
 
-/* ── Hints ── */
-.home__hint  { font-size: 12px; color: var(--text-muted); text-align: center; }
-.home__error { font-size: 13px; color: var(--accent-danger); text-align: center; }
+.home__error {
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-danger) 50%, transparent);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--accent-danger) 10%, transparent);
+  color: var(--accent-danger);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
 
-/* ── Slide transition ── */
+/* ── Transitions ── */
+.panel-enter-active { transition: opacity 0.25s ease, transform 0.3s var(--ease-out); }
+.panel-leave-active { transition: opacity 0.12s ease; }
+.panel-enter-from { opacity: 0; transform: translateY(8px); }
+.panel-leave-to { opacity: 0; }
+
 .slide-enter-active, .slide-leave-active {
   transition: max-height 0.25s ease, opacity 0.2s ease;
   overflow: hidden;
-  max-height: 80px;
+  max-height: 90px;
 }
 .slide-enter-from, .slide-leave-to { max-height: 0; opacity: 0; }
 
-/* ── Room list transition ── */
-.room-list-enter-active { transition: all 0.25s ease; }
-.room-list-leave-active { transition: all 0.2s ease; position: absolute; width: 100%; }
-.room-list-enter-from   { opacity: 0; transform: translateY(-6px); }
-.room-list-leave-to     { opacity: 0; transform: translateY(4px); }
+.room-list-enter-active { transition: opacity 0.3s ease, transform 0.35s var(--ease-spring); }
+.room-list-leave-active { transition: opacity 0.2s ease; position: absolute; width: 100%; }
+.room-list-enter-from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+.room-list-leave-to { opacity: 0; }
+.room-list-move { transition: transform 0.35s var(--ease-out); }
+
+/* ── Responsive ── */
+@media (max-width: 980px) {
+  .home__body { grid-template-columns: 1fr; }
+  .home__section--actions { position: static; order: -1; }
+}
+
+@media (max-width: 760px) {
+  .home__hero { grid-template-columns: 1fr; }
+  .home__hero-board { --cell: clamp(54px, 17vw, 80px); grid-row: 1; }
+  .home__guide-grid { grid-template-columns: 1fr; }
+  .home__guide-card { flex-direction: row; align-items: center; }
+  .home__guide-visual { flex: 0 0 90px; }
+}
 
 @media (max-width: 520px) {
-  .home__hero { align-items: flex-start; }
-  .home__hero-mark { min-width: 66px; min-height: 66px; border-radius: 18px; }
-  .home__hero-mark strong { font-size: 18px; }
-  .home__hero-mark span { font-size: 7px; }
-}
-
-.home__btn--spectator {
-  border: 1px solid var(--accent-primary);
-  background: transparent;
-  color: var(--accent-primary);
-}
-
-.home__btn--spectator:not(:disabled):hover {
-  background: var(--control-hover);
+  .room-card { flex-wrap: wrap; }
+  .room-card__info { flex: 1 1 calc(100% - 60px); }
+  .room-card__actions { width: 100%; justify-content: flex-end; }
+  .home__card { padding: 18px; }
+  .home__tab { font-size: 12px; }
 }
 </style>

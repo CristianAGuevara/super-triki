@@ -30,9 +30,10 @@
             >
               <span
                 v-if="pieceAt(rowIndex, colIndex, size)"
-                class="last-game__piece"
+                class="last-game__piece st-ring"
                 :class="[
                   `last-game__piece--${size}`,
+                  `st-ring--${size}`,
                   { 'last-game__piece--win': isHighlighted(rowIndex, colIndex, size) },
                 ]"
                 :style="{ '--piece-color': colorFor(pieceAt(rowIndex, colIndex, size)!.player) }"
@@ -67,7 +68,7 @@
         <span class="last-game__summary-label">Cómo terminó</span>
         <strong>{{ conditionLabel }}</strong>
         <p>{{ summaryText }}</p>
-        <small>Las fichas con brillo dorado forman la jugada ganadora.</small>
+        <small>Los anillos con brillo dorado forman la jugada ganadora.</small>
       </div>
     </div>
   </section>
@@ -141,8 +142,8 @@ function colorFor(slot: Player): string {
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 16px;
-  background: var(--surface-raised);
+  border-radius: var(--radius-l);
+  background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
@@ -162,24 +163,25 @@ function colorFor(slot: Player): string {
 
 .last-game__eyebrow {
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .last-game__header strong {
   color: var(--text-primary);
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 18px;
 }
 
 .last-game__result {
   padding: 5px 9px;
   border: 1px solid color-mix(in srgb, var(--accent-primary) 50%, transparent);
   border-radius: 999px;
-  color: var(--accent-primary);
-  font-size: 11px;
-  font-weight: 800;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .last-game__result--draw {
@@ -199,11 +201,11 @@ function colorFor(slot: Player): string {
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: repeat(3, var(--preview-cell));
-  gap: 7px;
-  padding: 11px;
-  border-radius: 14px;
-  background: var(--board-bg);
-  box-shadow: var(--shadow-glow);
+  gap: calc(var(--preview-cell) * 0.09);
+  padding: calc(var(--preview-cell) * 0.14);
+  border-radius: calc(var(--preview-cell) * 0.3);
+  background: linear-gradient(160deg, var(--board-rim), var(--board-bg) 40%);
+  box-shadow: var(--shadow-tray);
 }
 
 .last-game__row {
@@ -217,9 +219,9 @@ function colorFor(slot: Player): string {
   height: var(--preview-cell);
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--cell-border);
-  border-radius: 10px;
+  border-radius: calc(var(--preview-cell) * 0.22);
   background: var(--cell-bg);
+  box-shadow: inset 0 2px 5px var(--groove), 0 1px 0 var(--groove-light);
 }
 
 .last-game__ring {
@@ -239,47 +241,36 @@ function colorFor(slot: Player): string {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  border: 1px dashed var(--placeholder-border);
+  border: 1px solid var(--placeholder-border);
   border-radius: 50%;
-  opacity: 0.5;
+  box-shadow: inset 0 1px 2px var(--groove);
+  opacity: 0.6;
 }
 
-.last-game__piece {
-  display: block;
-  box-sizing: border-box;
-  border-radius: 50%;
-  border: 0 solid var(--piece-color);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--piece-color) 65%, transparent);
-}
+.last-game__piece { display: block; }
 
 .last-game__piece--large {
   width: calc(var(--preview-cell) * 0.68);
   height: calc(var(--preview-cell) * 0.68);
-  border-width: 4px;
 }
 
 .last-game__piece--medium {
   width: calc(var(--preview-cell) * 0.42);
   height: calc(var(--preview-cell) * 0.42);
-  border-width: 3px;
 }
 
 .last-game__piece--small {
   width: calc(var(--preview-cell) * 0.18);
   height: calc(var(--preview-cell) * 0.18);
-  background: var(--piece-color);
 }
 
 .last-game__piece--win {
-  box-shadow:
-    0 0 8px gold,
-    0 0 16px color-mix(in srgb, gold 55%, transparent);
   animation: last-game-win-pulse 0.9s ease-in-out infinite alternate;
 }
 
 @keyframes last-game-win-pulse {
-  from { filter: drop-shadow(0 0 3px gold); }
-  to { filter: drop-shadow(0 0 10px gold) brightness(1.25); }
+  from { filter: drop-shadow(0 0 3px var(--win-gold)); }
+  to { filter: drop-shadow(0 0 10px var(--win-gold)) brightness(1.25); }
 }
 
 .last-game__players {
@@ -294,12 +285,12 @@ function colorFor(slot: Player): string {
   align-items: center;
   gap: 7px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .last-game__color-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   box-shadow: 0 0 6px currentColor;
 }
@@ -312,9 +303,10 @@ function colorFor(slot: Player): string {
 
 .last-game__winner {
   margin-left: auto;
-  color: var(--accent-primary);
-  font-size: 9px;
-  font-weight: 900;
+  color: var(--win-gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -326,32 +318,33 @@ function colorFor(slot: Player): string {
   gap: 5px;
   padding: 12px 14px;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  border-radius: var(--radius-m);
   background: var(--surface-muted);
 }
 
 .last-game__summary-label {
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .last-game__summary strong {
   color: var(--text-primary);
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 16px;
 }
 
 .last-game__summary p {
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .last-game__summary small {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
 }
 

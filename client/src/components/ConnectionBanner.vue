@@ -66,20 +66,20 @@ onUnmounted(() => {
 .connection-banner {
   position: fixed;
   z-index: 500;
-  top: 70px;
+  top: calc(74px + env(safe-area-inset-top, 0px));
   left: 50%;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: min(560px, calc(100vw - 24px));
-  padding: 10px 12px 10px 14px;
-  border: 1px solid var(--accent-secondary);
-  border-radius: 12px;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 60%, transparent);
+  border-radius: var(--radius-m);
   background: var(--surface-raised);
   box-shadow: var(--shadow-card), var(--shadow-glow);
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
   transform: translateX(-50%);
 }
 
@@ -93,12 +93,13 @@ onUnmounted(() => {
 
 .connection-banner strong {
   color: var(--text-primary);
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 15px;
 }
 
 .connection-banner small {
   color: var(--accent-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -114,18 +115,18 @@ onUnmounted(() => {
 
 .connection-banner__retry {
   flex: 0 0 auto;
-  min-height: 34px;
-  padding: 5px 10px;
-  border: 1px solid var(--accent-secondary);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--accent-secondary);
+  min-height: 40px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gradient-primary);
+  color: var(--text-on-accent);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
 }
 
-.connection-banner__retry:hover { background: var(--control-hover); }
+.connection-banner__retry:hover { filter: brightness(1.06); }
 
 @keyframes connection-spin {
   to { transform: rotate(360deg); }

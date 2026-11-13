@@ -178,7 +178,7 @@ export const useGameStore = defineStore('game', () => {
     }
     moveNumber.value++
     turnStartedAt.value = Date.now()
-    audioStore.playSfx('move')
+    audioStore.playSfx('move', { size: targetSize })
 
     const win = detectWin(board.value, lines.value, players.value)
     if (win) {
@@ -201,7 +201,7 @@ export const useGameStore = defineStore('game', () => {
 
   function applyServerState(state: GameStateSnapshot): void {
     if (hasServerState.value && state.moveNumber > moveNumber.value) {
-      audioStore.playSfx('move')
+      audioStore.playSfx('move', { size: state.lastMove?.size })
     }
     dragState.value     = null
     selectedPiece.value = null
@@ -240,7 +240,10 @@ export const useGameStore = defineStore('game', () => {
     applyServerState(result.finalState)
     if (result.winResult) {
       winResult.value = result.winResult
-      audioStore.playSfx('win')
+      const roomStore = useRoomStore()
+      const lost = Boolean(roomStore.roomId && roomStore.mySlot && !roomStore.isSpectator &&
+        roomStore.mySlot !== result.winResult.winner)
+      audioStore.playSfx(lost ? 'lose' : 'win')
     } else {
       isDraw.value = true
       audioStore.playSfx('draw')
@@ -283,17 +286,33 @@ export const useGameStore = defineStore('game', () => {
     clearSelectionHint()
     dragState.value = null
     selectedPiece.value = payload
-    audioStore.playSfx('click')
+    audioStore.playSfx('select', { size: payload.size })
     if (typeof navigator !== 'undefined') navigator.vibrate?.(12)
   }
 
   function rejectSelection(): void {
     clearSelectionHint()
+    audioStore.playSfx('error')
     selectionHint.value = 'Esa casilla no está disponible.'
     selectionHintTimer = setTimeout(() => {
       selectionHint.value = null
       selectionHintTimer = null
     }, 1800)
+  }
+
+  /** Keyboard / remote helper: pick the next free piece of a size. */
+  function selectSize(player: Player, size: Size): boolean {
+    const piece = inventories.value[player]?.find(item => item.size === size)
+    if (!piece) {
+      audioStore.playSfx('error')
+      return false
+    }
+    if (selectedPiece.value?.size === size && selectedPiece.value.player === player) {
+      clearSelection()
+      return false
+    }
+    selectPiece({ pieceId: piece.id, player, size, source: 'inventory' })
+    return selectedPiece.value?.pieceId === piece.id
   }
 
   function clearSelection(): void {
@@ -329,6 +348,7 @@ export const useGameStore = defineStore('game', () => {
     placePiece,
     setDragState,
     selectPiece,
+    selectSize,
     rejectSelection,
     clearSelection,
     applyServerState,

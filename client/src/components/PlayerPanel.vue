@@ -1,13 +1,23 @@
 <template>
   <div
     class="player-panel"
-    :class="{ 'player-panel--active': isActive }"
-    :style="{ '--accent': meta.color }"
+    :class="{
+      'player-panel--active': isActive,
+      'player-panel--me': isMe,
+      'player-panel--idle': !isActive && !store.isGameOver,
+    }"
+    :style="{ '--accent': meta.color, '--piece-color': meta.color }"
   >
     <div class="player-panel__header">
-      <span class="player-panel__dot" />
+      <span class="player-panel__dot st-ring st-ring--medium" aria-hidden="true" />
       <span class="player-panel__name">{{ displayName }}</span>
-      <span v-if="isActive" class="player-panel__turn">{{ isMe ? 'Tu turno' : 'Su turno' }}</span>
+      <span v-if="isActive" class="player-panel__turn">
+        <span class="player-panel__turn-dot" aria-hidden="true" />
+        {{ isMe ? 'Tu turno' : 'Jugando' }}
+      </span>
+      <span v-else class="player-panel__count" :title="`${inventory.length} fichas restantes`">
+        {{ inventory.length }}/9
+      </span>
     </div>
 
     <!-- 3 stacked sets -->
@@ -18,60 +28,35 @@
         class="player-panel__stack"
         :class="{ 'player-panel__stack--empty': isStackEmpty(i) }"
       >
-        <!-- large ring — back -->
-        <div
-          v-if="pieceOfSet('large', i)"
-          v-draggable="dragPayload(pieceOfSet('large', i)!, i - 1)"
-          :data-piece-id="pieceOfSet('large', i)!.id"
-          class="stack-ring stack-ring--large"
-          :class="[
-            `stack-ring--player${player}`,
-            {
-              'stack-ring--locked': !canDrag,
-              'stack-ring--selected': isSelected(pieceOfSet('large', i)),
-            },
-          ]"
-          :style="pieceColorStyle"
-          :title="`Grande (J${player})`"
-        />
-        <div v-else class="stack-ring stack-ring--large stack-ring--used" />
-
-        <!-- medium ring — middle -->
-        <div
-          v-if="pieceOfSet('medium', i)"
-          v-draggable="dragPayload(pieceOfSet('medium', i)!, i - 1)"
-          :data-piece-id="pieceOfSet('medium', i)!.id"
-          class="stack-ring stack-ring--medium"
-          :class="[
-            `stack-ring--player${player}`,
-            {
-              'stack-ring--locked': !canDrag,
-              'stack-ring--selected': isSelected(pieceOfSet('medium', i)),
-            },
-          ]"
-          :style="pieceColorStyle"
-          :title="`Mediana (J${player})`"
-        />
-        <div v-else class="stack-ring stack-ring--medium stack-ring--used" />
-
-        <!-- small ring — front -->
-        <div
-          v-if="pieceOfSet('small', i)"
-          v-draggable="dragPayload(pieceOfSet('small', i)!, i - 1)"
-          :data-piece-id="pieceOfSet('small', i)!.id"
-          class="stack-ring stack-ring--small"
-          :class="[
-            `stack-ring--player${player}`,
-            {
-              'stack-ring--locked': !canDrag,
-              'stack-ring--selected': isSelected(pieceOfSet('small', i)),
-            },
-          ]"
-          :style="pieceColorStyle"
-          :title="`Pequeña (J${player})`"
-        />
-        <div v-else class="stack-ring stack-ring--small stack-ring--used" />
+        <template v-for="size in SIZE_ORDER" :key="size">
+          <div
+            v-if="pieceOfSet(size, i)"
+            v-draggable="dragPayload(pieceOfSet(size, i)!, i - 1)"
+            :data-piece-id="pieceOfSet(size, i)!.id"
+            class="stack-ring st-ring"
+            :class="[
+              `stack-ring--${size}`,
+              `st-ring--${size}`,
+              `stack-ring--player${player}`,
+              {
+                'stack-ring--locked': !canDrag,
+                'stack-ring--selected': isSelected(pieceOfSet(size, i)),
+              },
+            ]"
+            :style="pieceColorStyle"
+            :title="`${SIZE_LABELS[size]} (J${player})`"
+          />
+          <div v-else class="stack-ring stack-ring--used" :class="`stack-ring--${size}`" />
+        </template>
       </div>
+    </div>
+
+    <div v-if="isMe && canDrag && showShortcuts" class="player-panel__keys" aria-hidden="true">
+      <span v-for="(size, index) in SIZE_ORDER" :key="size" :class="{ 'is-out': countOf(size) === 0 }">
+        <kbd class="st-kbd">{{ index + 1 }}</kbd>
+        {{ SIZE_LABELS[size] }}
+        <small>×{{ countOf(size) }}</small>
+      </span>
     </div>
   </div>
 </template>
@@ -79,6 +64,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Player, Piece, Size, DragPayload } from '@/types/game'
+import { SIZE_ORDER } from '@/types/game'
 import type { PlayerSlot } from '@/types/socket'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
@@ -90,6 +76,10 @@ const props = defineProps<{ player: Player; mySlot?: PlayerSlot | null }>()
 const store     = useGameStore()
 const roomStore = useRoomStore()
 const userStore = useUserStore()
+
+const SIZE_LABELS: Record<Size, string> = { large: 'Grande', medium: 'Mediana', small: 'Pequeña' }
+const showShortcuts = typeof window !== 'undefined' &&
+  Boolean(window.matchMedia?.('(hover: hover) and (pointer: fine)').matches)
 
 const isActive  = computed(() => store.currentPlayer === props.player && !store.isGameOver)
 const meta      = computed(() => store.playerMeta[props.player])
@@ -113,6 +103,10 @@ const displayName = computed(() => {
 
 const inventory = computed(() => store.inventories[props.player] ?? [])
 
+function countOf(size: Size): number {
+  return inventory.value.filter(piece => piece.size === size).length
+}
+
 // Returns the i-th piece of a given size (1-indexed), or null if used
 function pieceOfSet(size: Size, i: number): Piece | null {
   const pieces = inventory.value.filter(p => p.size === size)
@@ -134,63 +128,101 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 
 <style scoped>
 .player-panel {
-  background: var(--cell-bg);
-  border: 2px solid transparent;
-  border-radius: 12px;
-  padding: 14px 16px;
-  min-width: 140px;
-  transition: border-color 0.3s, box-shadow 0.3s;
+  --stack: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 150px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-m);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 60%),
+    var(--surface);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease, transform 0.35s var(--ease-spring);
 }
 
+.player-panel--idle { opacity: 0.8; }
+
 .player-panel--active {
-  border-color: var(--accent);
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.08), 0 0 0 1px var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 40px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+  transform: translateY(-2px);
 }
 
 .player-panel__header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 9px;
+  min-width: 0;
 }
 
 .player-panel__dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background-color: var(--accent);
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
 .player-panel__name {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 14px;
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-panel__turn,
+.player-panel__count {
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .player-panel__turn {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--accent);
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  animation: pulse 1s ease-in-out infinite alternate;
-  white-space: nowrap;
 }
 
-@keyframes pulse {
-  from { opacity: 0.5; }
-  to   { opacity: 1; }
+.player-panel__turn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: turn-ping 1.3s ease-out infinite;
+}
+
+@keyframes turn-ping {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}
+
+.player-panel__count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* ── 3 stacks row ── */
 .player-panel__sets {
   display: flex;
-  gap: 10px;
+  gap: calc(var(--stack) * 0.16);
   align-items: center;
   justify-content: center;
 }
@@ -198,15 +230,14 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 /* Each stack is a fixed square where all rings are absolutely centered */
 .player-panel__stack {
   position: relative;
-  width: 76px;
-  height: 76px;
+  width: var(--stack);
+  height: var(--stack);
   flex-shrink: 0;
+  border-radius: 50%;
   transition: opacity 0.3s;
 }
 
-.player-panel__stack--empty {
-  opacity: 0.15;
-}
+.player-panel__stack--empty { opacity: 0.45; }
 
 /* ── Rings inside a stack ── */
 .stack-ring {
@@ -215,26 +246,30 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   left: 50%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  border-style: solid;
-  border-color: var(--piece-color, var(--accent-primary));
-  box-shadow: 0 0 5px var(--piece-color, var(--accent-primary));
-  box-sizing: border-box;
   cursor: grab;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  transition: transform 0.22s var(--ease-spring), opacity 0.2s ease, filter 0.2s ease;
 }
 
 /* z-index: large behind, small in front so each hits the right donut area */
-.stack-ring--large  { --light-inset: -2.5px; width: 76px; height: 76px; border-width: 5px; z-index: 1; }
-.stack-ring--medium { --light-inset: -1.5px; width: 48px; height: 48px; border-width: 3px; z-index: 2; }
-.stack-ring--small  { width: 22px; height: 22px; border-width: 0; z-index: 3; }
+.stack-ring--large  { width: 100%; height: 100%; z-index: 1; }
+.stack-ring--medium { width: 63%;  height: 63%;  z-index: 2; }
+.stack-ring--small  { width: 29%;  height: 29%;  z-index: 3; }
 
-/* Used (absent) rings — faint ghost */
+/* Used (absent) rings — an empty groove */
 .stack-ring--used {
-  opacity: 0.08;
-  border-color: var(--ghost-piece);
-  box-shadow: none;
+  border: 1px dashed var(--placeholder-border);
+  box-shadow: inset 0 1px 2px var(--groove);
   pointer-events: none;
   cursor: default;
+}
+
+.stack-ring--used.stack-ring--large { width: 88%; height: 88%; }
+.stack-ring--used.stack-ring--medium { width: 54%; height: 54%; }
+.stack-ring--used.stack-ring--small {
+  width: 22%;
+  height: 22%;
+  border-style: solid;
+  background: color-mix(in srgb, var(--groove) 30%, transparent);
 }
 
 /* Fallbacks when no room color is available (solo games or previews). */
@@ -243,45 +278,46 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 .stack-ring--player3 { --piece-color: var(--player-3-color); }
 .stack-ring--player4 { --piece-color: var(--player-4-color); }
 
-.stack-ring--large:not(.stack-ring--used)::after,
-.stack-ring--medium:not(.stack-ring--used)::after {
-  content: '';
-  position: absolute;
-  inset: var(--light-inset);
-  border: 2.5px solid color-mix(in srgb, var(--piece-color) 72%, white);
-  border-radius: inherit;
-  box-shadow:
-    0 0 4px 2px color-mix(in srgb, var(--piece-color) 62%, white),
-    0 0 11px 4px color-mix(in srgb, var(--piece-color) 52%, transparent);
-  filter: blur(0.7px);
-  pointer-events: none;
-}
-
-.stack-ring--small { background: var(--piece-color, var(--accent-primary)); }
-.stack-ring--used.stack-ring--small { background: var(--ghost-piece); }
-
-/* Selected by tapping on a touch device. */
+/* Selected by tap, click or keyboard. */
 .stack-ring--selected {
-  outline: 3px solid color-mix(in srgb, var(--piece-color) 58%, white);
-  outline-offset: 4px;
-  filter: brightness(1.35);
   z-index: 4;
+  outline: 2px solid color-mix(in srgb, var(--ring-color) 70%, white);
+  outline-offset: 3px;
+  transform: translate(-50%, -50%) translateY(-3px) scale(1.08);
+  filter:
+    drop-shadow(0 4px 0 color-mix(in srgb, var(--ring-color) 40%, #000))
+    drop-shadow(0 0 14px var(--ring-color))
+    brightness(1.12);
 }
 
 /* Locked: not your turn or not your pieces */
 .stack-ring--locked {
   cursor: not-allowed;
-  opacity: 0.45;
-  filter: grayscale(0.4);
+  opacity: 0.78;
 }
 
-.stack-ring:not(.stack-ring--used):not(.stack-ring--locked):hover {
-  filter: brightness(1.4);
-  transform: translate(-50%, -50%) scale(1.08);
+.stack-ring:not(.stack-ring--used):not(.stack-ring--locked):not(.stack-ring--selected):hover {
+  transform: translate(-50%, -50%) translateY(-2px) scale(1.06);
 }
 
 .stack-ring.dragging {
   opacity: 0.3;
   cursor: grabbing;
 }
+
+.player-panel__keys {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.player-panel__keys span { display: inline-flex; align-items: center; gap: 5px; }
+.player-panel__keys small { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
+.player-panel__keys .is-out { opacity: 0.35; }
 </style>

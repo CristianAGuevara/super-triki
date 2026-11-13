@@ -2,14 +2,16 @@
   <div
     ref="pieceElement"
     v-draggable="dragPayload"
-    class="piece"
+    class="piece st-ring"
     :class="[
       `piece--${piece.size}`,
+      `st-ring--${piece.size}`,
       `piece--player${piece.player}`,
       {
         'piece--inventory': inInventory,
         'piece--entry-hidden': entryAnimating,
         'piece--last-move-pulse': lastMoveActive,
+        'piece--last': highlightLastMove && !entryAnimating,
       },
     ]"
     :style="pieceStyle"
@@ -90,7 +92,13 @@ function animateFromInventory() {
   const from = {
     left: `${source.left + source.width / 2}px`,
     top: `${source.top + source.height / 2}px`,
-    transform: 'translate(-50%, -50%) scale(0.72) rotate(-10deg)',
+    transform: 'translate(-50%, -50%) scale(0.72) rotate(-30deg)',
+  }
+  const mid = {
+    left: `${(source.left + source.width / 2 + targetRect.left + targetRect.width / 2) / 2}px`,
+    top: `${Math.min(source.top, targetRect.top) - 60}px`,
+    transform: 'translate(-50%, -50%) scale(1.25) rotate(-8deg)',
+    offset: 0.55,
   }
   const to = {
     left: `${targetRect.left + targetRect.width / 2}px`,
@@ -99,9 +107,9 @@ function animateFromInventory() {
   }
 
   if (typeof ghost.animate === 'function') {
-    const animation = ghost.animate([from, to], {
-      duration: 550,
-      easing: 'cubic-bezier(0.2, 0.85, 0.3, 1.2)',
+    const animation = ghost.animate([from, mid, to], {
+      duration: 620,
+      easing: 'cubic-bezier(0.45, 0, 0.25, 1)',
       fill: 'forwards',
     })
     animation.addEventListener('finish', finish, { once: true })
@@ -113,25 +121,15 @@ function animateFromInventory() {
       ghost.style.transform = to.transform
     })
   }
-  window.setTimeout(finish, 750)
+  window.setTimeout(finish, 820)
 }
 </script>
 
 <style scoped>
 .piece {
-  position: relative;
-  border-radius: 50%;
-  border-style: solid;
-  border-color: var(--piece-color, var(--accent-primary));
-  box-shadow: 0 0 6px var(--piece-color, var(--accent-primary));
   cursor: grab;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
   flex-shrink: 0;
-  box-sizing: border-box;
-}
-
-.piece:hover {
-  transform: scale(1.1);
+  transition: transform 0.2s var(--ease-spring);
 }
 
 .piece.dragging {
@@ -143,14 +141,40 @@ function animateFromInventory() {
   opacity: 0 !important;
 }
 
-.piece--last-move-pulse {
-  animation: last-move-pulse 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+/* Sizes are relative to the slot in Cell.vue, so the board can scale. */
+.piece--large  { width: 90%; height: 90%; }
+.piece--medium { width: 86%; height: 86%; }
+.piece--small  { width: 78%; height: 78%; }
+
+.piece--last {
+  outline: 1.5px solid color-mix(in srgb, var(--ring-color) 55%, transparent);
+  outline-offset: 2px;
 }
 
-@keyframes last-move-pulse {
-  0% { opacity: 0.45; transform: scale(0.84); }
-  60% { opacity: 1; transform: scale(1.14); }
+.piece--last-move-pulse {
+  animation: piece-land 0.55s var(--ease-snap) both;
+}
+
+.piece--last-move-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid var(--ring-color);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: piece-ripple 0.7s 0.12s var(--ease-out);
+}
+
+@keyframes piece-land {
+  0% { opacity: 0; transform: scale(1.45) translateY(-6%); }
+  55% { opacity: 1; transform: scale(0.92); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes piece-ripple {
+  0% { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.6); }
 }
 
 .piece--flight {
@@ -159,31 +183,8 @@ function animateFromInventory() {
   pointer-events: none !important;
   margin: 0;
   opacity: 1 !important;
-  transform: translate(-50%, -50%) scale(0.72) rotate(-10deg);
-  transition: left 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2),
-    top 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2),
-    transform 0.55s cubic-bezier(0.2, 0.85, 0.3, 1.2);
-}
-
-/* Sizes — hollow ring style. Border widths scale with size */
-.piece--large  { --light-inset: -2.5px; width: var(--size-large);  height: var(--size-large);  border-width: 5px; }
-.piece--medium { --light-inset: -1.5px; width: var(--size-medium); height: var(--size-medium); border-width: 3px; }
-.piece--small  { width: var(--size-small);  height: var(--size-small);  border-width: 0; }
-
-.piece--small { background: var(--piece-color, var(--accent-primary)); }
-
-.piece--large::after,
-.piece--medium::after {
-  content: '';
-  position: absolute;
-  inset: var(--light-inset);
-  border: 2.5px solid color-mix(in srgb, var(--piece-color) 72%, white);
-  border-radius: inherit;
-  box-shadow:
-    0 0 4px 2px color-mix(in srgb, var(--piece-color) 62%, white),
-    0 0 11px 4px color-mix(in srgb, var(--piece-color) 52%, transparent);
-  filter: blur(0.7px);
-  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.72) rotate(-30deg);
+  transition: left 0.6s var(--ease-out), top 0.6s var(--ease-out), transform 0.6s var(--ease-out);
 }
 
 /* Fallbacks when no room color is available (solo games or previews). */

@@ -96,28 +96,30 @@ const turnLabel = computed(() =>
 }
 
 .group-spectator__eyebrow {
-  color: var(--text-muted);
-  font-size: 10px;
+  color: var(--accent-primary);
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .group-spectator__identity strong {
   color: var(--text-primary);
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: -0.02em;
 }
 
 .group-spectator__turn {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .group-spectator__back {
-  min-height: 40px;
-  padding: 7px 13px;
-  border: 1px solid var(--cell-border);
-  border-radius: 9px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   background: var(--control-bg);
   color: var(--text-primary);
   cursor: pointer;
@@ -171,9 +173,5 @@ const turnLabel = computed(() =>
     width: 100%;
   }
 
-  .group-spectator__board {
-    transform: scale(0.78);
-    margin-bottom: -40px;
-  }
 }
 </style>

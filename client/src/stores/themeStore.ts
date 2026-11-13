@@ -4,8 +4,8 @@ import { ref, watch } from 'vue'
 export type ThemeId = 'neon' | 'sunset'
 
 export const THEMES: Array<{ id: ThemeId; label: string; icon: string }> = [
-  { id: 'neon', label: 'Neon Arcade', icon: '✦' },
-  { id: 'sunset', label: 'Sunset Pop', icon: '◒' },
+  { id: 'neon', label: 'Noche', icon: 'moon' },
+  { id: 'sunset', label: 'Día', icon: 'sun' },
 ]
 
 const STORAGE_KEY = 'st_theme'

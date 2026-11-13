@@ -115,7 +115,7 @@
         </div>
 
         <div class="tournament__invite">
-          <code>{{ roomId }}</code>
+          <code><span v-for="(char, index) in roomId.split('')" :key="index">{{ char }}</span></code>
           <button type="button" @click="copyLink">
             {{ copied ? '¡Copiado!' : 'Copiar enlace del torneo' }}
           </button>
@@ -138,7 +138,7 @@
         <div v-if="isHost" class="tournament__host-actions">
           <button
             type="button"
-            class="tournament__primary"
+            class="st-btn tournament__primary"
             :disabled="!canStart || starting || savingSettings"
             @click="startTournament"
           >
@@ -187,7 +187,8 @@
                   class="tournament__spectator-count"
                   :title="`${group.spectatorCount} espectador${group.spectatorCount === 1 ? '' : 'es'}`"
                 >
-                  👁 {{ group.spectatorCount }}
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  {{ group.spectatorCount }}
                 </span>
                 <span
                   class="tournament__group-status"
@@ -281,7 +282,7 @@
             <button
               v-if="mustConfirmReady"
               type="button"
-              class="tournament__primary"
+              class="st-btn tournament__primary"
               :disabled="myReady || readying"
               @click="confirmReady"
             >
@@ -306,11 +307,16 @@
 
       <!-- Champion -->
       <section v-else class="tournament__finished">
-        <span class="tournament__trophy" aria-hidden="true">★</span>
+        <RingBurst :colors="['var(--win-gold)', 'var(--accent-secondary)', 'var(--player-2-color)', 'var(--player-color-emerald)']" :count="140" />
+        <span class="tournament__trophy" aria-hidden="true">
+          <i class="st-ring st-ring--large" />
+          <i class="st-ring st-ring--medium" />
+          <i class="st-ring st-ring--small" />
+        </span>
         <span class="tournament__eyebrow">Torneo finalizado</span>
         <h2>{{ championName }}</h2>
         <p>es el campeón de {{ store.name }}.</p>
-        <button type="button" class="tournament__primary" @click="goHome">Volver al inicio</button>
+        <button type="button" class="st-btn tournament__primary" @click="goHome">Volver al inicio</button>
       </section>
 
       <!-- League standings -->
@@ -378,6 +384,7 @@ import { connectSocket } from '@/services/socket'
 import type { TournamentFormat, TournamentGroupSnapshot } from '@/types/tournament'
 import TournamentSpectatorOverlay from '@/components/TournamentSpectatorOverlay.vue'
 import TournamentLastGame from '@/components/TournamentLastGame.vue'
+import RingBurst from '@/components/RingBurst.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -765,7 +772,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  padding: 24px 16px 48px;
+  padding: 28px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px));
 }
 
 .tournament__header {
@@ -778,19 +785,20 @@ onUnmounted(() => {
 
 .tournament__identity { display: flex; flex-direction: column; gap: 3px; }
 .tournament__eyebrow {
-  color: var(--text-muted);
-  font-size: 10px;
+  color: var(--accent-primary);
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .tournament__identity h1 {
   margin: 0;
   color: var(--text-primary);
-  font-size: clamp(24px, 5vw, 38px);
-  line-height: 1.05;
+  font-size: clamp(32px, 6vw, 56px);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
 }
-.tournament__code { color: var(--accent-secondary); font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+.tournament__code { color: var(--text-muted); font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.08em; }
 
 .tournament__header-actions {
   display: flex;
@@ -805,8 +813,8 @@ onUnmounted(() => {
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
   letter-spacing: 0.7px;
 }
 .tournament__status--waiting { border-color: var(--accent-primary); color: var(--accent-primary); }
@@ -814,14 +822,14 @@ onUnmounted(() => {
 .tournament__status--finished { border-color: var(--accent-danger); color: var(--accent-danger); }
 
 .tournament__leave {
-  min-height: 32px;
-  padding: 5px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
+  min-height: 38px;
+  padding: 6px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 .tournament__leave:hover { background: var(--control-hover); color: var(--text-primary); }
@@ -834,11 +842,12 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  padding: 22px;
+  padding: clamp(18px, 3vw, 28px);
   border: 1px solid var(--line-soft);
-  border-radius: 20px;
+  border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
+  animation: st-pop-in 0.45s var(--ease-out) both;
 }
 
 .tournament__summary {
@@ -856,16 +865,16 @@ onUnmounted(() => {
   gap: 3px;
   padding: 8px;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: var(--control-bg);
+  border-radius: var(--radius-m);
+  background: var(--surface-muted);
 }
-.tournament__summary strong { color: var(--text-primary); font-size: 22px; }
-.tournament__summary span { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+.tournament__summary strong { color: var(--text-primary); font-family: var(--font-display); font-size: 30px; font-variant-numeric: tabular-nums; }
+.tournament__summary span { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
 
 .tournament__hint {
-  max-width: 580px;
+  max-width: 62ch;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
   text-align: center;
 }
@@ -877,7 +886,7 @@ onUnmounted(() => {
   gap: 10px;
   padding: 13px;
   border: 1px solid var(--line-soft);
-  border-radius: 14px;
+  border-radius: var(--radius-m);
   background: var(--control-bg);
 }
 
@@ -901,8 +910,8 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.tournament__format-option strong { color: var(--text-primary); font-size: 12px; }
-.tournament__format-option small { color: var(--text-muted); font-size: 10px; line-height: 1.3; }
+.tournament__format-option strong { color: var(--text-primary); font-family: var(--font-display); font-size: 15px; }
+.tournament__format-option small { color: var(--text-muted); font-size: 12px; line-height: 1.3; }
 .tournament__format-option:hover:not(:disabled) { background: var(--control-hover); }
 .tournament__format-option--active {
   border-color: var(--accent-primary);
@@ -949,21 +958,28 @@ onUnmounted(() => {
   justify-content: center;
 }
 .tournament__invite code {
-  padding: 8px 14px;
-  border: 1px solid var(--cell-border);
-  border-radius: 10px;
+  display: flex;
+  gap: 5px;
+}
+
+.tournament__invite code span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 50px;
+  border-radius: var(--radius-s);
   background: var(--cell-bg);
+  box-shadow: inset 0 2px 5px var(--groove), 0 1px 0 var(--groove-light);
   color: var(--accent-primary);
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: 3px;
+  font-size: 24px;
+  font-weight: 700;
 }
 .tournament__invite button,
 .tournament__secondary {
-  min-height: 40px;
-  padding: 8px 14px;
-  border: 1px solid var(--cell-border);
-  border-radius: 10px;
+  min-height: 42px;
+  padding: 8px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   background: var(--control-bg);
   color: var(--text-primary);
   cursor: pointer;
@@ -1004,33 +1020,27 @@ onUnmounted(() => {
 .tournament__you {
   padding: 2px 6px;
   border-radius: 999px;
-  font-size: 9px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
 }
 .tournament__host-badge { background: var(--accent-secondary); color: var(--text-on-accent); }
 .tournament__you { background: var(--control-hover); color: var(--text-secondary); }
 
 .tournament__primary {
-  min-height: 46px;
-  padding: 10px 24px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--gradient-brand);
-  color: var(--text-on-accent);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 900;
+  min-width: min(280px, 100%);
+  min-height: 50px;
+  font-size: 16px;
 }
 .tournament__primary:disabled,
 .tournament__secondary:disabled { cursor: not-allowed; opacity: 0.45; }
 .tournament__host-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 
-.tournament__note { color: var(--text-muted); font-size: 11px; text-align: center; }
+.tournament__note { color: var(--text-muted); font-size: 13px; line-height: 1.45; text-align: center; }
 
 .tournament__stage { align-items: stretch; }
 .tournament__stage-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.tournament__stage-heading h2 { margin: 3px 0 0; color: var(--text-primary); font-size: 22px; }
+.tournament__stage-heading h2 { margin: 3px 0 0; color: var(--text-primary); font-size: 30px; }
 .tournament__advance-count { color: var(--text-muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
 
 .tournament__groups {
@@ -1042,50 +1052,58 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 13px;
+  padding: 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 14px;
+  border-radius: var(--radius-m);
   background: var(--cell-bg);
 }
 .tournament__group--finished { border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--line-soft)); }
 .tournament__group--draw { border-color: color-mix(in srgb, var(--accent-secondary) 48%, var(--line-soft)); }
 .tournament__group-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.tournament__group-header strong { color: var(--text-primary); font-size: 13px; }
+.tournament__group-header strong { color: var(--text-primary); font-family: var(--font-display); font-size: 17px; }
 .tournament__group-tools { display: flex; align-items: center; gap: 7px; }
-.tournament__group-status { color: var(--text-muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px; }
+.tournament__group-status { color: var(--text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
 .tournament__group-status--finished { color: var(--accent-primary); }
 .tournament__group-status--draw { color: var(--accent-secondary); }
 
 .tournament__max-time {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.tournament__spectator-count svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
 }
 
 .tournament__spectator-count {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   padding: 2px 6px;
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .tournament__watch {
   align-self: flex-start;
-  min-height: 32px;
-  padding: 5px 10px;
+  min-height: 36px;
+  padding: 6px 14px;
   border: 1px solid var(--accent-primary);
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--accent-primary);
   cursor: pointer;
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .tournament__watch:hover { background: var(--control-hover); }
@@ -1103,7 +1121,7 @@ onUnmounted(() => {
 .tournament__group-player--winner { background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--text-primary); }
 .tournament__group-player--out { opacity: 0.5; text-decoration: line-through; }
 .tournament__winner-badge,
-.tournament__out-badge { margin-left: auto; font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.tournament__out-badge { margin-left: auto; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .tournament__winner-badge { color: var(--accent-primary); }
 .tournament__out-badge { color: var(--text-faint); }
 
@@ -1123,7 +1141,7 @@ onUnmounted(() => {
   gap: 11px;
   padding: 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 16px;
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 
@@ -1136,7 +1154,8 @@ onUnmounted(() => {
 
 .tournament__ready-copy strong {
   color: var(--text-primary);
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 22px;
 }
 
 .tournament__ready-list {
@@ -1159,8 +1178,8 @@ onUnmounted(() => {
 
 .tournament__ready-chip small {
   color: var(--text-muted);
-  font-size: 8px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
 }
 
@@ -1185,20 +1204,26 @@ onUnmounted(() => {
 
 .tournament__ready-auto-note { max-width: 520px; }
 
-.tournament__finished { align-items: center; text-align: center; }
+.tournament__finished { position: relative; overflow: hidden; align-items: center; text-align: center; }
 .tournament__trophy {
+  --piece-color: var(--win-gold);
+  position: relative;
   display: grid;
   place-items: center;
-  width: 78px;
-  height: 78px;
-  border: 2px solid var(--accent-secondary);
-  border-radius: 50%;
-  color: var(--accent-secondary);
-  font-size: 34px;
-  box-shadow: 0 0 28px color-mix(in srgb, var(--accent-secondary) 26%, transparent);
+  width: 120px;
+  height: 120px;
+  margin-bottom: 6px;
 }
-.tournament__finished h2 { margin: 0; color: var(--text-primary); font-size: clamp(26px, 6vw, 42px); }
-.tournament__finished p { color: var(--text-secondary); font-size: 14px; }
+.tournament__trophy i { position: absolute; animation: trophy-drop 0.7s var(--ease-snap) both; }
+.tournament__trophy i:nth-child(1) { width: 120px; height: 120px; animation-delay: 0.1s; }
+.tournament__trophy i:nth-child(2) { width: 74px; height: 74px; animation-delay: 0.25s; }
+.tournament__trophy i:nth-child(3) { width: 32px; height: 32px; animation-delay: 0.4s; }
+@keyframes trophy-drop {
+  0% { opacity: 0; transform: translateY(-50px) scale(1.3); }
+  100% { opacity: 1; transform: none; }
+}
+.tournament__finished h2 { margin: 0; color: var(--text-primary); font-size: clamp(40px, 8vw, 72px); letter-spacing: -0.04em; }
+.tournament__finished p { color: var(--text-secondary); font-size: 16px; }
 
 .tournament__standings {
   display: flex;
@@ -1207,7 +1232,7 @@ onUnmounted(() => {
   gap: 10px;
   padding: 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 16px;
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 
@@ -1217,7 +1242,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
 }
-.tournament__standings-heading h3 { margin: 3px 0 0; color: var(--text-primary); font-size: 17px; }
+.tournament__standings-heading h3 { margin: 3px 0 0; color: var(--text-primary); font-size: 22px; }
 .tournament__standings-heading .tournament__note { white-space: nowrap; }
 
 .tournament__standings-table {
@@ -1229,13 +1254,14 @@ onUnmounted(() => {
 
 .tournament__standing-row {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 38px 34px 34px 46px;
+  grid-template-columns: 26px minmax(0, 1fr) 40px 36px 36px 48px;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 9px 12px;
   border-top: 1px solid var(--line-soft);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 .tournament__standing-row:first-child { border-top: 0; }
 .tournament__standing-row--header {
@@ -1244,16 +1270,17 @@ onUnmounted(() => {
   z-index: 1;
   background: var(--surface-raised);
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
-.tournament__standing-row--leader { background: color-mix(in srgb, var(--accent-primary) 10%, transparent); }
+.tournament__standing-row--leader { background: color-mix(in srgb, var(--win-gold) 12%, transparent); }
+.tournament__standing-row--leader strong { color: var(--win-gold); }
 .tournament__standing-row--me { color: var(--text-primary); font-weight: 800; }
 .tournament__standing-name { display: flex; min-width: 0; flex-direction: column; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tournament__standing-name small { color: var(--text-faint); font-size: 8px; font-weight: 500; }
-.tournament__standing-row strong { color: var(--accent-primary); text-align: right; }
+.tournament__standing-name small { color: var(--text-faint); font-size: 11px; font-weight: 500; }
+.tournament__standing-row strong { color: var(--text-primary); font-family: var(--font-display); font-size: 16px; text-align: right; }
 .tournament__tiebreak-note { color: var(--accent-secondary); font-weight: 700; }
 
 .tournament__action-error {
@@ -1279,7 +1306,7 @@ onUnmounted(() => {
   gap: 8px;
   padding: 24px;
   border: 1px solid var(--line-soft);
-  border-radius: 18px;
+  border-radius: var(--radius-l);
   background: var(--surface);
   color: var(--text-secondary);
   text-align: center;
@@ -1288,9 +1315,10 @@ onUnmounted(() => {
 .tournament__message--error { border-color: var(--accent-danger); }
 .tournament__back {
   margin-top: 8px;
-  padding: 9px 16px;
-  border: 1px solid var(--cell-border);
-  border-radius: 9px;
+  min-height: 44px;
+  padding: 9px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   background: var(--control-bg);
   color: var(--text-primary);
   cursor: pointer;
@@ -1314,7 +1342,7 @@ onUnmounted(() => {
   .tournament__summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .tournament__summary > div { min-height: 62px; padding: 5px; }
   .tournament__summary strong { font-size: 18px; }
-  .tournament__summary span { font-size: 8px; }
+  .tournament__summary span { font-size: 11px; }
   .tournament__stage-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
   .tournament__groups { grid-template-columns: 1fr; }
   .tournament__format-grid { grid-template-columns: 1fr; }

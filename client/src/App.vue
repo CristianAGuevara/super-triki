@@ -1,10 +1,20 @@
 <template>
+  <div class="app-ambient" aria-hidden="true">
+    <span class="app-ambient__ring app-ambient__ring--a" />
+    <span class="app-ambient__ring app-ambient__ring--b" />
+    <span class="app-ambient__ring app-ambient__ring--c" />
+  </div>
+
   <header class="app-header" :class="{ 'app-header--spectator': isSpectatorRoute }">
-    <RouterLink to="/" class="app-logo">
-      <img src="/favicon.svg" alt="Super Triki" class="app-logo__img" />
-      <span>
+    <RouterLink to="/" class="app-logo" aria-label="Super Triki, ir al inicio">
+      <svg class="app-logo__mark" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="32" r="24" class="app-logo__ring app-logo__ring--l" />
+        <circle cx="32" cy="32" r="13.5" class="app-logo__ring app-logo__ring--m" />
+        <circle cx="32" cy="32" r="6" class="app-logo__dot" />
+      </svg>
+      <span class="app-logo__text">
         <span class="app-logo__name">Super Triki</span>
-        <span class="app-logo__tagline">STRATEGY // PLAY</span>
+        <span class="app-logo__tagline">triqui de anillos</span>
       </span>
     </RouterLink>
 
@@ -16,13 +26,38 @@
       >
         TV · OK
       </span>
-      <div class="audio-control" role="group" aria-label="Control de sonido">
+
+      <div class="audio-control" role="group" aria-label="Sonido">
         <button
-          class="audio-control__mute"
+          class="icon-btn"
+          :class="{ 'icon-btn--off': !audioStore.musicEnabled }"
+          :aria-pressed="audioStore.musicEnabled"
+          :aria-label="audioStore.musicEnabled ? 'Apagar música' : 'Encender música'"
+          :title="audioStore.musicEnabled ? 'Apagar música' : 'Encender música'"
+          @click="toggleMusic"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 18V5l11-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="17" cy="16" r="3" />
+            <path v-if="!audioStore.musicEnabled" d="M3 3l18 18" class="icon-btn__slash" />
+          </svg>
+        </button>
+        <button
+          class="icon-btn"
+          :class="{ 'icon-btn--off': audioStore.muted }"
           :aria-label="audioStore.muted ? 'Activar sonido' : 'Silenciar sonido'"
+          :title="audioStore.muted ? 'Activar sonido' : 'Silenciar sonido'"
           @click="audioStore.toggleMute"
         >
-          {{ audioStore.muted ? '🔇' : '🔊' }}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4V5z" />
+            <template v-if="!audioStore.muted">
+              <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+              <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+            </template>
+            <path v-else d="m16 9 5 6m0-6-5 6" />
+          </svg>
         </button>
         <input
           class="audio-control__range"
@@ -30,29 +65,30 @@
           min="0"
           max="1"
           step="0.01"
-          :value="audioStore.volume"
+          :value="audioStore.muted ? 0 : audioStore.volume"
+          :style="{ '--fill': `${(audioStore.muted ? 0 : audioStore.volume) * 100}%` }"
           aria-label="Volumen"
           data-tv-skip
           @input="setVolume"
         />
-        <span class="audio-control__value">{{ Math.round(audioStore.volume * 100) }}%</span>
       </div>
 
-      <div class="theme-switcher" role="group" aria-label="Tema visual">
       <button
-        v-for="option in themeStore.themes"
-        :key="option.id"
-        class="theme-switcher__button"
-        :class="{ 'theme-switcher__button--active': themeStore.theme === option.id }"
-        :aria-label="`Usar tema ${option.label}`"
-        :title="option.label"
-        :aria-pressed="themeStore.theme === option.id"
-        @click="selectTheme(option.id)"
+        class="icon-btn theme-toggle"
+        :aria-label="themeStore.theme === 'neon' ? 'Cambiar a tema de día' : 'Cambiar a tema de noche'"
+        :title="themeStore.theme === 'neon' ? 'Tema de día' : 'Tema de noche'"
+        @click="toggleTheme"
       >
-        <span aria-hidden="true">{{ option.icon }}</span>
-        <span class="theme-switcher__label">{{ option.label }}</span>
+        <Transition name="theme-icon" mode="out-in">
+          <svg v-if="themeStore.theme === 'neon'" key="moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+          </svg>
+          <svg v-else key="sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.5" />
+            <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+          </svg>
+        </Transition>
       </button>
-      </div>
     </div>
   </header>
 
@@ -65,7 +101,11 @@
     </div>
   </Transition>
 
-  <RouterView />
+  <RouterView v-slot="{ Component, route: viewRoute }">
+    <Transition name="page" mode="out-in">
+      <component :is="Component" :key="String(viewRoute.name)" />
+    </Transition>
+  </RouterView>
 </template>
 
 <script setup lang="ts">
@@ -359,9 +399,14 @@ socket.on('disconnect', handleDisconnect)
 socket.on('connect_error', handleConnectError)
 socket.io.on('reconnect_attempt', handleReconnectAttempt)
 
-function selectTheme(theme: 'neon' | 'sunset') {
+function toggleTheme() {
   audioStore.playSfx('click')
-  themeStore.setTheme(theme)
+  themeStore.setTheme(themeStore.theme === 'neon' ? 'sunset' : 'neon')
+}
+
+function toggleMusic() {
+  audioStore.toggleMusic()
+  audioStore.playSfx('click')
 }
 
 function activateAudio() {
@@ -417,48 +462,66 @@ onUnmounted(() => {
 
 <style>
 @import '@/assets/variables.css';
-
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--accent-primary) 32%, transparent);
-  color: var(--text-primary);
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 2px;
-}
-
-html.tv-mode :focus {
-  outline: 3px solid var(--accent-primary);
-  outline-offset: 3px;
-}
-
-@media (min-width: 1200px) {
-  html.tv-mode body {
-    zoom: 1.12;
-  }
-}
-
-body {
-  background-color: var(--page-bg);
-  background-image: var(--page-gradient);
-  background-attachment: fixed;
-  color: var(--text-primary);
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  transition: background-color 0.35s ease, color 0.35s ease;
-}
+@import '@/assets/base.css';
 </style>
 
 <style scoped>
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.app-ambient__ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--line-soft);
+  opacity: 0.7;
+}
+
+.app-ambient__ring::after {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  border: 1px solid var(--line-soft);
+}
+
+.app-ambient__ring--a {
+  width: 70vmax;
+  height: 70vmax;
+  top: -38vmax;
+  right: -30vmax;
+  animation: ambient-drift 38s ease-in-out infinite alternate;
+}
+
+.app-ambient__ring--b {
+  width: 46vmax;
+  height: 46vmax;
+  bottom: -26vmax;
+  left: -18vmax;
+  animation: ambient-drift 46s ease-in-out infinite alternate-reverse;
+}
+
+.app-ambient__ring--c {
+  width: 18vmax;
+  height: 18vmax;
+  top: 48%;
+  right: 6vw;
+  border-width: 0.9vmax;
+  border-color: color-mix(in srgb, var(--accent-secondary) 6%, transparent);
+  animation: ambient-drift 30s ease-in-out infinite alternate;
+}
+
+.app-ambient__ring--c::after { display: none; }
+
+@keyframes ambient-drift {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); }
+  to { transform: translate3d(-3vmax, 4vmax, 0) rotate(40deg); }
+}
+
 .app-header {
   position: sticky;
   top: 0;
@@ -466,90 +529,106 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px clamp(16px, 4vw, 40px);
+  gap: 12px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  padding-left: max(clamp(16px, 4vw, 40px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(16px, 4vw, 40px), env(safe-area-inset-right, 0px));
   background: var(--header-bg);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(14px) saturate(1.4);
   border-bottom: 1px solid var(--line-soft);
-  transition: background 0.35s ease, border-color 0.35s ease;
+  transition: background 0.4s ease, border-color 0.4s ease;
 }
 
 .app-header--spectator {
-  padding-top: 6px;
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
   padding-bottom: 6px;
 }
 
-.app-header--spectator .app-logo__img { width: 22px; height: 22px; }
+.app-header--spectator .app-logo__mark { width: 26px; height: 26px; }
 .app-header--spectator .app-logo__tagline { display: none; }
-.app-header--spectator .audio-control { transform: scale(0.9); transform-origin: right center; }
 
 .app-logo {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: inherit;
   text-decoration: none;
 }
 
-.app-logo > span { display: flex; flex-direction: column; gap: 1px; }
-
-.app-logo__img {
-  width: 28px;
-  height: 28px;
+.app-logo__mark {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
+.app-logo__ring {
+  fill: none;
+  transform-origin: 32px 32px;
+  transition: transform 0.6s var(--ease-spring);
+}
+
+.app-logo__ring--l { stroke: var(--accent-primary); stroke-width: 8; }
+.app-logo__ring--m { stroke: var(--accent-secondary); stroke-width: 6; }
+.app-logo__dot { fill: var(--player-2-color); }
+
+.app-logo:hover .app-logo__ring--l { transform: rotate(90deg) scale(1.06); }
+.app-logo:hover .app-logo__ring--m { transform: scale(0.86); }
+
+.app-logo__text { display: flex; flex-direction: column; gap: 1px; }
+
 .app-logo__name {
-  font-size: 16px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 800;
-  background: var(--gradient-brand);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: 0.5px;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .app-logo__tagline {
   color: var(--text-muted);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1.8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .header-tools {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tv-mode-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 4px 9px;
+  min-height: 30px;
+  padding: 4px 10px;
   border: 1px solid var(--accent-primary);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   color: var(--accent-primary);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   white-space: nowrap;
 }
 
 .tv-mode-hint {
   position: fixed;
   z-index: 520;
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   display: flex;
   align-items: baseline;
   gap: 9px;
   max-width: calc(100vw - 32px);
-  padding: 11px 16px;
+  padding: 12px 18px;
   border: 1px solid var(--accent-primary);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--surface-raised);
-  box-shadow: var(--shadow-card), var(--shadow-glow);
+  box-shadow: var(--shadow-card);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   transform: translateX(-50%);
 }
 
@@ -557,96 +636,101 @@ body {
   color: var(--accent-primary);
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: 0.08em;
 }
 
 .tv-hint-enter-active,
-.tv-hint-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
+.tv-hint-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
 .tv-hint-enter-from,
-.tv-hint-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 10px);
-}
+.tv-hint-leave-to { opacity: 0; transform: translate(-50%, 10px); }
 
 .audio-control {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-width: 126px;
-  padding: 4px 8px;
+  gap: 2px;
+  padding: 3px 10px 3px 3px;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--surface-muted);
 }
 
-.audio-control__mute {
+.icon-btn {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
-  border-radius: 7px;
+  border-radius: 50%;
   background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.25s var(--ease-spring);
 }
+
+.icon-btn:hover { background: var(--control-hover); color: var(--text-primary); }
+.icon-btn:active { transform: scale(0.9); }
+.icon-btn--off { color: var(--text-faint); }
+
+.icon-btn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-btn__slash { stroke: var(--accent-danger); }
+
+.theme-toggle {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-muted);
+  width: 44px;
+  height: 44px;
+}
+
+.theme-icon-enter-active, .theme-icon-leave-active { transition: opacity 0.2s ease, transform 0.35s var(--ease-spring); }
+.theme-icon-enter-from { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+.theme-icon-leave-to { opacity: 0; transform: rotate(90deg) scale(0.5); }
 
 .audio-control__range {
-  width: 58px;
-  accent-color: var(--accent-primary);
+  --fill: 60%;
+  width: 72px;
+  height: 4px;
+  margin-left: 4px;
+  appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-primary) var(--fill), var(--line-strong) var(--fill));
   cursor: pointer;
 }
 
-.audio-control__value {
-  min-width: 28px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 800;
-  text-align: right;
+.audio-control__range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
-.theme-switcher {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: var(--surface-muted);
-  box-shadow: var(--shadow-card);
-}
-
-.theme-switcher__button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.audio-control__range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
   border: 0;
-  border-radius: 8px;
-  padding: 7px 10px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 800;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  border-radius: 50%;
+  background: var(--text-primary);
 }
 
-.theme-switcher__button:hover { color: var(--text-primary); transform: translateY(-1px); }
-.theme-switcher__button--active {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
-}
-
-@media (max-width: 520px) {
+@media (max-width: 560px) {
   .app-logo__tagline { display: none; }
-  .theme-switcher__label { display: none; }
-  .theme-switcher__button { padding: 7px 9px; font-size: 14px; }
-  .header-tools { gap: 5px; }
-  .audio-control { min-width: auto; padding: 4px; }
-  .audio-control__range, .audio-control__value { display: none; }
+  .header-tools { gap: 6px; }
+  .audio-control { padding-right: 3px; }
+  .audio-control__range { display: none; }
+}
+
+@media (max-width: 360px) {
+  .app-logo__name { font-size: 16px; }
 }
 </style>

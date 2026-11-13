@@ -1,5 +1,10 @@
 <template>
-  <section v-if="roomStore.mySlot" class="tv-controls" aria-label="Control de fichas para TV">
+  <section
+    v-if="roomStore.mySlot"
+    class="tv-controls"
+    aria-label="Control de fichas para TV"
+    :style="{ '--piece-color': store.playerMeta[roomStore.mySlot]?.color }"
+  >
     <div class="tv-controls__status">
       <span class="tv-controls__eyebrow">Control TV</span>
       <strong>{{ isMyTurn ? 'Tu turno' : waitingLabel }}</strong>
@@ -20,7 +25,7 @@
         :aria-pressed="selectedSize === option.size"
         @click="selectPiece(option.size)"
       >
-        <span class="tv-controls__piece-dot" />
+        <span class="tv-controls__piece-dot st-ring" :class="`st-ring--${option.size}`" />
         <span>{{ option.label }}</span>
         <small>×{{ option.count }}</small>
       </button>
@@ -115,10 +120,11 @@ function selectPiece(size: Size) {
   justify-content: space-between;
   gap: 12px 18px;
   flex-wrap: wrap;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  background: var(--surface-muted);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .tv-controls__status {
@@ -130,15 +136,16 @@ function selectPiece(size: Size) {
 
 .tv-controls__eyebrow {
   color: var(--accent-primary);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .tv-controls__status strong {
   color: var(--text-primary);
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 18px;
 }
 
 .tv-controls__pieces {
@@ -151,17 +158,17 @@ function selectPiece(size: Size) {
 .tv-controls__piece,
 .tv-controls__cancel {
   display: inline-flex;
-  min-height: 42px;
+  min-height: 48px;
   align-items: center;
-  gap: 7px;
-  padding: 7px 11px;
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
+  gap: 9px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   background: var(--cell-bg);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .tv-controls__piece small {
@@ -169,17 +176,10 @@ function selectPiece(size: Size) {
   font-size: 10px;
 }
 
-.tv-controls__piece-dot {
-  width: 14px;
-  height: 14px;
-  border: 3px solid var(--accent-primary);
-  border-radius: 50%;
-  box-shadow: 0 0 7px var(--accent-primary);
-}
-
-.tv-controls__piece--large .tv-controls__piece-dot { width: 18px; height: 18px; border-width: 4px; }
-.tv-controls__piece--medium .tv-controls__piece-dot { width: 14px; height: 14px; border-width: 3px; }
-.tv-controls__piece--small .tv-controls__piece-dot { width: 9px; height: 9px; border-width: 0; background: var(--accent-primary); }
+.tv-controls__piece-dot { flex-shrink: 0; }
+.tv-controls__piece--large .tv-controls__piece-dot { width: 26px; height: 26px; }
+.tv-controls__piece--medium .tv-controls__piece-dot { width: 18px; height: 18px; }
+.tv-controls__piece--small .tv-controls__piece-dot { width: 10px; height: 10px; }
 
 .tv-controls__piece--selected,
 .tv-controls__piece:hover,
@@ -197,7 +197,7 @@ function selectPiece(size: Size) {
 .tv-controls__note,
 .tv-controls__hint {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .tv-controls__hint {

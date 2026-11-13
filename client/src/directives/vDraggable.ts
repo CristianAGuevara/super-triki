@@ -27,6 +27,8 @@ interface DragState {
   onPointerMove: (event: PointerEvent) => void
   onPointerUp: (event: PointerEvent) => void
   onPointerCancel: (event: PointerEvent) => void
+  onClick: (event: MouseEvent) => void
+  lastPointerType: string | null
   pointerId: number | null
   startX: number
   startY: number
@@ -110,6 +112,7 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
 
     const state: DragState = {
       payload: binding.value,
+      lastPointerType: null,
       pointerId: null,
       startX: 0,
       startY: 0,
@@ -131,6 +134,7 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
         useGameStore().setDragState(null)
       },
       onPointerDown: event => {
+        state.lastPointerType = event.pointerType
         if (event.pointerType === 'mouse' || !isDragAllowed(state.payload)) return
 
         event.preventDefault()
@@ -199,12 +203,21 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
         if (state.pointerId !== event.pointerId) return
         cleanupPointerDrag(el, state)
       },
+      // Mouse: a plain click (no drag) selects the piece, like a tap.
+      onClick: event => {
+        if (state.lastPointerType !== 'mouse' || !isDragAllowed(state.payload)) return
+        const store = useGameStore()
+        const payload = resolveTapPayload(el, state.payload, event.clientX, event.clientY)
+        if (store.selectedPiece?.pieceId === payload.pieceId) store.clearSelection()
+        else store.selectPiece(payload)
+      },
     }
 
     states.set(el, state)
     el.addEventListener('dragstart', state.onDragStart)
     el.addEventListener('dragend', state.onDragEnd)
     el.addEventListener('pointerdown', state.onPointerDown)
+    el.addEventListener('click', state.onClick)
   },
 
   updated(el, binding) {
@@ -219,6 +232,7 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
     el.removeEventListener('dragstart', state.onDragStart)
     el.removeEventListener('dragend', state.onDragEnd)
     el.removeEventListener('pointerdown', state.onPointerDown)
+    el.removeEventListener('click', state.onClick)
     cleanupPointerDrag(el, state)
     states.delete(el)
   },
