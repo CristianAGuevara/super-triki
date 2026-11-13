@@ -5,6 +5,7 @@
     aria-modal="true"
     aria-label="Partida del torneo en modo espectador"
   >
+    <WinCinematic v-if="gameStore.cinematicActive" @done="gameStore.finishCinematic()" />
     <header class="group-spectator__header">
       <div class="group-spectator__identity">
         <span class="group-spectator__eyebrow">Modo espectador</span>
@@ -53,6 +54,7 @@ import Board from '@/components/Board.vue'
 import PlayerPanel from '@/components/PlayerPanel.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
 import MatchClocks from '@/components/MatchClocks.vue'
+import WinCinematic from '@/components/WinCinematic.vue'
 
 defineProps<{ groupLabel: string }>()
 const emit = defineEmits<{ close: [] }>()

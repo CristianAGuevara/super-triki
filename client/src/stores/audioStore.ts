@@ -15,9 +15,16 @@ export type SfxName =
   | 'join'
   | 'leave'
   | 'start'
+  | 'riser'
+  | 'impact'
+  | 'chime'
+  | 'whoosh'
+  | 'fanfare'
 
 interface SfxOptions {
   size?: Size
+  /** Position in a sequence (cinematic chimes climb the scale). */
+  step?: number
 }
 
 const VOLUME_KEY = 'st_audio_volume'
@@ -65,6 +72,10 @@ const CHORDS = [
 ]
 const MELODY_SCALE = [587.33, 659.25, 739.99, 880.0, 987.77, 1174.66]
 const BEAT = 60 / 82
+const MUSIC_LEVEL = 0.62
+const MUSIC_DUCKED = 0.1
+/* D major, so the cinematic chimes sit in the music's key. */
+const CHIME_SCALE = [587.33, 739.99, 880.0, 1174.66, 1479.98, 1760.0]
 
 export const useAudioStore = defineStore('audio', () => {
   const volume = ref(readVolume())
@@ -91,13 +102,13 @@ export const useAudioStore = defineStore('audio', () => {
     masterGain = context.createGain()
     musicGain = context.createGain()
     sfxGain = context.createGain()
-    musicGain.gain.value = 0.28
+    musicGain.gain.value = MUSIC_LEVEL
     sfxGain.gain.value = 0.9
 
     // A soft echo gives the music some room without a reverb impulse.
     const lowpass = context.createBiquadFilter()
     lowpass.type = 'lowpass'
-    lowpass.frequency.value = 2200
+    lowpass.frequency.value = 3400
     const delay = context.createDelay(1)
     delay.delayTime.value = BEAT * 0.75
     const feedback = context.createGain()
@@ -183,18 +194,33 @@ export const useAudioStore = defineStore('audio', () => {
     osc.stop(end + 0.05)
   }
 
-  function noise(dur: number, gain: number, filterFreq: number, q: number, delay = 0, dest?: AudioNode) {
+  interface NoiseExtra {
+    /** Sweep the filter to this frequency over the duration. */
+    to?: number
+    type?: BiquadFilterType
+    /** Swell in over this many seconds instead of starting at full gain. */
+    attack?: number
+  }
+
+  function noise(dur: number, gain: number, filterFreq: number, q: number, delay = 0, dest?: AudioNode, extra: NoiseExtra = {}) {
     const audio = context
     if (!audio || !noiseBuffer) return
     const start = audio.currentTime + delay
     const src = audio.createBufferSource()
     src.buffer = noiseBuffer
+    src.loop = dur > 0.45
     const filter = audio.createBiquadFilter()
-    filter.type = 'bandpass'
-    filter.frequency.value = filterFreq
+    filter.type = extra.type ?? 'bandpass'
+    filter.frequency.setValueAtTime(filterFreq, start)
+    if (extra.to) filter.frequency.exponentialRampToValueAtTime(extra.to, start + dur)
     filter.Q.value = q
     const env = audio.createGain()
-    env.gain.setValueAtTime(gain, start)
+    if (extra.attack) {
+      env.gain.setValueAtTime(0.0001, start)
+      env.gain.exponentialRampToValueAtTime(gain, start + extra.attack)
+    } else {
+      env.gain.setValueAtTime(gain, start)
+    }
     env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
     src.connect(filter)
     filter.connect(env)
@@ -213,21 +239,21 @@ export const useAudioStore = defineStore('audio', () => {
     const offset = time - audio.currentTime
 
     chord.forEach((freq, index) => {
-      tone({ freq, dur: BEAT * 4.2, type: index === 0 ? 'triangle' : 'sine', gain: index === 0 ? 0.07 : 0.035, delay: offset + index * 0.02, attack: 0.5, dest, detune: index % 2 ? 6 : -6 })
+      tone({ freq, dur: BEAT * 4.2, type: index === 0 ? 'triangle' : 'sine', gain: index === 0 ? 0.09 : 0.05, delay: offset + index * 0.02, attack: 0.5, dest, detune: index % 2 ? 6 : -6 })
     })
     // Bass pulse on beats 1 and 3.
-    tone({ freq: chord[0] / 2, dur: BEAT * 1.6, type: 'sine', gain: 0.09, delay: offset, attack: 0.02, dest })
-    tone({ freq: chord[0] / 2, dur: BEAT * 1.4, type: 'sine', gain: 0.06, delay: offset + BEAT * 2, attack: 0.02, dest })
+    tone({ freq: chord[0] / 2, dur: BEAT * 1.6, type: 'sine', gain: 0.13, delay: offset, attack: 0.02, dest })
+    tone({ freq: chord[0] / 2, dur: BEAT * 1.4, type: 'sine', gain: 0.09, delay: offset + BEAT * 2, attack: 0.02, dest })
 
     // Sparse pentatonic plucks: different on each pass, never busy.
     for (let step = 0; step < 8; step++) {
       if (Math.random() > (step % 2 === 0 ? 0.42 : 0.18)) continue
       const note = MELODY_SCALE[Math.floor(Math.random() * MELODY_SCALE.length)]
-      tone({ freq: note, dur: 0.5, type: 'triangle', gain: 0.03, delay: offset + step * (BEAT / 2), attack: 0.005, dest })
+      tone({ freq: note, dur: 0.5, type: 'triangle', gain: 0.05, delay: offset + step * (BEAT / 2), attack: 0.005, dest })
     }
     // Brushed hat on the off-beats.
     for (let beat = 0; beat < 4; beat++) {
-      noise(0.05, 0.012, 7000, 0.8, offset + beat * BEAT + BEAT / 2, dest)
+      noise(0.05, 0.02, 7000, 0.8, offset + beat * BEAT + BEAT / 2, dest)
     }
     musicBar++
   }
@@ -254,6 +280,41 @@ export const useAudioStore = defineStore('audio', () => {
     musicPlaying.value = true
     nextBarTime = audio.currentTime + 0.15
     musicLoop()
+  }
+
+  /** Lower the music while a cinematic plays its own score. */
+  function duckMusic(ducked: boolean) {
+    if (!musicGain || !context) return
+    musicGain.gain.setTargetAtTime(ducked ? MUSIC_DUCKED : MUSIC_LEVEL, context.currentTime, ducked ? 0.08 : 0.6)
+  }
+
+  /** Short brass-like stab: sawtooth through a closing lowpass. */
+  function brass(freq: number, dur: number, gain: number, delay: number, dest: AudioNode) {
+    const audio = context
+    if (!audio) return
+    const start = audio.currentTime + delay
+    const filter = audio.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.Q.value = 2
+    filter.frequency.setValueAtTime(600, start)
+    filter.frequency.exponentialRampToValueAtTime(3200, start + 0.06)
+    filter.frequency.exponentialRampToValueAtTime(1200, start + dur)
+    filter.connect(dest)
+    ;[-7, 7].forEach(detune => {
+      const osc = audio.createOscillator()
+      const env = audio.createGain()
+      osc.type = 'sawtooth'
+      osc.detune.value = detune
+      osc.frequency.value = freq
+      env.gain.setValueAtTime(0.0001, start)
+      env.gain.exponentialRampToValueAtTime(gain, start + 0.025)
+      env.gain.setValueAtTime(gain, start + dur * 0.6)
+      env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
+      osc.connect(env)
+      env.connect(filter)
+      osc.start(start)
+      osc.stop(start + dur + 0.05)
+    })
   }
 
   function stopMusic() {
@@ -319,6 +380,51 @@ export const useAudioStore = defineStore('audio', () => {
         for (let i = 0; i < 6; i++) noise(0.12, 0.05, 6000 + i * 600, 6, 0.46 + i * 0.07)
         break
       }
+      case 'riser': {
+        // Suspense: rising filtered noise, a drone and an accelerating snare roll.
+        noise(1.5, 0.16, 300, 1.2, 0, undefined, { to: 4200, attack: 1.3 })
+        tone({ freq: 55, to: 98, dur: 1.55, type: 'sawtooth', gain: 0.05, attack: 1.2, dest })
+        tone({ freq: 110, to: 196, dur: 1.55, type: 'sine', gain: 0.06, attack: 1.2, dest })
+        let t = 0
+        let gap = 0.16
+        while (t < 1.42) {
+          noise(0.05, 0.05 + t * 0.09, 1800, 1, t)
+          t += gap
+          gap = Math.max(0.035, gap * 0.86)
+        }
+        break
+      }
+      case 'impact':
+        tone({ freq: 150, to: 36, dur: 0.75, type: 'sine', gain: 0.55, dest })
+        tone({ freq: 75, to: 30, dur: 0.9, type: 'triangle', gain: 0.25, dest })
+        noise(0.4, 0.45, 900, 0.7, 0, undefined, { type: 'lowpass', to: 120 })
+        noise(0.09, 0.3, 2400, 1.4)
+        tone({ freq: 1320, dur: 0.12, type: 'triangle', gain: 0.06, delay: 0.01, dest })
+        break
+      case 'chime': {
+        const step = Math.min(options.step ?? 0, CHIME_SCALE.length - 1)
+        const freq = CHIME_SCALE[step]
+        tone({ freq, dur: 0.7, type: 'triangle', gain: 0.12, dest })
+        tone({ freq: freq * 2, dur: 0.5, type: 'sine', gain: 0.04, delay: 0.01, dest })
+        tone({ freq: freq * 3, dur: 0.25, type: 'sine', gain: 0.015, delay: 0.02, dest })
+        noise(0.18, 0.05, 7000 + step * 800, 5, 0.01)
+        break
+      }
+      case 'whoosh':
+        noise(0.5, 0.18, 5000, 1.5, 0, undefined, { to: 500, attack: 0.18 })
+        break
+      case 'fanfare': {
+        // Da-da-da-DAAA, then the full D major chord with a sparkle tail.
+        const lead = [[587.33, 0, 0.13], [587.33, 0.15, 0.13], [587.33, 0.3, 0.13], [880, 0.45, 0.9]] as const
+        lead.forEach(([freq, delay, dur]) => brass(freq, dur, 0.07, delay, dest))
+        ;[293.66, 369.99, 440, 587.33].forEach(freq => brass(freq, 1.5, 0.045, 0.45, dest))
+        tone({ freq: 73.42, dur: 1.6, type: 'sine', gain: 0.22, delay: 0.45, dest })
+        noise(0.5, 0.3, 700, 0.8, 0.45, undefined, { type: 'lowpass', to: 150 })
+        for (let i = 0; i < 10; i++) {
+          tone({ freq: CHIME_SCALE[i % CHIME_SCALE.length] * 2, dur: 0.3, type: 'sine', gain: 0.025, delay: 0.6 + i * 0.07, dest })
+        }
+        break
+      }
       case 'lose':
         ;[392, 311.13, 261.63].forEach((freq, index) => {
           tone({ freq, dur: 0.42, type: 'triangle', gain: 0.08, delay: index * 0.2, dest })
@@ -351,6 +457,7 @@ export const useAudioStore = defineStore('audio', () => {
     toggleMusic,
     startMusic,
     stopMusic,
+    duckMusic,
     playSfx,
   }
 })

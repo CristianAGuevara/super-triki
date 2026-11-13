@@ -56,6 +56,8 @@ export const useGameStore = defineStore('game', () => {
   const hasServerState = ref(false)
   const lastMove = ref<LastMove | null>(null)
   const lastMoveSource = ref<PieceEntrySource | null>(null)
+  /** True while the win cinematic owns the screen (and the sound). */
+  const cinematicActive = ref(false)
   const audioStore = useAudioStore()
 
   const lines = computed(() => getAllLines(3))
@@ -118,6 +120,7 @@ export const useGameStore = defineStore('game', () => {
     hasServerState.value = false
     lastMove.value = null
     lastMoveSource.value = null
+    cinematicActive.value = false
   }
 
   function resetGame() {
@@ -178,14 +181,14 @@ export const useGameStore = defineStore('game', () => {
     }
     moveNumber.value++
     turnStartedAt.value = Date.now()
-    audioStore.playSfx('move', { size: targetSize })
 
     const win = detectWin(board.value, lines.value, players.value)
     if (win) {
+      cinematicActive.value = true
       winResult.value = win
-      audioStore.playSfx('win')
       return true
     }
+    audioStore.playSfx('move', { size: targetSize })
 
     if (detectDraw(board.value, inventories.value, players.value)) {
       isDraw.value = true
@@ -199,8 +202,8 @@ export const useGameStore = defineStore('game', () => {
 
   // ── Server state application ─────────────────────────────────
 
-  function applyServerState(state: GameStateSnapshot): void {
-    if (hasServerState.value && state.moveNumber > moveNumber.value) {
+  function applyServerState(state: GameStateSnapshot, silent = false): void {
+    if (!silent && hasServerState.value && state.moveNumber > moveNumber.value) {
       audioStore.playSfx('move', { size: state.lastMove?.size })
     }
     dragState.value     = null
@@ -237,7 +240,18 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function applyGameOver(result: GameOverPayload): void {
-    applyServerState(result.finalState)
+    // Only a win that just happened gets the cinematic; a reconnect that
+    // replays an old game:over goes straight to the result.
+    const live = hasServerState.value && result.finalState.moveNumber > moveNumber.value
+    const cinematic = Boolean(
+      live && result.winResult && result.winResult.condition !== 'timeout' && result.finalState.lastMove,
+    )
+    applyServerState(result.finalState, cinematic)
+    if (cinematic) {
+      cinematicActive.value = true
+      winResult.value = result.winResult
+      return
+    }
     if (result.winResult) {
       winResult.value = result.winResult
       const roomStore = useRoomStore()
@@ -315,6 +329,10 @@ export const useGameStore = defineStore('game', () => {
     return selectedPiece.value?.pieceId === piece.id
   }
 
+  function finishCinematic(): void {
+    cinematicActive.value = false
+  }
+
   function clearSelection(): void {
     selectedPiece.value = null
     clearSelectionHint()
@@ -339,6 +357,8 @@ export const useGameStore = defineStore('game', () => {
     lastMove,
     turnStartedAt,
     lastMoveSource,
+    cinematicActive,
+    finishCinematic,
     isGameOver,
     highlightedSlots,
     canDrop,

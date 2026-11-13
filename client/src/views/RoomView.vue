@@ -2,6 +2,8 @@
   <div class="room">
     <SelectionBar />
 
+    <WinCinematic v-if="gameStore.cinematicActive" @done="gameStore.finishCinematic()" />
+
     <MatchResultOverlay
       v-if="showMatchResult"
       :winner-name="resultWinnerName"
@@ -293,6 +295,7 @@ import PlayerColorPicker from '@/components/PlayerColorPicker.vue'
 import MatchResultOverlay from '@/components/MatchResultOverlay.vue'
 import MatchClocks from '@/components/MatchClocks.vue'
 import TvGameControls from '@/components/TvGameControls.vue'
+import WinCinematic from '@/components/WinCinematic.vue'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -435,6 +438,16 @@ function finishMatchResult() {
   }
 }
 
+function startResultCountdown() {
+  stopResultCountdown()
+  showMatchResult.value = true
+  resultCountdown.value = RESULT_SECONDS
+  resultInterval = setInterval(() => {
+    resultCountdown.value -= 1
+    if (resultCountdown.value <= 0) finishMatchResult()
+  }, 1000)
+}
+
 watch(() => gameStore.isGameOver, over => {
   stopResultCountdown()
 
@@ -443,13 +456,13 @@ watch(() => gameStore.isGameOver, over => {
     return
   }
 
-  showMatchResult.value = true
-  resultCountdown.value = RESULT_SECONDS
-  resultInterval = setInterval(() => {
-    resultCountdown.value -= 1
-    if (resultCountdown.value <= 0) finishMatchResult()
-  }, 1000)
+  // A live win plays the cinematic first; the result card follows it.
+  if (!gameStore.cinematicActive) startResultCountdown()
 }, { immediate: true })
+
+watch(() => gameStore.cinematicActive, (active, wasActive) => {
+  if (!active && wasActive && gameStore.isGameOver) startResultCountdown()
+})
 
 const turnColor = computed(() => {
   const meta = gameStore.playerMeta[gameStore.currentPlayer]

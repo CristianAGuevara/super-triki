@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
+import { winLineEndpoints } from '@/utils/boardUtils'
 import Cell from './Cell.vue'
 
 const store = useGameStore()
@@ -40,29 +41,7 @@ const armedColor = computed(() =>
   activePiece.value ? store.playerMeta[activePiece.value.player]?.color : null
 )
 
-// Cell centres in a 318-unit box: cell = 100, gap = 9 (matches the CSS ratio).
-const CENTER = [50, 159, 268]
-
-const winLine = computed(() => {
-  const result = store.winResult
-  if (!result || result.condition === 'complete-cell' || result.condition === 'timeout') return null
-  const coords = Array.from(
-    new Map(result.highlights.map(({ coord }) => [`${coord[0]},${coord[1]}`, coord])).values(),
-  ).sort((a, b) => a[0] - b[0] || a[1] - b[1])
-  if (coords.length < 2) return null
-  const [r1, c1] = coords[0]
-  const [r2, c2] = coords[coords.length - 1]
-  const x1 = CENTER[c1], y1 = CENTER[r1], x2 = CENTER[c2], y2 = CENTER[r2]
-  const length = Math.hypot(x2 - x1, y2 - y1)
-  const ux = (x2 - x1) / length, uy = (y2 - y1) / length
-  const overshoot = 34
-  return {
-    x1: x1 - ux * overshoot,
-    y1: y1 - uy * overshoot,
-    x2: x2 + ux * overshoot,
-    y2: y2 + uy * overshoot,
-  }
-})
+const winLine = computed(() => winLineEndpoints(store.winResult))
 
 watch(() => store.selectionHint, hint => {
   if (!hint) return
