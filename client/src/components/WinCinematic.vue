@@ -65,8 +65,9 @@
           </template>
         </div>
 
-        <svg v-if="line && lineOn" class="cine__line" viewBox="0 0 318 318" preserveAspectRatio="none">
-          <line :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" pathLength="1" />
+        <svg v-if="line && lineOn" class="cine__line st-winline" viewBox="0 0 318 318" preserveAspectRatio="none">
+          <line class="st-winline__base" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" pathLength="1" />
+          <line class="st-winline__core" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" pathLength="1" />
         </svg>
       </div>
     </div>
@@ -638,29 +639,17 @@ onUnmounted(() => {
 
 .cine__burst { z-index: 2; }
 
+/* Stroke styling lives in base.css / themes.css (.st-winline). */
 .cine__line {
+  --winline-w: 7.5px;
+  --winline-draw: 0.5s;
   position: absolute;
   /* Above every cell, including the focused one (z-index 2). */
   z-index: 6;
   inset: calc(var(--cell) * 0.13);
   width: calc(100% - var(--cell) * 0.26);
   height: calc(100% - var(--cell) * 0.26);
-  overflow: visible;
-  pointer-events: none;
 }
-
-.cine__line line {
-  stroke: var(--win-gold);
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  filter: drop-shadow(0 0 8px var(--win-gold));
-  vector-effect: non-scaling-stroke;
-  animation: cine-line 0.5s var(--ease-out) forwards;
-}
-
-@keyframes cine-line { to { stroke-dashoffset: 0; } }
 
 .cine__title {
   position: absolute;

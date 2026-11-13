@@ -16,12 +16,13 @@
 
     <svg
       v-if="winLine"
-      class="board__win-line"
+      class="board__win-line st-winline"
       viewBox="0 0 318 318"
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <line :x1="winLine.x1" :y1="winLine.y1" :x2="winLine.x2" :y2="winLine.y2" pathLength="1" />
+      <line class="st-winline__base" :x1="winLine.x1" :y1="winLine.y1" :x2="winLine.x2" :y2="winLine.y2" pathLength="1" />
+      <line class="st-winline__core" :x1="winLine.x1" :y1="winLine.y1" :x2="winLine.x2" :y2="winLine.y2" pathLength="1" />
     </svg>
   </div>
 </template>
@@ -99,30 +100,16 @@ watch(() => store.selectionHint, hint => {
   gap: var(--gap);
 }
 
+/* Stroke styling lives in base.css / themes.css (.st-winline). */
 .board__win-line {
+  --winline-w: 6.5px;
+  --winline-draw: 0.7s;
+  --winline-delay: 0.25s;
   position: absolute;
   inset: calc(var(--cell) * 0.13);
   width: calc(100% - var(--cell) * 0.26);
   height: calc(100% - var(--cell) * 0.26);
-  overflow: visible;
-  pointer-events: none;
   z-index: 5;
-}
-
-.board__win-line line {
-  stroke: var(--win-gold);
-  stroke-width: 7;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  filter: drop-shadow(0 0 6px var(--win-gold));
-  opacity: 0.9;
-  vector-effect: non-scaling-stroke;
-  animation: win-line-draw 0.7s 0.25s var(--ease-out) forwards;
-}
-
-@keyframes win-line-draw {
-  to { stroke-dashoffset: 0; }
 }
 
 @keyframes board-slam {

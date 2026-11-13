@@ -8,6 +8,14 @@
         <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.7 1.6" result="speckle" />
         <feComposite in="rough" in2="speckle" operator="in" />
       </filter>
+      <!-- Same chalk, for the win line: a straight <line> has an empty
+           bounding box, so the region is given in user units instead. -->
+      <filter id="st-chalk-line" filterUnits="userSpaceOnUse" x="-70" y="-70" width="458" height="458">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="9" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.4" xChannelSelector="R" yChannelSelector="G" result="rough" />
+        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.7 1.6" result="speckle" />
+        <feComposite in="rough" in2="speckle" operator="in" />
+      </filter>
     </defs>
   </svg>
 

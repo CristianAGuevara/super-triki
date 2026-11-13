@@ -22,7 +22,7 @@ export const useTournamentStore = defineStore('tournament', () => {
   const phase = ref<'waiting' | 'playing' | 'finished'>('waiting')
   const format = ref<'elimination' | 'league'>('elimination')
   const leagueRounds = ref(3)
-  const playerClockSeconds = ref(300)
+  const playerClockSeconds = ref(180)
   const stageKind = ref<'elimination' | 'league' | 'sudden-death'>('elimination')
   const stage = ref(0)
   const participants = ref<TournamentParticipantSnapshot[]>([])
@@ -134,7 +134,7 @@ export const useTournamentStore = defineStore('tournament', () => {
     phase.value = 'waiting'
     format.value = 'elimination'
     leagueRounds.value = 3
-    playerClockSeconds.value = 300
+    playerClockSeconds.value = 180
     stageKind.value = 'elimination'
     stage.value = 0
     participants.value = []

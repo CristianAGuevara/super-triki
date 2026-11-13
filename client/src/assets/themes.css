@@ -125,6 +125,17 @@
   box-shadow: 0 0 30px -6px rgba(165, 107, 255, 0.35), inset 0 0 30px -6px rgba(165, 107, 255, 0.25);
 }
 
+/* The win line is a tube being switched on: it strikes, stutters, holds. */
+:root[data-theme='neon'] .st-winline {
+  animation: neon-line-strike 0.55s calc(var(--winline-delay) + var(--winline-draw)) linear;
+}
+
+@keyframes neon-line-strike {
+  0%, 30%, 60%, 100% { opacity: 1; }
+  15% { opacity: 0.35; }
+  45% { opacity: 0.6; }
+}
+
 /* ════════════════════════════════════════════════════════════════════
    PIXEL — 8-bit console: hard edges, flat fills, stepped motion.
    ════════════════════════════════════════════════════════════════════ */
@@ -310,6 +321,29 @@
   filter: drop-shadow(3px 3px 0 #0b0914);
 }
 
+/* Win line: a chunky gold bar with a dark outline, drawn in hard steps. */
+:root[data-theme='pixel'] .st-winline line {
+  stroke-linecap: butt;
+  shape-rendering: crispEdges;
+  animation-timing-function: steps(7, end);
+}
+
+:root[data-theme='pixel'] .st-winline__base {
+  stroke: #181425;
+  stroke-width: calc(var(--winline-w) * 2);
+  filter: none;
+}
+
+/* The gold bar stops just short of both ends so the outline closes it. */
+:root[data-theme='pixel'] .st-winline__core {
+  stroke: var(--win-gold);
+  stroke-width: var(--winline-w);
+  stroke-dasharray: 0.976 1.024;
+  animation-name: pixel-line-draw;
+}
+
+@keyframes pixel-line-draw { to { stroke-dashoffset: -0.012; } }
+
 /* ════════════════════════════════════════════════════════════════════
    PIZARRA — coloured chalk on a green board, drawn by hand.
    ════════════════════════════════════════════════════════════════════ */
@@ -450,3 +484,26 @@
 }
 
 :root[data-theme='chalk'] .home__hero h1 em { -webkit-text-fill-color: transparent; }
+
+/* Win line: struck through by hand — one firm chalk stroke and a lighter
+   second pass that doesn't quite follow the first. */
+:root[data-theme='chalk'] .st-winline line {
+  filter: url(#st-chalk-line);
+  animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1);
+}
+
+:root[data-theme='chalk'] .st-winline__base {
+  stroke: var(--win-gold);
+  stroke-width: calc(var(--winline-w) * 0.95);
+  opacity: 0.92;
+}
+
+:root[data-theme='chalk'] .st-winline__core {
+  stroke: var(--win-gold);
+  stroke-width: calc(var(--winline-w) * 0.5);
+  opacity: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(1.3deg) translate(1px, 2px);
+  animation-delay: calc(var(--winline-delay) + var(--winline-draw) * 0.45);
+}

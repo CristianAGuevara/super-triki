@@ -11,8 +11,9 @@
         />
       </div>
     </div>
-    <svg v-if="won" class="hero-board__line" viewBox="0 0 100 100" aria-hidden="true">
-      <line x1="8" y1="8" x2="92" y2="92" pathLength="1" />
+    <svg v-if="won" class="hero-board__line st-winline" viewBox="0 0 318 318" aria-hidden="true">
+      <line class="st-winline__base" x1="25" y1="25" x2="293" y2="293" pathLength="1" />
+      <line class="st-winline__core" x1="25" y1="25" x2="293" y2="293" pathLength="1" />
     </svg>
     <span class="hero-board__caption">{{ caption }}</span>
   </div>
@@ -121,29 +122,19 @@ onUnmounted(() => window.clearTimeout(timer))
   to { filter: drop-shadow(0 0 10px var(--win-gold)) brightness(1.2); }
 }
 
+/* Stroke styling lives in base.css / themes.css (.st-winline). */
 .hero-board__line {
+  --winline-w: 7px;
+  --winline-draw: 0.6s;
+  --winline-delay: 0.25s;
   position: absolute;
   z-index: 2;
   top: calc(var(--cell) * 0.14);
   left: 50%;
   width: calc(var(--cell) * 3.18);
   height: calc(var(--cell) * 3.18);
-  overflow: visible;
   transform: translateX(-50%);
-  pointer-events: none;
 }
-
-.hero-board__line line {
-  stroke: var(--win-gold);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  filter: drop-shadow(0 0 3px var(--win-gold));
-  animation: hero-line 0.6s 0.25s var(--ease-out) forwards;
-}
-
-@keyframes hero-line { to { stroke-dashoffset: 0; } }
 
 .hero-board__caption {
   min-height: 20px;

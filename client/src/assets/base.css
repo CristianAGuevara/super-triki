@@ -115,6 +115,43 @@ input[type='checkbox'] {
   mask: none;
 }
 
+/* ── Win line, shared by the board, the cinematic and the home demo ──
+   Two strokes on the same path: __base underneath, __core on top. Base
+   look is a lit neon tube (coloured glass + white-hot core); themes
+   restyle both strokes. Hosts set --winline-w / -draw / -delay.
+   Widths are in viewBox units (318 across the grid), so the line scales
+   with the board. No non-scaling-stroke: it breaks the dash maths. */
+.st-winline {
+  --winline-w: 7px;
+  --winline-draw: 0.5s;
+  --winline-delay: 0s;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.st-winline line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: st-winline-draw var(--winline-draw) var(--winline-delay) var(--ease-out) forwards;
+}
+
+.st-winline__base {
+  stroke: var(--win-gold);
+  stroke-width: var(--winline-w);
+  filter:
+    drop-shadow(0 0 3px var(--win-gold))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--win-gold) 70%, transparent));
+}
+
+.st-winline__core {
+  stroke: color-mix(in srgb, var(--win-gold) 22%, #fff);
+  stroke-width: calc(var(--winline-w) * 0.36);
+}
+
+@keyframes st-winline-draw { to { stroke-dashoffset: 0; } }
+
 /* ── Shared controls ────────────────────────────────────────────── */
 .st-btn {
   display: inline-flex;
