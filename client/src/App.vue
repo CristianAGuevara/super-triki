@@ -42,7 +42,7 @@
       <span
         v-if="tvStore.enabled"
         class="tv-mode-badge"
-        title="Modo TV activo: flechas para moverte, OK para seleccionar. Añade ?tv=0 a la URL para desactivarlo."
+        title="Modo TV activo: flechas para moverte, OK para seleccionar, sin cursor. Añade ?tv=0 a la URL para desactivarlo."
       >
         TV · OK
       </span>
@@ -467,6 +467,9 @@ function closeThemeMenuOnOutside(event: Event) {
     if (event.key === 'Escape') themeMenuOpen.value = false
     return
   }
+  // With the pointer disabled every press lands on the page root; the menu
+  // is then closed with Back/Escape or by choosing a theme.
+  if (tvStore.enabled && tvStore.inputMode === 'dpad') return
   if (!themeMenuRoot.value?.contains(event.target as Node)) themeMenuOpen.value = false
 }
 
@@ -478,6 +481,7 @@ function toggleMusic() {
 function activateAudio() {
   audioStore.startMusic()
   window.removeEventListener('pointerdown', activateAudio)
+  window.removeEventListener('keydown', activateAudio)
 }
 
 function setVolume(event: Event) {
@@ -496,6 +500,8 @@ onMounted(() => {
     }
   }
   window.addEventListener('pointerdown', activateAudio)
+  // A remote that sends real keys never produces a pointerdown.
+  window.addEventListener('keydown', activateAudio)
   document.addEventListener('pointerdown', closeThemeMenuOnOutside)
   document.addEventListener('keydown', closeThemeMenuOnOutside)
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -511,6 +517,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('pointerdown', activateAudio)
+  window.removeEventListener('keydown', activateAudio)
   document.removeEventListener('pointerdown', closeThemeMenuOnOutside)
   document.removeEventListener('keydown', closeThemeMenuOnOutside)
   document.removeEventListener('visibilitychange', handleVisibilityChange)

@@ -6,6 +6,7 @@
     role="status"
     aria-live="assertive"
     :aria-label="`${winnerName} gana la ronda`"
+    data-tv-ok
     @click="finish"
   >
     <div class="cine__rays" aria-hidden="true" />

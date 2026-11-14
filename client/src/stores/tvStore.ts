@@ -52,22 +52,38 @@ export function detectTvMode(): boolean {
   return isTvUserAgent(window.navigator.userAgent) || isLargeCoarsePointerScreen()
 }
 
-function applyTvMode(enabled: boolean) {
+/**
+ * How the viewer is driving the page right now. "dpad" hides and disables
+ * the pointer so only the focus ring moves; "pointer" leaves it alone.
+ */
+export type TvInputMode = 'dpad' | 'pointer'
+
+function applyTvMode(enabled: boolean, inputMode: TvInputMode) {
   if (typeof document === 'undefined') return
   document.documentElement.classList.toggle('tv-mode', enabled)
+  document.documentElement.classList.toggle('tv-nav', enabled && inputMode === 'dpad')
   document.documentElement.dataset.tvMode = enabled ? 'true' : 'false'
 }
 
 export const useTvModeStore = defineStore('tvMode', () => {
   const enabled = ref(detectTvMode())
+  // Starts as "pointer": nothing is taken away until an arrow is seen.
+  const inputMode = ref<TvInputMode>('pointer')
   const hintVisible = ref(false)
   let hintTimer: ReturnType<typeof setTimeout> | null = null
 
-  applyTvMode(enabled.value)
+  applyTvMode(enabled.value, inputMode.value)
+
+  function setInputMode(mode: TvInputMode) {
+    if (inputMode.value === mode) return
+    inputMode.value = mode
+    applyTvMode(enabled.value, mode)
+  }
 
   function setEnabled(value: boolean) {
     enabled.value = value
-    applyTvMode(value)
+    if (!value) inputMode.value = 'pointer'
+    applyTvMode(value, inputMode.value)
     try {
       window.localStorage.setItem(STORAGE_KEY, value ? '1' : '0')
     } catch {
@@ -94,8 +110,10 @@ export const useTvModeStore = defineStore('tvMode', () => {
 
   return {
     enabled,
+    inputMode,
     hintVisible,
     setEnabled,
+    setInputMode,
     showHint,
     hideHint,
   }

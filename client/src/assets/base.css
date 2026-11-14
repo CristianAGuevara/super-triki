@@ -23,6 +23,18 @@ html.tv-mode :focus {
   html.tv-mode body { zoom: 1.12; }
 }
 
+/* TV, driven with the arrows: no cursor, and nothing reacts to the pointer
+   (hover, clicks, drags) — only the focus ring moves. See useTvNavigation. */
+html.tv-nav,
+html.tv-nav * {
+  cursor: none !important;
+}
+
+html.tv-nav body,
+html.tv-nav body * {
+  pointer-events: none !important;
+}
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {

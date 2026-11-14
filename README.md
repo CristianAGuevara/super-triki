@@ -78,6 +78,15 @@ Grande, Mediana y Pequeña. Se elige una con `OK`, se mueve el foco a una casill
 del tablero y se coloca con `OK`. Se puede forzar el modo con `?tv=1` o
 desactivarlo con `?tv=0`.
 
+En modo TV el puntero queda fuera de juego en cuanto se usa una flecha: se
+oculta el cursor y la página deja de reaccionar a él (sin hover ni clics por
+posición); `OK` actúa siempre sobre el elemento con foco. Muchos navegadores de
+TV no entregan las flechas a la página, sino que mueven su propio cursor; ese
+cursor no se puede apagar desde una web, así que la página lee las flechas a
+partir de su movimiento (tramos rectos en un solo eje = una pulsación) y navega
+igual. Si se mueve un puntero de mano (ratón, mando con giroscopio) el cursor
+vuelve a funcionar hasta la siguiente flecha.
+
 ## Torneos
 
 Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o
