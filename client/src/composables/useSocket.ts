@@ -7,9 +7,11 @@ import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
 import { useTournamentStore } from '@/stores/tournamentStore'
+import { useEmoteStore } from '@/stores/emoteStore'
 import type { GameSettings, PlayerColorId } from '@/types/game'
 import type { TournamentFormat } from '@/types/tournament'
 import type {
+  EmoteId,
   GameControlAck,
   GameMovePayload,
   RoomJoinAck,
@@ -31,6 +33,7 @@ export function useSocket() {
   const audioStore      = useAudioStore()
   const userStore       = useUserStore()
   const tournamentStore = useTournamentStore()
+  const emoteStore      = useEmoteStore()
 
   async function resyncRoomAfterReconnect(): Promise<boolean> {
     if (!roomStore.roomId) return true
@@ -191,6 +194,10 @@ export function useSocket() {
       audioStore.playSfx('leave')
     })
 
+    socket.on('emote:show', payload => {
+      emoteStore.receive(payload.slot, payload.emote, roomStore.mySlot)
+    })
+
     socket.on('tournament:state', state => {
       tournamentStore.setState(state)
     })
@@ -215,6 +222,7 @@ export function useSocket() {
     socket.off('game:over')
     socket.off('player:joined')
     socket.off('player:left')
+    socket.off('emote:show')
     socket.off('tournament:state')
     socket.off('tournament:assigned')
     socket.off('error')
@@ -406,6 +414,20 @@ export function useSocket() {
     })
   }
 
+  function emitEmote(roomId: string, emote: EmoteId): Promise<GameControlAck> {
+    return new Promise(resolve => {
+      if (!socket.connected) {
+        resolve({ ok: false, error: 'Sin conexión' })
+        return
+      }
+      const timeout = window.setTimeout(() => resolve({ ok: false, error: 'El servidor no respondió' }), 4_000)
+      socket.emit('emote:send', { roomId, emote }, result => {
+        window.clearTimeout(timeout)
+        resolve(result)
+      })
+    })
+  }
+
   function emitRematch(roomId: string): void {
     socket.emit('game:rematch', { roomId }, result => {
       if (!result.ok) roomStore.setError(result.error ?? 'No se pudo iniciar la siguiente partida')
@@ -451,6 +473,7 @@ export function useSocket() {
     emitLeaveSpectator,
     emitMove,
     emitSetColor,
+    emitEmote,
     emitRematch,
     emitStart,
     emitFinishGame,

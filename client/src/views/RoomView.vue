@@ -4,6 +4,8 @@
 
     <WinCinematic v-if="gameStore.cinematicActive" @done="gameStore.finishCinematic()" />
 
+    <EmoteWheel v-if="roomStore.mySlot && !gameStore.cinematicActive && !showMatchResult" :send-emote="sendEmote" />
+
     <MatchResultOverlay
       v-if="showMatchResult"
       :winner-name="resultWinnerName"
@@ -58,6 +60,7 @@
             >
               <span class="lobby__avatar st-ring st-ring--large" aria-hidden="true" />
               <span class="lobby__player-name">{{ p.username }}</span>
+              <EmoteBubble :slot="p.slot" />
               <span v-if="p.slot === roomStore.hostSlot" class="lobby__tag">Anfitrión</span>
               <span v-if="p.slot === roomStore.mySlot" class="lobby__tag lobby__tag--me">Tú</span>
               <span v-if="!p.connected" class="lobby__tag lobby__tag--off">Desconectado</span>
@@ -284,6 +287,9 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useTvModeStore } from '@/stores/tvStore'
 import { useTurnClock } from '@/composables/useTurnClock'
 import { useSocket } from '@/composables/useSocket'
+import type { EmoteId } from '@/types/socket'
+import EmoteWheel from '@/components/EmoteWheel.vue'
+import EmoteBubble from '@/components/EmoteBubble.vue'
 import { useGameShortcuts } from '@/composables/useGameShortcuts'
 import { connectSocket, disconnectSocket } from '@/services/socket'
 import Board from '@/components/Board.vue'
@@ -304,7 +310,11 @@ const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
 const tvStore = useTvModeStore()
-const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame, emitSetColor } = useSocket()
+const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame, emitSetColor, emitEmote } = useSocket()
+
+function sendEmote(emote: EmoteId) {
+  return emitEmote(roomId.value, emote)
+}
 
 const roomId = computed(() => route.params.id as string)
 const mountedRoomId = String(route.params.id).toUpperCase()
@@ -782,6 +792,7 @@ function closeRules() {
 }
 
 .lobby__player {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;

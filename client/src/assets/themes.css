@@ -221,6 +221,15 @@
   -webkit-backdrop-filter: none !important;
 }
 
+/* Emotes look the same in every theme, so they keep their round shapes. */
+:root[data-theme='pixel'] :is(.emote-wheel__toggle, .emote-wheel__item) {
+  border-radius: 50% !important;
+}
+
+:root[data-theme='pixel'] .emote-bubble {
+  border-radius: 50% 50% 50% 12% !important;
+}
+
 :root[data-theme='pixel'] body {
   background-size: 32px 32px;
   font-size: 16px;

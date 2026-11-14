@@ -1,5 +1,6 @@
 import type { Server, Socket } from 'socket.io'
-import type { ClientToServerEvents, GameMovePayload, ServerToClientEvents } from '../types/socket.js'
+import type { ClientToServerEvents, EmoteId, GameMovePayload, ServerToClientEvents } from '../types/socket.js'
+import { EMOTE_IDS } from '../types/socket.js'
 import type { GameSettings, Size } from '../types/game.js'
 import { DEFAULT_GAME_SETTINGS, isPlayerColorId } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
@@ -198,6 +199,30 @@ async function completeTournamentGroup(
   if (!result) return
   await emitRoomEvent(io, tournamentChannel(meta.id), 'tournament:state', result.state)
   await emitTournamentAssignments(io, result.assignments)
+}
+
+// ── Emotes ───────────────────────────────────────────────────
+// Rate limits live in memory: they only have to stop spam, and losing them
+// on a restart costs nothing.
+const EMOTE_COOLDOWN_MS = 5_000
+/** Slack for network jitter, so a client that waited its 5 s isn't refused. */
+const EMOTE_COOLDOWN_SLACK_MS = 400
+const emoteLastSentAt = new Map<string, number>()
+/** Turn in which each player last buzzed: one buzz per turn. */
+const buzzLastTurn = new Map<string, string>()
+
+function isEmoteId(value: unknown): value is EmoteId {
+  return typeof value === 'string' && (EMOTE_IDS as readonly string[]).includes(value)
+}
+
+function pruneEmoteLimits(now: number) {
+  if (emoteLastSentAt.size < 2_000) return
+  for (const [key, at] of emoteLastSentAt) {
+    if (now - at > 60_000) {
+      emoteLastSentAt.delete(key)
+      buzzLastTurn.delete(key)
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -531,6 +556,48 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     ack({ ok: true })
     await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
+  })
+
+  // ── emote:send ───────────────────────────────────────────────
+  socket.on('emote:send', async (payload, ack) => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string' || !isEmoteId(payload.emote)) {
+      ack({ ok: false, error: 'Emote inválido' })
+      return
+    }
+    const roomId = payload.roomId.trim().toUpperCase()
+    const emote = payload.emote
+    const slot = await RoomManager.getSlotBySocket(socket.id, roomId)
+    if (!slot) {
+      ack({ ok: false, error: 'No perteneces a esta sala' })
+      return
+    }
+
+    const key = `${roomId}:${slot}`
+    const now = Date.now()
+    if (emote === 'buzz') {
+      const room = await RoomManager.getRoom(roomId)
+      if (!room?.game) {
+        ack({ ok: false, error: 'El zumbido solo se usa durante la partida' })
+        return
+      }
+      const turn = `${room.roundNumber}:${room.game.turnNumber}`
+      if (buzzLastTurn.get(key) === turn) {
+        ack({ ok: false, error: 'Ya usaste el zumbido en este turno' })
+        return
+      }
+      buzzLastTurn.set(key, turn)
+    } else {
+      const last = emoteLastSentAt.get(key) ?? 0
+      if (now - last < EMOTE_COOLDOWN_MS - EMOTE_COOLDOWN_SLACK_MS) {
+        ack({ ok: false, error: 'Espera unos segundos para reaccionar otra vez' })
+        return
+      }
+      emoteLastSentAt.set(key, now)
+    }
+    pruneEmoteLimits(now)
+
+    ack({ ok: true })
+    await emitRoomEvent(io, roomId, 'emote:show', { slot, emote })
   })
 
   // ── tournament:create ────────────────────────────────────────

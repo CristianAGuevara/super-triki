@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import type { Size } from '@/types/game'
 
 export type SfxName =
+  | 'emote'
+  | 'buzz'
   | 'click'
   | 'select'
   | 'move'
@@ -355,6 +357,17 @@ export const useAudioStore = defineStore('audio', () => {
     const pitch = options.size ? SIZE_PITCH[options.size] : 1
 
     switch (name) {
+      case 'emote':
+        tone({ freq: 620, to: 930, dur: 0.09, type: 'triangle', gain: 0.1, dest })
+        tone({ freq: 930, to: 1240, dur: 0.12, type: 'triangle', gain: 0.09, delay: 0.08, dest })
+        break
+      case 'buzz':
+        for (let i = 0; i < 3; i++) {
+          tone({ freq: 92, to: 84, dur: 0.16, type: 'sawtooth', gain: 0.2, delay: i * 0.21, dest })
+          tone({ freq: 184, to: 170, dur: 0.16, type: 'square', gain: 0.07, delay: i * 0.21, dest })
+          noise(0.14, 0.09, 420, 2, i * 0.21)
+        }
+        break
       case 'click':
         tone({ freq: 880, to: 620, dur: 0.06, gain: 0.06, dest })
         noise(0.025, 0.05, 3200, 2)

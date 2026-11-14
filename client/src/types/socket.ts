@@ -93,11 +93,17 @@ export interface TournamentRoomAssignment {
   gameState: GameStateSnapshot
 }
 
+export const EMOTE_IDS = ['happy', 'angry', 'sleepy', 'crying', 'love', 'cool', 'buzz'] as const
+export type EmoteId = typeof EMOTE_IDS[number]
+export interface EmoteSendPayload { roomId: string; emote: EmoteId }
+export interface EmoteShowPayload { slot: PlayerSlot; emote: EmoteId }
+
 export interface ClientToServerEvents {
   'room:create': (payload: { username: string; userId: string; name: string; isPrivate: boolean; password?: string }, ack: (res: RoomCreateAck) => void) => void
   'room:join':   (payload: { roomId: string; username: string; userId: string; password?: string }, ack: (res: RoomJoinAck) => void) => void
   'room:reconnect': (payload: { roomId: string; reconnectToken: string }, ack: (res: RoomReconnectAck) => void) => void
   'room:set-color': (payload: RoomSetColorPayload, ack: (res: GameControlAck) => void) => void
+  'emote:send': (payload: EmoteSendPayload, ack: (res: GameControlAck) => void) => void
   'tournament:create': (payload: { username: string; userId: string; name: string }, ack: (res: TournamentCreateAck) => void) => void
   'tournament:join': (payload: { tournamentId: string; username: string; userId: string }, ack: (res: TournamentJoinAck) => void) => void
   'tournament:reconnect': (payload: { tournamentId: string; reconnectToken: string }, ack: (res: TournamentReconnectAck) => void) => void
@@ -181,6 +187,7 @@ export interface ServerToClientEvents {
   'game:state':    (state: GameStateSnapshot)       => void
   'game:over':     (result: GameOverPayload)        => void
   'game:turn-timeout': (payload: { player: PlayerSlot }) => void
+  'emote:show': (payload: EmoteShowPayload) => void
   'game:clock': (payload: { turnStartedAt: number }) => void
   'game:aborted': (payload: { reason: string }) => void
   'rooms:list':    (rooms: PublicRoomInfo[])        => void

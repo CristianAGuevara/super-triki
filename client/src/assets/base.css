@@ -164,6 +164,22 @@ input[type='checkbox'] {
 
 @keyframes st-winline-draw { to { stroke-dashoffset: 0; } }
 
+/* ── Buzz emote: someone rattled this player's screen ── */
+html.st-buzzing #app { animation: st-buzz 0.75s linear; }
+
+@keyframes st-buzz {
+  0%, 100% { transform: none; }
+  8% { transform: translate(-10px, 5px) rotate(-0.7deg); }
+  16% { transform: translate(9px, -6px) rotate(0.6deg); }
+  24% { transform: translate(-8px, -4px) rotate(-0.5deg); }
+  32% { transform: translate(8px, 6px) rotate(0.5deg); }
+  42% { transform: translate(-7px, 3px) rotate(-0.4deg); }
+  52% { transform: translate(6px, -4px) rotate(0.3deg); }
+  64% { transform: translate(-4px, 3px) rotate(-0.2deg); }
+  78% { transform: translate(3px, -2px); }
+  90% { transform: translate(-1px, 1px); }
+}
+
 /* ── Shared controls ────────────────────────────────────────────── */
 .st-btn {
   display: inline-flex;

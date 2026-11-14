@@ -87,6 +87,15 @@ partir de su movimiento (tramos rectos en un solo eje = una pulsación) y navega
 igual. Si se mueve un puntero de mano (ratón, mando con giroscopio) el cursor
 vuelve a funcionar hasta la siguiente flecha.
 
+## Emotes
+
+En la sala y durante la partida hay un botón flotante que abre un semicírculo
+de reacciones interpretadas por **Triki**, la mascota del juego: feliz,
+enamorado, cool, dormido, llorando y enojado. Al enviar una, todas quedan
+bloqueadas 5 segundos. El **zumbido** solo existe durante la partida, se puede
+usar una vez por turno (desaparece hasta el siguiente) y hace temblar la
+pantalla de los demás jugadores. El servidor aplica ambos límites.
+
 ## Torneos
 
 Desde el menú principal se puede crear un torneo de hasta **50 jugadores** o
