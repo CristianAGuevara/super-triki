@@ -86,27 +86,32 @@
         <details v-if="roomStore.mySlot === roomStore.hostSlot" class="lobby__options">
           <summary>
             <span>Opciones de partida</span>
-            <small>{{ roomStore.gameSettings.turnTimerEnabled ? `Turnos de ${roomStore.gameSettings.turnDurationSeconds} s` : 'Sin límite de tiempo' }}</small>
+            <small>{{ playerClockEnabled ? `${playerClockLabel} por jugador` : 'Sin límite de tiempo' }}</small>
           </summary>
           <label class="lobby__option">
-            <input v-model="roomStore.gameSettings.turnTimerEnabled" type="checkbox" />
-            <span>Temporizador por turno</span>
+            <input
+              :checked="playerClockEnabled"
+              type="checkbox"
+              @change="togglePlayerClock"
+            />
+            <span>Reloj por jugador</span>
           </label>
-          <div v-if="roomStore.gameSettings.turnTimerEnabled" class="lobby__timer-options">
+          <div v-if="playerClockEnabled" class="lobby__timer-options">
             <label class="lobby__option lobby__option--select">
-              <span>Tiempo para jugar</span>
-              <select v-model.number="roomStore.gameSettings.turnDurationSeconds">
-                <option :value="30">30 segundos</option>
-                <option :value="60">1 minuto</option>
-                <option :value="90">1 min 30 s</option>
-                <option :value="120">2 minutos</option>
-                <option :value="180">3 minutos</option>
+              <span>Tiempo por jugador</span>
+              <select :value="playerClockSeconds" @change="changePlayerClock">
+                <option
+                  v-for="clock in playerClockOptions"
+                  :key="clock.value"
+                  :value="clock.value"
+                >
+                  {{ clock.label }}
+                </option>
               </select>
             </label>
-            <label class="lobby__option">
-              <input v-model="roomStore.gameSettings.removePieceOnTimeout" type="checkbox" />
-              <span>Quitar una ficha a quien deje pasar su turno</span>
-            </label>
+            <p class="lobby__option-hint">
+              Solo corre el reloj del jugador que tiene el turno. Al agotarse, pierde la partida.
+            </p>
           </div>
         </details>
 
@@ -163,11 +168,6 @@
           >
             <span class="room__turn-dot" aria-hidden="true" />
             <span class="room__turn-label">{{ isMyTurn ? '¡Tu turno!' : `Turno de ${turnLabel}` }}</span>
-            <span
-              v-if="roomStore.gameSettings.turnTimerEnabled"
-              class="room__turn-timer"
-              :class="{ 'room__turn-timer--urgent': turnSecondsLeft <= 15 }"
-            >{{ turnClock }}</span>
           </div>
         </Transition>
 
@@ -280,13 +280,16 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { PlayerColorId } from '@/types/game'
-import { resolvePlayerColorId } from '@/types/game'
+import {
+  DEFAULT_PLAYER_CLOCK_SECONDS,
+  PLAYER_CLOCK_OPTIONS as playerClockOptions,
+  resolvePlayerColorId,
+} from '@/types/game'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useTvModeStore } from '@/stores/tvStore'
-import { useTurnClock } from '@/composables/useTurnClock'
 import { useSocket } from '@/composables/useSocket'
 import type { EmoteId } from '@/types/socket'
 import EmoteWheel from '@/components/EmoteWheel.vue'
@@ -366,10 +369,29 @@ const canFinishGameForHost = computed(() =>
   roomStore.mySlot === roomStore.hostSlot && roomStore.phase === 'playing' &&
   roomStore.players.some(player => !player.connected)
 )
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(
-  undefined,
-  () => roomStore.gameSettings.turnDurationSeconds * 1_000,
+const playerClockEnabled = computed(() =>
+  (roomStore.gameSettings.playerClockSeconds ?? 0) > 0
 )
+const playerClockSeconds = computed(() =>
+  roomStore.gameSettings.playerClockSeconds || DEFAULT_PLAYER_CLOCK_SECONDS
+)
+const playerClockLabel = computed(() =>
+  playerClockOptions.find(option => option.value === playerClockSeconds.value)?.label
+    ?? `${Math.round(playerClockSeconds.value / 60)} min`
+)
+
+function togglePlayerClock(event: Event) {
+  const enabled = (event.target as HTMLInputElement).checked
+  roomStore.gameSettings.playerClockSeconds = enabled ? DEFAULT_PLAYER_CLOCK_SECONDS : 0
+  if (enabled) roomStore.gameSettings.turnTimerEnabled = false
+}
+
+function changePlayerClock(event: Event) {
+  const seconds = Number((event.target as HTMLSelectElement).value)
+  const option = playerClockOptions.find(candidate => candidate.value === seconds)
+  roomStore.gameSettings.playerClockSeconds = option?.value ?? DEFAULT_PLAYER_CLOCK_SECONDS
+  roomStore.gameSettings.turnTimerEnabled = false
+}
 
 const isMyTurn = computed(() =>
   roomStore.phase === 'playing' &&
@@ -881,6 +903,7 @@ function closeRules() {
 .lobby__options > :last-child { padding-bottom: 14px; }
 
 .lobby__timer-options { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 14px; }
+.lobby__option-hint { color: var(--text-muted); font-size: 12px; line-height: 1.4; }
 .lobby__option { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
 .lobby__option--select { justify-content: space-between; }
 .lobby__option select {
@@ -1002,7 +1025,7 @@ function closeRules() {
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  padding: 6px 8px 6px 16px;
+  padding: 6px 16px;
   border: 1px solid color-mix(in srgb, var(--turn-color) 50%, var(--line-soft));
   border-radius: 999px;
   background: color-mix(in srgb, var(--turn-color) 10%, var(--surface));
@@ -1011,8 +1034,6 @@ function closeRules() {
   font-weight: 700;
   white-space: nowrap;
 }
-
-.room__turn:not(:has(.room__turn-timer)) { padding-right: 16px; }
 
 .room__turn-dot {
   width: 10px;
@@ -1034,29 +1055,6 @@ function closeRules() {
 
 @keyframes my-turn-glow {
   50% { box-shadow: 0 0 40px -6px var(--turn-color); }
-}
-
-.room__turn-timer {
-  display: inline-flex;
-  min-width: 52px;
-  justify-content: center;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: var(--control-bg);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.room__turn-timer--urgent {
-  background: color-mix(in srgb, var(--accent-danger) 20%, transparent);
-  color: var(--accent-danger);
-  animation: timer-urgent 1s ease-in-out infinite;
-}
-
-@keyframes timer-urgent {
-  50% { transform: scale(1.08); }
 }
 
 .turn-swap-enter-active { transition: opacity 0.25s ease, transform 0.4s var(--ease-spring); }

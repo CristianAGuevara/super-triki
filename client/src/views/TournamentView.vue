@@ -405,7 +405,7 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket } from '@/services/socket'
 import type { TournamentFormat, TournamentGroupSnapshot } from '@/types/tournament'
-import { PLAYER_COLORS } from '@/types/game'
+import { PLAYER_CLOCK_OPTIONS as playerClockOptions, PLAYER_COLORS } from '@/types/game'
 import TournamentSpectatorOverlay from '@/components/TournamentSpectatorOverlay.vue'
 import TournamentLastGame from '@/components/TournamentLastGame.vue'
 import RingBurst from '@/components/RingBurst.vue'
@@ -456,13 +456,7 @@ const formatOptions = [
   },
 ]
 
-const playerClockOptions = [
-  { value: 60, label: '1 min' },
-  { value: 180, label: '3 min' },
-  { value: 300, label: '5 min' },
-  { value: 480, label: '8 min' },
-  { value: 600, label: '10 min' },
-]
+
 
 const formatShort = computed(() =>
   store.format === 'league'

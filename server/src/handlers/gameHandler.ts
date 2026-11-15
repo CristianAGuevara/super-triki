@@ -245,11 +245,17 @@ function normalizeGameSettings(value: unknown, fallback: GameSettings): GameSett
   const settings = isRecord(value) ? value : fallback
   const durations = [30, 45, 60, 90, 120, 180]
   const duration = Number(settings.turnDurationSeconds)
-  const turnTimerEnabled = settings.turnTimerEnabled === true
+  const allowedClocks = [0, 60, 180, 300, 480, 600]
+  const clock = Number(settings.playerClockSeconds)
+  const fallbackClock = Number(fallback.playerClockSeconds)
   return {
-    turnTimerEnabled,
+    // Normal rooms now use the same per-player clock as tournaments.
+    turnTimerEnabled: false,
     turnDurationSeconds: durations.includes(duration) ? duration : fallback.turnDurationSeconds,
-    removePieceOnTimeout: turnTimerEnabled && settings.removePieceOnTimeout === true,
+    removePieceOnTimeout: false,
+    playerClockSeconds: allowedClocks.includes(clock)
+      ? clock
+      : allowedClocks.includes(fallbackClock) ? fallbackClock : 0,
   }
 }
 

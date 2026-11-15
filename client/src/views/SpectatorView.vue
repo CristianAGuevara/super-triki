@@ -14,7 +14,6 @@
       <div class="spectator__header-right">
         <span class="spectator__turn-inline">
           Turno: <strong :style="{ color: turnColor }">{{ turnLabel }}</strong>
-          <span v-if="roomStore.gameSettings.turnTimerEnabled" class="spectator__timer" :class="{ 'spectator__timer--urgent': turnSecondsLeft <= 15 }">{{ turnClock }}</span>
         </span>
         <span class="spectator__status" :class="`spectator__status--${roomStore.phase}`">{{ statusLabel }}</span>
       </div>
@@ -76,7 +75,6 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useTurnClock } from '@/composables/useTurnClock'
 import { useSocket } from '@/composables/useSocket'
 import { connectSocket, disconnectSocket } from '@/services/socket'
 import Board from '@/components/Board.vue'
@@ -111,10 +109,6 @@ const turnLabel = computed(() => {
 
 const turnColor = computed(() =>
   gameStore.playerMeta[gameStore.currentPlayer]?.color ?? 'var(--accent-primary)'
-)
-const { secondsLeft: turnSecondsLeft, formattedTime: turnClock } = useTurnClock(
-  undefined,
-  () => roomStore.gameSettings.turnDurationSeconds * 1_000,
 )
 
 const resultLabel = computed(() => {
@@ -233,22 +227,6 @@ function goHome() {
 }
 
 .spectator__turn-inline strong { font-weight: 900; }
-
-.spectator__timer {
-  display: inline-block;
-  min-width: 38px;
-  margin-left: 5px;
-  padding: 2px 6px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  text-align: center;
-}
-
-.spectator__timer--urgent { color: var(--accent-danger); border-color: var(--accent-danger); }
 
 .spectator__main {
   --spectator-cell: clamp(64px, 10vh, 110px);

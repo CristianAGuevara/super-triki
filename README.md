@@ -39,6 +39,9 @@ para desarrollo con una sola instancia, pero no para producción distribuida.
 - En la sala de espera cada jugador puede elegir uno de los ocho colores
   disponibles. El color se conserva durante la partida y no puede repetirse
   entre jugadores de la misma sala.
+- El anfitrión puede activar un **reloj total por jugador** de 1, 3, 5, 8 o 10
+  minutos. Está desactivado por defecto; al activarlo empieza en 5 minutos. Solo
+  corre el reloj de quien tiene el turno y, al agotarse, ese jugador pierde.
 
 ## Identidad de sesión
 
@@ -126,7 +129,7 @@ Al iniciar, los jugadores se reparten priorizando grupos de 4 y después grupos 
 (3 + 2). Los empates de una partida de eliminación se pueden repetir.
 
 Las partidas de torneo usan un **reloj total por jugador** elegido por el
-anfitrión (3, 5, 8, 10 o 15 minutos). Solo corre el reloj del jugador que tiene
+anfitrión (1, 3, 5, 8 o 10 minutos). Solo corre el reloj del jugador que tiene
 el turno. Al agotarse, ese jugador queda fuera de la partida y el resto continúa;
 si queda uno solo, gana el grupo. La duración máxima de un grupo es el tiempo por
 jugador multiplicado por sus integrantes.

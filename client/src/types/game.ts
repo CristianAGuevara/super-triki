@@ -63,6 +63,16 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   playerClockSeconds: 0,
 }
 
+export const DEFAULT_PLAYER_CLOCK_SECONDS = 300
+
+export const PLAYER_CLOCK_OPTIONS = [
+  { value: 60, label: '1 min' },
+  { value: 180, label: '3 min' },
+  { value: 300, label: '5 min' },
+  { value: 480, label: '8 min' },
+  { value: 600, label: '10 min' },
+] as const
+
 export interface Piece {
   id: string
   player: Player
