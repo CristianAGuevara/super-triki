@@ -3,7 +3,8 @@ import { createServer } from 'node:http'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import type { ClientToServerEvents, ServerToClientEvents } from './types/socket.js'
-import { registerGameHandler } from './handlers/gameHandler.js'
+import { getPublicListings, registerGameHandler } from './handlers/gameHandler.js'
+import type { PublicRoomInfo } from './types/socket.js'
 import { initializeRoomBus, roomRedisEnabled } from './redis.js'
 
 const PORT = process.env.PORT ?? 3001
@@ -14,6 +15,25 @@ const SOCKET_PATH = `${API_PREFIX}/socket.io` || '/socket.io'
 const app = express()
 app.use(cors({ origin: FRONTEND_URL }))
 app.get(`${API_PREFIX}/health` || '/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
+
+// The home page reads the open rooms from here instead of holding a socket
+// open. A short cache makes many visitors cost one lookup.
+const ROOMS_CACHE_MS = 2_000
+let roomsCache: { at: number; rooms: PublicRoomInfo[] } | null = null
+let roomsPending: Promise<PublicRoomInfo[]> | null = null
+
+app.get(`${API_PREFIX}/rooms`, async (_req, res) => {
+  try {
+    if (!roomsCache || Date.now() - roomsCache.at >= ROOMS_CACHE_MS) {
+      roomsPending ??= getPublicListings().finally(() => { roomsPending = null })
+      roomsCache = { at: Date.now(), rooms: await roomsPending }
+    }
+    res.set('Cache-Control', 'no-store').json(roomsCache.rooms)
+  } catch (error) {
+    console.error('[rooms:http]', error)
+    res.status(503).json({ error: 'No se pudo leer la lista de salas' })
+  }
+})
 
 const httpServer = createServer(app)
 

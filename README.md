@@ -65,6 +65,14 @@ un margen de 3 segundos antes de anunciar una desconexión, de modo que el relev
 normalmente pasa inadvertido. Los tiempos se pueden ajustar con
 `VITE_SOCKET_ROTATE_MS` y `VITE_SOCKET_ROTATE_JITTER_MS`.
 
+## Conexión bajo demanda
+
+La página de inicio no abre ningún WebSocket. La lista de salas y torneos se
+lee por HTTP (`GET /rooms`, o `/api/rooms` en Vercel) cada 4 segundos, se pausa
+con la pestaña oculta y el servidor la cachea 2 segundos. El socket se conecta
+al crear, unirse o ver una sala, y se cierra al volver al inicio. El `userId`
+y los tokens de reconexión viven en el navegador, así que no dependen de ello.
+
 ## Modo TV
 
 La página detecta televisores webOS, Tizen, Android TV, Fire TV y pantallas

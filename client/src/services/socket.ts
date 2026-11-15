@@ -5,15 +5,20 @@ type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
 let _socket: AppSocket | null = null
 
+export function serverEndpoint(): { serverUrl: string; socketPath: string } {
+  const isLocal = typeof window === 'undefined' ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  const serverUrl = import.meta.env.VITE_SERVER_URL ||
+    (isLocal ? 'http://localhost:3001' : window.location.origin)
+  const socketPath = import.meta.env.VITE_SOCKET_PATH ||
+    (import.meta.env.VITE_SERVER_URL || isLocal ? '/socket.io' : '/api/socket.io')
+  return { serverUrl, socketPath }
+}
+
 export function getSocket(): AppSocket {
   if (!_socket) {
-    const isLocal = typeof window === 'undefined' ||
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1'
-    const serverUrl = import.meta.env.VITE_SERVER_URL ||
-      (isLocal ? 'http://localhost:3001' : window.location.origin)
-    const socketPath = import.meta.env.VITE_SOCKET_PATH ||
-      (import.meta.env.VITE_SERVER_URL || isLocal ? '/socket.io' : '/api/socket.io')
+    const { serverUrl, socketPath } = serverEndpoint()
 
     _socket = io(serverUrl, {
       autoConnect: false,

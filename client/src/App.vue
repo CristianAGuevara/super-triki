@@ -164,7 +164,7 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useTvModeStore } from '@/stores/tvStore'
 import { useTvNavigation } from '@/composables/useTvNavigation'
-import { connectSocket, getSocket } from '@/services/socket'
+import { getSocket } from '@/services/socket'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
 
 const themeStore = useThemeStore()
@@ -199,6 +199,15 @@ let connectedAt = 0
 let rotationStartedAt = 0
 let healthCheckInFlight = false
 let healthCheckSeq = 0
+
+/**
+ * The home page keeps no socket open (it polls the room list over HTTP), so
+ * a closed socket there is the normal state, not something to repair. Once
+ * the visitor acts, the socket becomes active and the watchdog takes over.
+ */
+function socketIdle(): boolean {
+  return route.name === 'home' && !socket.active
+}
 
 function clearTimer(timer: number | undefined): undefined {
   if (timer !== undefined) window.clearTimeout(timer)
@@ -325,7 +334,7 @@ function handleReconnectAttempt(attempt: number) {
 }
 
 function checkConnection() {
-  if (document.hidden || connectionStore.blocked) return
+  if (document.hidden || connectionStore.blocked || socketIdle()) return
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     connectionStore.setDisconnected('Sin conexión a internet')
     return
@@ -375,7 +384,7 @@ function checkConnection() {
 }
 
 function handleVisibilityChange() {
-  if (document.hidden || connectionStore.blocked) return
+  if (document.hidden || connectionStore.blocked || socketIdle()) return
 
   if (connectionStore.rotating) {
     if (!socket.connected) {
@@ -401,6 +410,10 @@ function handleVisibilityChange() {
 }
 
 function handleOnline() {
+  if (socketIdle()) {
+    connectionStore.reset()
+    return
+  }
   if (connectionStore.blocked) return
 
   if (connectionStore.rotating) {
@@ -433,7 +446,7 @@ function handleOffline() {
 }
 
 function handlePageShow() {
-  if (connectionStore.blocked) return
+  if (connectionStore.blocked || socketIdle()) return
   if (!socket.connected) {
     connectionStore.setReconnecting()
     socket.connect()
@@ -510,7 +523,7 @@ onMounted(() => {
   window.addEventListener('pageshow', handlePageShow)
   connectionStore.setConnected(socket.connected)
   connectedAt = socket.connected ? Date.now() : 0
-  connectSocket()
+  // No connect here: each room, tournament and spectator view connects itself.
   schedulePlannedRotation()
   healthTimer = window.setInterval(checkConnection, HEALTH_INTERVAL_MS)
 })

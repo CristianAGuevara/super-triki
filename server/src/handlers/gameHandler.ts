@@ -88,7 +88,7 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
   }).catch(error => console.error('[game:timer-load]', error))
 }
 
-async function getPublicListings() {
+export async function getPublicListings() {
   const [rooms, tournaments] = await Promise.all([
     RoomManager.getPublicRooms(),
     TournamentManager.getPublicTournaments(),

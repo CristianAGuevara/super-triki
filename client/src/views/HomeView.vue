@@ -396,7 +396,9 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useLobbyStore } from '@/stores/lobbyStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useTournamentStore } from '@/stores/tournamentStore'
-import { connectSocket, getSocket, waitForSocketConnection } from '@/services/socket'
+import { disconnectSocket, getSocket, waitForSocketConnection } from '@/services/socket'
+import { fetchPublicRooms } from '@/services/rooms'
+import { useConnectionStore } from '@/stores/connectionStore'
 import type { TournamentCreateAck, TournamentJoinAck } from '@/types/socket'
 import HeroBoard from '@/components/HeroBoard.vue'
 
@@ -506,11 +508,42 @@ function handleJoinListing(listing: { kind: 'room' | 'tournament'; roomId: strin
   void handleJoinPublic(listing.roomId)
 }
 
+// The home page holds no socket: the open rooms are polled over HTTP, and
+// the socket only connects when the visitor creates, joins or watches.
+const ROOMS_POLL_MS = 4_000
+let roomsTimer: number | undefined
+let roomsRequest = 0
+
+async function refreshRooms() {
+  const request = ++roomsRequest
+  const rooms = await fetchPublicRooms()
+  // Ignore a slow answer that a newer one has already replaced.
+  if (rooms && request === roomsRequest) lobbyStore.setRooms(rooms)
+}
+
+function startRoomsPolling() {
+  stopRoomsPolling()
+  if (document.hidden) return
+  void refreshRooms()
+  roomsTimer = window.setInterval(refreshRooms, ROOMS_POLL_MS)
+}
+
+function stopRoomsPolling() {
+  if (roomsTimer !== undefined) window.clearInterval(roomsTimer)
+  roomsTimer = undefined
+}
+
+function handleRoomsVisibility() {
+  if (document.hidden) stopRoomsPolling()
+  else startRoomsPolling()
+}
+
 onMounted(() => {
-  connectSocket()
-  const socket = getSocket()
-  socket.on('rooms:list', rooms => lobbyStore.setRooms(rooms))
-  socket.emit('rooms:get', rooms => lobbyStore.setRooms(rooms))
+  // Arriving here means no room is active: drop any socket left open.
+  disconnectSocket()
+  useConnectionStore().reset()
+  startRoomsPolling()
+  document.addEventListener('visibilitychange', handleRoomsVisibility)
 
   const next = route.query.next as string | undefined
   if (next) {
@@ -528,7 +561,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  getSocket().off('rooms:list')
+  stopRoomsPolling()
+  roomsRequest += 1
+  document.removeEventListener('visibilitychange', handleRoomsVisibility)
 })
 
 async function handleCreate() {
