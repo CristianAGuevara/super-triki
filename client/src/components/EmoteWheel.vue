@@ -1,7 +1,8 @@
 <!--
   Floating emote button. Pressing it fans the emotes out in a half circle;
   sending one locks them all for a few seconds. The buzz sits in the middle
-  of the fan, can be used once per turn and is gone until the next one.
+  of the fan with its own, longer cooldown, and only works during a match.
+  Cooldowns are shown as a ring that fills up, never as a number.
 -->
 <template>
   <div
@@ -16,15 +17,23 @@
         :key="item.id"
         type="button"
         class="emote-wheel__item"
-        :class="{ 'emote-wheel__item--buzz': item.id === 'buzz' }"
+        :class="{ 'emote-wheel__item--buzz': item.id === 'buzz', 'emote-wheel__item--off': item.off }"
         :style="item.style"
         :tabindex="open ? 0 : -1"
-        :disabled="!open || sending || (cooling && item.id !== 'buzz')"
+        :disabled="!open || sending || item.off"
         :aria-label="item.label"
         :title="item.label"
         @click="send(item.id)"
       >
-        <TrikiEmote :emote="item.id" />
+        <svg
+          v-if="item.id === 'buzz' && buzzCooling"
+          class="emote-wheel__ring"
+          viewBox="0 0 36 36"
+          aria-hidden="true"
+        >
+          <circle cx="18" cy="18" r="16" pathLength="1" :style="{ strokeDashoffset: 1 - buzzProgress }" />
+        </svg>
+        <span class="emote-wheel__face"><TrikiEmote :emote="item.id" /></span>
       </button>
     </div>
 
@@ -36,13 +45,12 @@
       :title="toggleLabel"
       @click="toggle"
     >
-      <svg v-if="cooling" class="emote-wheel__cooldown" viewBox="0 0 36 36" aria-hidden="true">
-        <circle cx="18" cy="18" r="16" pathLength="1" :style="{ strokeDashoffset: cooldownProgress }" />
+      <svg v-if="cooling" class="emote-wheel__ring" viewBox="0 0 36 36" aria-hidden="true">
+        <circle cx="18" cy="18" r="16" pathLength="1" :style="{ strokeDashoffset: 1 - cooldownProgress }" />
       </svg>
       <span class="emote-wheel__face">
         <TrikiEmote :emote="open ? 'cool' : 'happy'" />
       </span>
-      <span v-if="cooling" class="emote-wheel__seconds">{{ secondsLeft }}</span>
     </button>
   </div>
 </template>
@@ -54,7 +62,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useTvModeStore } from '@/stores/tvStore'
-import { EMOTE_COOLDOWN_MS, EMOTES, useEmoteStore } from '@/stores/emoteStore'
+import { BUZZ_COOLDOWN_MS, EMOTE_COOLDOWN_MS, EMOTES, useEmoteStore } from '@/stores/emoteStore'
 import TrikiEmote from './TrikiEmote.vue'
 
 /** Distance from the button to each emote, and the half circle they span. */
@@ -83,45 +91,47 @@ const color = computed(() =>
   roomStore.mySlot ? gameStore.playerMeta[roomStore.mySlot]?.color : undefined
 )
 
-const cooling = computed(() => store.cooldownUntil > now.value)
-const secondsLeft = computed(() => Math.max(1, Math.ceil((store.cooldownUntil - now.value) / 1000)))
-const cooldownProgress = computed(() =>
-  Math.min(1, Math.max(0, 1 - (store.cooldownUntil - now.value) / EMOTE_COOLDOWN_MS))
-)
+function progress(until: number, total: number): number {
+  return Math.min(1, Math.max(0, 1 - (until - now.value) / total))
+}
 
-/** One buzz per turn: a turn is identified by when it started and whose it is. */
-const turnKey = computed(() =>
-  roomStore.phase === 'playing' && !gameStore.isGameOver
-    ? `${gameStore.turnStartedAt}:${gameStore.currentPlayer}`
-    : null
-)
-const buzzAvailable = computed(() => turnKey.value !== null && store.buzzTurn !== turnKey.value)
+const cooling = computed(() => store.cooldownUntil > now.value)
+const cooldownProgress = computed(() => progress(store.cooldownUntil, EMOTE_COOLDOWN_MS))
+const buzzCooling = computed(() => store.buzzCooldownUntil > now.value)
+const buzzProgress = computed(() => progress(store.buzzCooldownUntil, BUZZ_COOLDOWN_MS))
+
+/** The buzz only exists while a match is being played, not in the waiting room. */
+const inMatch = computed(() => roomStore.phase === 'playing' && !gameStore.isGameOver)
 
 const toggleLabel = computed(() => {
   if (open.value) return 'Cerrar emotes'
-  return cooling.value ? `Emotes disponibles en ${secondsLeft.value} s` : 'Abrir emotes'
+  return cooling.value ? 'Emotes recargando' : 'Abrir emotes'
+})
+
+const buzzLabel = computed(() => {
+  if (!inMatch.value) return 'Zumbido: disponible durante la partida'
+  if (buzzCooling.value) return 'Zumbido recargando'
+  return 'Zumbido: sacude la pantalla de los demás'
 })
 
 const items = computed(() => {
-  // Seven seats on the arc; the buzz takes the middle one and leaves a gap
-  // when it is spent.
-  const seats: Array<{ id: EmoteId; label: string } | null> = [
-    ...EMOTES.slice(0, 3),
-    buzzAvailable.value ? { id: 'buzz' as const, label: 'Zumbido: sacude la pantalla de los demás' } : null,
-    ...EMOTES.slice(3),
+  // Seven seats on the arc; the buzz takes the middle one.
+  const seats: Array<{ id: EmoteId; label: string; off: boolean }> = [
+    ...EMOTES.slice(0, 3).map(emote => ({ ...emote, off: cooling.value })),
+    { id: 'buzz', label: buzzLabel.value, off: !inMatch.value || buzzCooling.value },
+    ...EMOTES.slice(3).map(emote => ({ ...emote, off: cooling.value })),
   ]
   const step = (ARC_END - ARC_START) / (seats.length - 1)
-  return seats.flatMap((seat, index) => {
-    if (!seat) return []
+  return seats.map((seat, index) => {
     const angle = ((ARC_START + step * index) * Math.PI) / 180
-    return [{
+    return {
       ...seat,
       style: {
         '--x': `${Math.round(Math.cos(angle) * RADIUS)}px`,
         '--y': `${Math.round(-Math.sin(angle) * RADIUS)}px`,
         '--delay': `${index * 28}ms`,
       },
-    }]
+    }
   })
 })
 
@@ -138,20 +148,18 @@ function toggle() {
 async function send(emote: EmoteId) {
   if (sending.value || !roomStore.roomId) return
   const isBuzz = emote === 'buzz'
-  if (!isBuzz && cooling.value) return
-  if (isBuzz && !buzzAvailable.value) return
+  if (isBuzz ? (!inMatch.value || buzzCooling.value) : cooling.value) return
 
   sending.value = true
   open.value = false
   // Lock right away; undone below if the server refuses.
-  const turn = turnKey.value
-  if (isBuzz) store.markBuzzed(turn)
+  if (isBuzz) store.startBuzzCooldown()
   else store.startCooldown()
 
   const result = await props.sendEmote(emote)
   sending.value = false
   if (!result.ok) {
-    if (isBuzz) store.markBuzzed(null)
+    if (isBuzz) store.clearBuzzCooldown()
     else store.clearCooldown()
     audioStore.playSfx('error')
   }
@@ -168,7 +176,7 @@ function closeOnOutside(event: Event) {
   if (!root.value?.contains(event.target as Node)) open.value = false
 }
 
-watch(cooling, active => {
+watch(() => cooling.value || buzzCooling.value, active => {
   if (active && !ticker) {
     ticker = window.setInterval(() => { now.value = Date.now() }, 100)
   } else if (!active && ticker) {
@@ -177,7 +185,7 @@ watch(cooling, active => {
   }
 }, { immediate: true })
 
-watch(() => store.cooldownUntil, () => { now.value = Date.now() })
+watch(() => [store.cooldownUntil, store.buzzCooldownUntil], () => { now.value = Date.now() })
 
 onMounted(() => {
   document.addEventListener('pointerdown', closeOnOutside)
@@ -192,6 +200,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Fixed colours on purpose: the emotes look the same in every theme. */
 .emote-wheel {
   --fab: 58px;
   position: fixed;
@@ -210,10 +219,10 @@ onUnmounted(() => {
   height: 100%;
   padding: 7px;
   place-items: center;
-  border: 2px solid color-mix(in srgb, var(--piece-color, var(--accent-primary)) 75%, transparent);
+  border: 2px solid color-mix(in srgb, var(--piece-color, #22e8ff) 75%, transparent);
   border-radius: 50%;
   background: #1c1740;
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.85), 0 0 22px -6px var(--piece-color, var(--accent-primary));
+  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.85), 0 0 22px -6px var(--piece-color, #22e8ff);
   cursor: pointer;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
 }
@@ -229,37 +238,28 @@ onUnmounted(() => {
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
-.emote-wheel--cooling .emote-wheel__face { opacity: 0.35; filter: grayscale(0.8); }
+.emote-wheel--cooling .emote-wheel__toggle .emote-wheel__face { opacity: 0.4; filter: grayscale(0.8); }
 
-.emote-wheel__cooldown {
+/* Cooldown: a ring around the button that fills up as it recharges. */
+.emote-wheel__ring {
   position: absolute;
-  inset: -5px;
-  width: calc(100% + 10px);
-  height: calc(100% + 10px);
+  inset: -6px;
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
   transform: rotate(-90deg);
   pointer-events: none;
 }
 
-.emote-wheel__cooldown circle {
+.emote-wheel__ring circle {
   fill: none;
-  stroke: var(--piece-color, var(--accent-primary));
-  stroke-width: 2.4;
+  stroke: var(--piece-color, #22e8ff);
+  stroke-width: 2.6;
   stroke-linecap: round;
   stroke-dasharray: 1;
   transition: stroke-dashoffset 0.1s linear;
 }
 
-.emote-wheel__seconds {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
-  font-size: 19px;
-  font-weight: 700;
-  pointer-events: none;
-}
+.emote-wheel__item--buzz .emote-wheel__ring circle { stroke: #ffd43b; }
 
 .emote-wheel__fan {
   position: absolute;
@@ -307,17 +307,14 @@ onUnmounted(() => {
 
 .emote-wheel--open .emote-wheel__item:not(:disabled):hover,
 .emote-wheel--open .emote-wheel__item:not(:disabled):focus-visible {
-  border-color: var(--piece-color, var(--accent-primary));
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.85), 0 0 18px -2px var(--piece-color, var(--accent-primary));
+  border-color: var(--piece-color, #22e8ff);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.85), 0 0 18px -2px var(--piece-color, #22e8ff);
   transform: translate(var(--x), var(--y)) scale(1.18);
   transition-delay: 0s;
 }
 
-.emote-wheel--open .emote-wheel__item:disabled {
-  cursor: not-allowed;
-  filter: grayscale(1);
-  opacity: 0.4;
-}
+.emote-wheel__item--off { cursor: not-allowed; }
+.emote-wheel__item--off .emote-wheel__face { filter: grayscale(1); opacity: 0.38; }
 
 .emote-wheel__item--buzz {
   --size: 62px;
@@ -325,7 +322,14 @@ onUnmounted(() => {
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.85), 0 0 18px -4px #ffd43b;
 }
 
-.emote-wheel--open .emote-wheel__item--buzz { animation: emote-buzz-hint 1.6s ease-in-out 0.5s infinite; }
+.emote-wheel__item--buzz.emote-wheel__item--off {
+  border-color: rgba(255, 212, 59, 0.35);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.85);
+}
+
+.emote-wheel--open .emote-wheel__item--buzz:not(.emote-wheel__item--off) {
+  animation: emote-buzz-hint 1.6s ease-in-out 0.5s infinite;
+}
 
 @keyframes emote-buzz-hint {
   0%, 82%, 100% { rotate: 0deg; }

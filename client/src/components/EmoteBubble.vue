@@ -1,66 +1,101 @@
-<!-- The reaction a player just sent, popping out next to them. -->
+<!--
+  The reaction a player just sent, with their name under it.
+  - Default: pops out of whatever it is placed in (a player panel, a seat).
+  - `floating`: a free-standing card, used by EmoteStage on narrow screens.
+-->
 <template>
-  <Transition name="emote-pop">
-    <span
-      v-if="shown"
-      :key="shown.key"
-      class="emote-bubble"
-      :class="{ 'emote-bubble--buzz': shown.emote === 'buzz' }"
-      role="status"
-      :aria-label="label"
-    >
-      <TrikiEmote :emote="shown.emote" animated />
-    </span>
-  </Transition>
+  <span
+    class="emote-bubble"
+    :class="{ 'emote-bubble--buzz': emote === 'buzz', 'emote-bubble--floating': floating }"
+    :style="{ '--piece-color': color }"
+    role="status"
+    :aria-label="`${name}: ${label}`"
+  >
+    <span class="emote-bubble__face"><TrikiEmote :emote="emote" animated /></span>
+    <span class="emote-bubble__name">{{ name }}</span>
+  </span>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { PlayerSlot } from '@/types/socket'
-import { EMOTES, useEmoteStore } from '@/stores/emoteStore'
+import type { EmoteId, PlayerSlot } from '@/types/socket'
+import { EMOTES } from '@/stores/emoteStore'
+import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
 import TrikiEmote from './TrikiEmote.vue'
 
-const props = defineProps<{ slot: PlayerSlot }>()
-const store = useEmoteStore()
+const props = withDefaults(defineProps<{
+  slot: PlayerSlot
+  emote: EmoteId
+  floating?: boolean
+}>(), { floating: false })
 
-const shown = computed(() => store.shown[props.slot] ?? null)
-const label = computed(() => {
-  if (!shown.value) return ''
-  if (shown.value.emote === 'buzz') return 'Zumbido'
-  return EMOTES.find(emote => emote.id === shown.value?.emote)?.label ?? ''
-})
+const gameStore = useGameStore()
+const roomStore = useRoomStore()
+
+const name = computed(() =>
+  roomStore.players.find(player => player.slot === props.slot)?.username ?? `Jugador ${props.slot}`
+)
+const color = computed(() => gameStore.playerMeta[props.slot]?.color)
+const label = computed(() =>
+  props.emote === 'buzz' ? 'Zumbido' : EMOTES.find(emote => emote.id === props.emote)?.label ?? ''
+)
 </script>
 
 <style scoped>
+/* Fixed colours on purpose: the emotes look the same in every theme. */
 .emote-bubble {
   position: absolute;
-  top: -52px;
-  right: -20px;
+  top: -58px;
+  right: -22px;
   z-index: 30;
-  width: 92px;
-  height: 92px;
-  padding: 9px;
-  border: 2px solid color-mix(in srgb, var(--piece-color, var(--accent-primary)) 70%, transparent);
-  border-radius: 50% 50% 50% 12%;
-  background: #1c1740;
-  box-shadow: 0 10px 26px -8px rgba(0, 0, 0, 0.8), 0 0 22px -6px var(--piece-color, var(--accent-primary));
+  display: flex;
+  width: 96px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   pointer-events: none;
 }
 
-.emote-bubble--buzz {
+.emote-bubble--floating {
+  position: static;
+}
+
+.emote-bubble__face {
+  display: block;
+  width: 92px;
+  height: 92px;
+  padding: 9px;
+  border: 2px solid color-mix(in srgb, var(--piece-color, #22e8ff) 75%, transparent);
+  border-radius: 50%;
+  background: #1c1740;
+  box-shadow: 0 10px 26px -8px rgba(0, 0, 0, 0.8), 0 0 22px -6px var(--piece-color, #22e8ff);
+}
+
+.emote-bubble--buzz .emote-bubble__face {
   border-color: #ffd43b;
   box-shadow: 0 10px 26px -8px rgba(0, 0, 0, 0.8), 0 0 26px -2px #ffd43b;
 }
 
-.emote-pop-enter-active { animation: emote-pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.emote-pop-leave-active { animation: emote-pop-out 0.24s ease-in forwards; }
-
-@keyframes emote-pop-in {
-  0% { opacity: 0; transform: translateY(16px) scale(0.3) rotate(-18deg); }
-  100% { opacity: 1; transform: none; }
+.emote-bubble__name {
+  max-width: 120px;
+  padding: 2px 10px;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--piece-color, #22e8ff) 75%, transparent);
+  border-radius: 999px;
+  background: #1c1740;
+  color: #fff;
+  font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@keyframes emote-pop-out {
-  to { opacity: 0; transform: translateY(-12px) scale(0.6); }
+/* Narrow or upright screens: the panels may be off-screen, so EmoteStage
+   shows the reactions instead. */
+@media (max-width: 760px), (orientation: portrait) {
+  .emote-bubble:not(.emote-bubble--floating) { display: none; }
 }
 </style>

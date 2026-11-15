@@ -222,12 +222,12 @@
 }
 
 /* Emotes look the same in every theme, so they keep their round shapes. */
-:root[data-theme='pixel'] :is(.emote-wheel__toggle, .emote-wheel__item) {
+:root[data-theme='pixel'] :is(.emote-wheel__toggle, .emote-wheel__item, .emote-bubble__face) {
   border-radius: 50% !important;
 }
 
-:root[data-theme='pixel'] .emote-bubble {
-  border-radius: 50% 50% 50% 12% !important;
+:root[data-theme='pixel'] .emote-bubble__name {
+  border-radius: 999px !important;
 }
 
 :root[data-theme='pixel'] body {

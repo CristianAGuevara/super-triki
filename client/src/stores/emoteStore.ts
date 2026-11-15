@@ -6,6 +6,8 @@ import { useAudioStore } from './audioStore'
 
 /** Emotes are locked for this long after sending one. */
 export const EMOTE_COOLDOWN_MS = 5_000
+/** The buzz recharges on its own, slower clock. */
+export const BUZZ_COOLDOWN_MS = 20_000
 /** How long a reaction stays next to its player. */
 const SHOW_MS = 2_800
 const BUZZ_SHAKE_MS = 800
@@ -29,8 +31,7 @@ export const useEmoteStore = defineStore('emote', () => {
   const audioStore = useAudioStore()
   const shown = reactive<Partial<Record<PlayerSlot, ShownEmote>>>({})
   const cooldownUntil = ref(0)
-  /** Turn in which this player already buzzed (the buzz is gone until the next one). */
-  const buzzTurn = ref<string | null>(null)
+  const buzzCooldownUntil = ref(0)
   const timers = new Map<PlayerSlot, number>()
   let sequence = 0
   let shakeTimer: number | null = null
@@ -76,9 +77,22 @@ export const useEmoteStore = defineStore('emote', () => {
     cooldownUntil.value = 0
   }
 
-  function markBuzzed(turn: string | null) {
-    buzzTurn.value = turn
+  function startBuzzCooldown() {
+    buzzCooldownUntil.value = Date.now() + BUZZ_COOLDOWN_MS
   }
 
-  return { shown, cooldownUntil, buzzTurn, receive, startCooldown, clearCooldown, markBuzzed }
+  function clearBuzzCooldown() {
+    buzzCooldownUntil.value = 0
+  }
+
+  return {
+    shown,
+    cooldownUntil,
+    buzzCooldownUntil,
+    receive,
+    startCooldown,
+    clearCooldown,
+    startBuzzCooldown,
+    clearBuzzCooldown,
+  }
 })

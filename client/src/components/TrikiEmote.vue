@@ -89,8 +89,9 @@
       </g>
 
       <g v-else-if="emote === 'love'">
-        <path class="triki__heart triki__heart--eye" transform="translate(27 49) scale(0.75)" :d="HEART" />
-        <path class="triki__heart triki__heart--eye" transform="translate(55 49) scale(0.75)" :d="HEART" />
+        <!-- The <g> places each eye; the path inside is what beats. -->
+        <g transform="translate(27 49) scale(0.75)"><path class="triki__heart triki__heart--eye" :d="HEART" /></g>
+        <g transform="translate(55 49) scale(0.75)"><path class="triki__heart triki__heart--eye" :d="HEART" /></g>
         <path class="triki__line" d="M42 71q4 5 8 0q4 5 8 0" />
       </g>
 

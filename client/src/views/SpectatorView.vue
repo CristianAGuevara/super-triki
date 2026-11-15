@@ -1,6 +1,7 @@
 <template>
   <div class="spectator">
     <WinCinematic v-if="gameStore.cinematicActive" @done="gameStore.finishCinematic()" />
+    <EmoteStage />
     <header class="spectator__header">
       <div class="spectator__identity">
         <span class="spectator__eyebrow">
@@ -83,6 +84,7 @@ import PlayerPanel from '@/components/PlayerPanel.vue'
 import Scoreboard from '@/components/Scoreboard.vue'
 import MatchClocks from '@/components/MatchClocks.vue'
 import WinCinematic from '@/components/WinCinematic.vue'
+import EmoteStage from '@/components/EmoteStage.vue'
 
 const route = useRoute()
 const router = useRouter()

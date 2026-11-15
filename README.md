@@ -92,9 +92,14 @@ vuelve a funcionar hasta la siguiente flecha.
 En la sala y durante la partida hay un botón flotante que abre un semicírculo
 de reacciones interpretadas por **Triki**, la mascota del juego: feliz,
 enamorado, cool, dormido, llorando y enojado. Al enviar una, todas quedan
-bloqueadas 5 segundos. El **zumbido** solo existe durante la partida, se puede
-usar una vez por turno (desaparece hasta el siguiente) y hace temblar la
-pantalla de los demás jugadores. El servidor aplica ambos límites.
+bloqueadas 5 segundos. El **zumbido** hace temblar la pantalla de los demás
+jugadores; solo funciona durante la partida (en la sala de espera aparece
+desactivado) y se recarga en 20 segundos. Las recargas se muestran como un
+anillo que se va llenando, y el servidor aplica ambos límites.
+
+Cada reacción aparece con el nombre de quien la envió: junto a su panel en
+pantallas anchas, y en una franja fija arriba en móvil o pantalla vertical,
+donde varias reacciones a la vez se colocan una al lado de la otra.
 
 ## Torneos
 

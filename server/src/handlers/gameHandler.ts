@@ -208,8 +208,9 @@ const EMOTE_COOLDOWN_MS = 5_000
 /** Slack for network jitter, so a client that waited its 5 s isn't refused. */
 const EMOTE_COOLDOWN_SLACK_MS = 400
 const emoteLastSentAt = new Map<string, number>()
-/** Turn in which each player last buzzed: one buzz per turn. */
-const buzzLastTurn = new Map<string, string>()
+/** The buzz recharges on its own, slower clock. */
+const BUZZ_COOLDOWN_MS = 20_000
+const buzzLastSentAt = new Map<string, number>()
 
 function isEmoteId(value: unknown): value is EmoteId {
   return typeof value === 'string' && (EMOTE_IDS as readonly string[]).includes(value)
@@ -220,7 +221,7 @@ function pruneEmoteLimits(now: number) {
   for (const [key, at] of emoteLastSentAt) {
     if (now - at > 60_000) {
       emoteLastSentAt.delete(key)
-      buzzLastTurn.delete(key)
+      buzzLastSentAt.delete(key)
     }
   }
 }
@@ -580,12 +581,14 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         ack({ ok: false, error: 'El zumbido solo se usa durante la partida' })
         return
       }
-      const turn = `${room.roundNumber}:${room.game.turnNumber}`
-      if (buzzLastTurn.get(key) === turn) {
-        ack({ ok: false, error: 'Ya usaste el zumbido en este turno' })
+      const lastBuzz = buzzLastSentAt.get(key) ?? 0
+      if (now - lastBuzz < BUZZ_COOLDOWN_MS - EMOTE_COOLDOWN_SLACK_MS) {
+        ack({ ok: false, error: 'El zumbido aún se está recargando' })
         return
       }
-      buzzLastTurn.set(key, turn)
+      buzzLastSentAt.set(key, now)
+      // Keeps the entry alive for pruning even if no other emote is sent.
+      if (!emoteLastSentAt.has(key)) emoteLastSentAt.set(key, 0)
     } else {
       const last = emoteLastSentAt.get(key) ?? 0
       if (now - last < EMOTE_COOLDOWN_MS - EMOTE_COOLDOWN_SLACK_MS) {

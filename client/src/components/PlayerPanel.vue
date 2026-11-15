@@ -8,7 +8,7 @@
     }"
     :style="{ '--accent': meta.color, '--piece-color': meta.color }"
   >
-    <EmoteBubble :slot="(player as PlayerSlot)" />
+    <EmoteAnchor :slot="(player as PlayerSlot)" />
     <div class="player-panel__header">
       <span class="player-panel__dot st-ring st-ring--medium" aria-hidden="true" />
       <span class="player-panel__name">{{ displayName }}</span>
@@ -68,7 +68,7 @@ import type { Player, Piece, Size, DragPayload } from '@/types/game'
 import { SIZE_ORDER } from '@/types/game'
 import type { PlayerSlot } from '@/types/socket'
 import { useGameStore } from '@/stores/gameStore'
-import EmoteBubble from './EmoteBubble.vue'
+import EmoteAnchor from './EmoteAnchor.vue'
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { vDraggable } from '@/directives/vDraggable'
