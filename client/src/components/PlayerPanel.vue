@@ -71,11 +71,16 @@
         @click="selectSize(size)"
       >
         <span class="mobile-piece__count">×{{ countOf(size) }}</span>
-        <span
-          class="mobile-piece__icon st-ring"
-          :class="[`st-ring--${size}`, `mobile-piece__icon--${size}`]"
-          :style="pieceColorStyle"
-        />
+        <span class="mobile-piece__icon-wrap">
+          <span
+            v-draggable="mobileDragPayload(size)"
+            class="mobile-piece__icon st-ring"
+            :class="[`st-ring--${size}`, `mobile-piece__icon--${size}`]"
+            :style="pieceColorStyle"
+            :title="`Arrastra una ficha ${SIZE_LABELS[size].toLowerCase()}`"
+            @pointerup="markTouchIconTap"
+          />
+        </span>
         <span class="mobile-piece__label">{{ SIZE_LABELS[size] }}</span>
       </button>
     </div>
@@ -151,17 +156,40 @@ const selectedSize = computed(() =>
   store.selectedPiece?.player === props.player ? store.selectedPiece?.size ?? null : null
 )
 
+let lastTouchIconTap = 0
+
+function firstPieceOf(size: Size): Piece | null {
+  return inventory.value.find(piece => piece.size === size) ?? null
+}
+
+function mobileDragPayload(size: Size): DragPayload {
+  const piece = firstPieceOf(size)
+  return {
+    pieceId: piece?.id ?? '',
+    player: props.player,
+    size,
+    source: 'inventory',
+    setIndex: 0,
+  }
+}
+
+function markTouchIconTap(event: PointerEvent) {
+  if (event.pointerType !== 'mouse') lastTouchIconTap = Date.now()
+}
+
 function isSelected(piece: Piece | null): boolean {
   return Boolean(piece && store.selectedPiece?.pieceId === piece.id)
 }
 
 function selectSize(size: Size) {
+  // The drag directive already handles taps on the piece itself.
+  if (Date.now() - lastTouchIconTap < 450) return
   if (!canDrag.value) return
   if (selectedSize.value === size) {
     store.clearSelection()
     return
   }
-  const piece = inventory.value.find(candidate => candidate.size === size)
+  const piece = firstPieceOf(size)
   if (!piece) return
   store.selectPiece({
     pieceId: piece.id,
@@ -280,6 +308,7 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 
 /* Mobile / portrait: three independent, large touch targets. */
 .player-panel__mobile-pieces {
+  --mobile-piece-large: clamp(46px, 17vw, 68px);
   display: none;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -289,11 +318,12 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 78px;
+  min-height: calc(var(--mobile-piece-large) + 34px);
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 9px 5px 7px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 5px 6px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--surface-raised) 66%, transparent);
@@ -308,24 +338,45 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   right: 7px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
+}
+
+.mobile-piece__icon-wrap {
+  display: grid;
+  width: 100%;
+  height: var(--mobile-piece-large);
+  place-items: center;
 }
 
 .mobile-piece__icon {
   flex: 0 0 auto;
+  cursor: grab;
+  touch-action: none;
 }
 
-.mobile-piece__icon--large { width: 27px; height: 27px; }
-.mobile-piece__icon--medium { width: 19px; height: 19px; }
-.mobile-piece__icon--small { width: 11px; height: 11px; }
+.mobile-piece__icon--large {
+  width: var(--mobile-piece-large);
+  height: var(--mobile-piece-large);
+}
+
+.mobile-piece__icon--medium {
+  width: calc(var(--mobile-piece-large) * 0.64);
+  height: calc(var(--mobile-piece-large) * 0.64);
+}
+
+.mobile-piece__icon--small {
+  width: calc(var(--mobile-piece-large) * 0.29);
+  height: calc(var(--mobile-piece-large) * 0.29);
+}
 
 .mobile-piece__label {
   overflow: hidden;
   max-width: 100%;
   color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -357,7 +408,7 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 
 @media (max-width: 700px), (orientation: portrait), (hover: none) and (pointer: coarse) {
   .player-panel__sets { display: none; }
-  .player-panel__keys { display: none; }
+  .player-panel .player-panel__keys { display: none; }
   .player-panel__mobile-pieces { display: grid; }
 }
 
