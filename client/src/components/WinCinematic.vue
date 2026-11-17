@@ -31,7 +31,10 @@
                 v-for="size in SIZE_ORDER"
                 :key="size"
                 class="cine__slot"
-                :class="`cine__slot--${size}`"
+                :class="[
+                  `cine__slot--${size}`,
+                  { 'cine__slot--last': isLast(r - 1, c - 1, size) },
+                ]"
               >
                 <span
                   v-if="pieceAt(r - 1, c - 1, size)"
@@ -535,6 +538,9 @@ onUnmounted(() => {
 .cine__slot--large { width: 69%; height: 69%; }
 .cine__slot--medium { width: 44%; height: 44%; }
 .cine__slot--small { width: 20%; height: 20%; }
+
+/* The piece that just landed must fly above the dimmed pieces already there. */
+.cine__slot--last { z-index: 5; }
 
 .cine__piece {
   width: 100%;
