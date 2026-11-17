@@ -56,7 +56,7 @@
       <button
         v-for="size in SIZE_ORDER"
         :key="size"
-        v-draggable="mobileDragPayload(size)"
+        v-draggable.dragOnly="mobileDragPayload(size)"
         type="button"
         class="mobile-piece"
         :class="[
@@ -70,8 +70,11 @@
         :aria-pressed="selectedSize === size"
         :aria-label="`Ficha ${SIZE_LABELS[size].toLowerCase()}, ${countOf(size)} disponibles`"
         :title="`Toca para seleccionar o arrastra una ficha ${SIZE_LABELS[size].toLowerCase()}`"
-        @pointerup="markTouchButtonTap"
-        @click="selectSize(size)"
+        @pointerdown="beginButtonPress($event)"
+        @pointermove="trackButtonPress($event)"
+        @pointerup="finishButtonPress($event, size)"
+        @pointercancel="cancelButtonPress"
+        @click="selectFromClick(size)"
       >
         <span class="mobile-piece__count">×{{ countOf(size) }}</span>
         <span class="mobile-piece__icon-wrap">
@@ -158,7 +161,15 @@ const selectedSize = computed(() =>
   store.selectedPiece?.player === props.player ? store.selectedPiece?.size ?? null : null
 )
 
-let lastTouchButtonTap = 0
+interface ButtonPress {
+  pointerId: number
+  startX: number
+  startY: number
+  maxDistance: number
+}
+
+let buttonPress: ButtonPress | null = null
+let suppressClickUntil = 0
 
 function firstPieceOf(size: Size): Piece | null {
   return inventory.value.find(piece => piece.size === size) ?? null
@@ -175,8 +186,42 @@ function mobileDragPayload(size: Size): DragPayload {
   }
 }
 
-function markTouchButtonTap(event: PointerEvent) {
-  if (event.pointerType !== 'mouse') lastTouchButtonTap = Date.now()
+function beginButtonPress(event: PointerEvent) {
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  buttonPress = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    maxDistance: 0,
+  }
+}
+
+function trackButtonPress(event: PointerEvent) {
+  if (!buttonPress || buttonPress.pointerId !== event.pointerId) return
+  buttonPress.maxDistance = Math.max(
+    buttonPress.maxDistance,
+    Math.hypot(event.clientX - buttonPress.startX, event.clientY - buttonPress.startY),
+  )
+}
+
+function finishButtonPress(event: PointerEvent, size: Size) {
+  if (!buttonPress || buttonPress.pointerId !== event.pointerId) return
+  const movement = Math.max(
+    buttonPress.maxDistance,
+    Math.hypot(event.clientX - buttonPress.startX, event.clientY - buttonPress.startY),
+  )
+  buttonPress = null
+  suppressClickUntil = Date.now() + 500
+  if (movement < 8) selectSize(size)
+}
+
+function cancelButtonPress() {
+  buttonPress = null
+}
+
+function selectFromClick(size: Size) {
+  if (Date.now() < suppressClickUntil) return
+  selectSize(size)
 }
 
 function isSelected(piece: Piece | null): boolean {
@@ -184,8 +229,6 @@ function isSelected(piece: Piece | null): boolean {
 }
 
 function selectSize(size: Size) {
-  // The drag directive already handles touch taps on the whole button.
-  if (Date.now() - lastTouchButtonTap < 450) return
   if (!canDrag.value) return
   if (selectedSize.value === size) {
     store.clearSelection()

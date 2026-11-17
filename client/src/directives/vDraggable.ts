@@ -195,7 +195,7 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
               if (typeof navigator !== 'undefined') navigator.vibrate?.(10)
             }
           }
-        } else {
+        } else if (!binding.modifiers.dragOnly) {
           const store = useGameStore()
           const payload = resolveTapPayload(el, state.payload, event.clientX, event.clientY)
           if (store.selectedPiece?.pieceId === payload.pieceId) {
