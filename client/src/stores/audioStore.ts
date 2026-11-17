@@ -37,6 +37,8 @@ interface SfxOptions {
 const VOLUME_KEY = 'st_audio_volume'
 const MUTED_KEY = 'st_audio_muted'
 const MUSIC_KEY = 'st_audio_music'
+const MUSIC_VOLUME_KEY = 'st_audio_music_volume'
+const SFX_VOLUME_KEY = 'st_audio_sfx_volume'
 
 function storage(): Storage | null {
   try {
@@ -46,18 +48,30 @@ function storage(): Storage | null {
   }
 }
 
+function clampVolume(value: number, fallback = 0.6): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback
+}
+
 function readVolume(): number {
   const raw = storage()?.getItem(VOLUME_KEY)
   const stored = raw === null || raw === undefined ? NaN : Number(raw)
-  return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.6
+  return clampVolume(stored)
 }
 
-function readMuted(): boolean {
-  return storage()?.getItem(MUTED_KEY) === 'true'
+function readMusicVolume(): number {
+  const raw = storage()?.getItem(MUSIC_VOLUME_KEY)
+  if (raw !== null && raw !== undefined) return clampVolume(Number(raw))
+  // Migrate the old shared volume/mute controls.
+  if (storage()?.getItem(MUTED_KEY) === 'true') return 0
+  if (storage()?.getItem(MUSIC_KEY) === 'false') return 0
+  return readVolume()
 }
 
-function readMusic(): boolean {
-  return storage()?.getItem(MUSIC_KEY) !== 'false'
+function readSfxVolume(): number {
+  const raw = storage()?.getItem(SFX_VOLUME_KEY)
+  if (raw !== null && raw !== undefined) return clampVolume(Number(raw))
+  if (storage()?.getItem(MUTED_KEY) === 'true') return 0
+  return readVolume()
 }
 
 function save(key: string, value: string) {
@@ -80,14 +94,14 @@ const CHORDS = [
 const MELODY_SCALE = [587.33, 659.25, 739.99, 880.0, 987.77, 1174.66]
 const BEAT = 60 / 82
 const MUSIC_LEVEL = 0.62
-const MUSIC_DUCKED = 0.1
+const MUSIC_DUCK_RATIO = 0.16
+const SFX_LEVEL = 0.9
 /* D major, so the cinematic chimes sit in the music's key. */
 const CHIME_SCALE = [587.33, 739.99, 880.0, 1174.66, 1479.98, 1760.0]
 
 export const useAudioStore = defineStore('audio', () => {
-  const volume = ref(readVolume())
-  const muted = ref(readMuted())
-  const musicEnabled = ref(readMusic())
+  const musicVolume = ref(readMusicVolume())
+  const sfxVolume = ref(readSfxVolume())
   const musicPlaying = ref(false)
   /** 'chip' swaps every voice for square/triangle waves (pixel theme). */
   const style = ref<'soft' | 'chip'>('soft')
@@ -104,6 +118,7 @@ export const useAudioStore = defineStore('audio', () => {
   let musicTimer: number | null = null
   let musicBar = 0
   let nextBarTime = 0
+  let musicDucked = false
 
   function ensureAudio(): AudioContext | null {
     if (typeof window === 'undefined') return null
@@ -115,8 +130,9 @@ export const useAudioStore = defineStore('audio', () => {
     masterGain = context.createGain()
     musicGain = context.createGain()
     sfxGain = context.createGain()
-    musicGain.gain.value = MUSIC_LEVEL
-    sfxGain.gain.value = 0.9
+    masterGain.gain.value = 1
+    musicGain.gain.value = 0
+    sfxGain.gain.value = 0
 
     // A soft echo gives the music some room without a reverb impulse.
     const lowpass = context.createBiquadFilter()
@@ -143,36 +159,33 @@ export const useAudioStore = defineStore('audio', () => {
     const data = noiseBuffer.getChannelData(0)
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
 
-    syncVolume()
+    syncGains()
     return context
   }
 
-  function syncVolume() {
-    if (!masterGain || !context) return
-    masterGain.gain.setTargetAtTime(muted.value ? 0 : volume.value, context.currentTime, 0.02)
+  function musicLevel(): number {
+    const level = musicVolume.value * MUSIC_LEVEL
+    return musicDucked ? level * MUSIC_DUCK_RATIO : level
   }
 
-  function setVolume(value: number) {
-    volume.value = Math.min(1, Math.max(0, value))
-    if (volume.value > 0 && muted.value) muted.value = false
-    save(VOLUME_KEY, String(volume.value))
-    save(MUTED_KEY, String(muted.value))
-    syncVolume()
-    if (volume.value > 0) startMusic()
+  function syncGains() {
+    if (!context || !musicGain || !sfxGain) return
+    musicGain.gain.setTargetAtTime(musicLevel(), context.currentTime, 0.02)
+    sfxGain.gain.setTargetAtTime(sfxVolume.value * SFX_LEVEL, context.currentTime, 0.02)
   }
 
-  function toggleMute() {
-    muted.value = !muted.value
-    save(MUTED_KEY, String(muted.value))
-    syncVolume()
-    if (!muted.value) startMusic()
-  }
-
-  function toggleMusic() {
-    musicEnabled.value = !musicEnabled.value
-    save(MUSIC_KEY, String(musicEnabled.value))
-    if (musicEnabled.value) startMusic()
+  function setMusicVolume(value: number) {
+    musicVolume.value = clampVolume(value)
+    save(MUSIC_VOLUME_KEY, String(musicVolume.value))
+    syncGains()
+    if (musicVolume.value > 0) startMusic()
     else stopMusic()
+  }
+
+  function setSfxVolume(value: number) {
+    sfxVolume.value = clampVolume(value)
+    save(SFX_VOLUME_KEY, String(sfxVolume.value))
+    syncGains()
   }
 
   interface ToneSpec {
@@ -294,7 +307,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function startMusic() {
-    if (!musicEnabled.value || muted.value) return
+    if (musicVolume.value <= 0) return
     const audio = ensureAudio()
     if (!audio) return
     void audio.resume()
@@ -306,8 +319,9 @@ export const useAudioStore = defineStore('audio', () => {
 
   /** Lower the music while a cinematic plays its own score. */
   function duckMusic(ducked: boolean) {
+    musicDucked = ducked
     if (!musicGain || !context) return
-    musicGain.gain.setTargetAtTime(ducked ? MUSIC_DUCKED : MUSIC_LEVEL, context.currentTime, ducked ? 0.08 : 0.6)
+    musicGain.gain.setTargetAtTime(musicLevel(), context.currentTime, ducked ? 0.08 : 0.6)
   }
 
   /** Short brass-like stab: sawtooth through a closing lowpass. */
@@ -350,8 +364,9 @@ export const useAudioStore = defineStore('audio', () => {
   /* ── Effects ───────────────────────────────────────────────────── */
 
   function playSfx(name: SfxName, options: SfxOptions = {}) {
+    if (sfxVolume.value <= 0) return
     const audio = ensureAudio()
-    if (!audio || muted.value || !sfxGain) return
+    if (!audio || !sfxGain) return
     const dest = sfxGain
     void audio.resume()
     const pitch = options.size ? SIZE_PITCH[options.size] : 1
@@ -505,15 +520,13 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   return {
-    volume,
-    muted,
-    musicEnabled,
+    musicVolume,
+    sfxVolume,
     musicPlaying,
     style,
     setStyle,
-    setVolume,
-    toggleMute,
-    toggleMusic,
+    setMusicVolume,
+    setSfxVolume,
     startMusic,
     stopMusic,
     duckMusic,

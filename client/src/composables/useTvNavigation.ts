@@ -297,6 +297,13 @@ export function useTvNavigation() {
     const active = document.activeElement
     if (isTextEntry(active) && caretBlocks(active, direction)) return
 
+    // Vertical volume sliders use Up/Down natively; Left/Right leaves them.
+    if (active instanceof HTMLInputElement &&
+        active.type === 'range' &&
+        (direction === 'up' || direction === 'down')) {
+      return
+    }
+
     // Always consumed, so the browser never scrolls the page instead.
     event.preventDefault()
     event.stopPropagation()

@@ -47,50 +47,102 @@
         TV · OK
       </span>
 
-      <div class="audio-control" role="group" aria-label="Sonido">
+      <div
+        ref="audioControlsRoot"
+        class="audio-controls"
+        role="group"
+        aria-label="Audio"
+        @focusout="handleAudioFocusOut"
+      >
         <button
+          type="button"
           class="icon-btn"
-          :class="{ 'icon-btn--off': !audioStore.musicEnabled }"
-          :aria-pressed="audioStore.musicEnabled"
-          :aria-label="audioStore.musicEnabled ? 'Apagar música' : 'Encender música'"
-          :title="audioStore.musicEnabled ? 'Apagar música' : 'Encender música'"
-          @click="toggleMusic"
+          :class="{
+            'icon-btn--off': audioStore.musicVolume <= 0,
+            'icon-btn--active': musicPanelOpen,
+          }"
+          :aria-expanded="musicPanelOpen"
+          aria-label="Ajustar volumen de música"
+          title="Volumen de música"
+          @click="toggleAudioPanel('music')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 18V5l11-2v13" />
             <circle cx="6" cy="18" r="3" />
             <circle cx="17" cy="16" r="3" />
-            <path v-if="!audioStore.musicEnabled" d="M3 3l18 18" class="icon-btn__slash" />
+            <path v-if="audioStore.musicVolume <= 0" d="M3 3l18 18" class="icon-btn__slash" />
           </svg>
         </button>
         <button
+          type="button"
           class="icon-btn"
-          :class="{ 'icon-btn--off': audioStore.muted }"
-          :aria-label="audioStore.muted ? 'Activar sonido' : 'Silenciar sonido'"
-          :title="audioStore.muted ? 'Activar sonido' : 'Silenciar sonido'"
-          @click="audioStore.toggleMute"
+          :class="{
+            'icon-btn--off': audioStore.sfxVolume <= 0,
+            'icon-btn--active': sfxPanelOpen,
+          }"
+          :aria-expanded="sfxPanelOpen"
+          aria-label="Ajustar volumen de efectos"
+          title="Volumen de efectos"
+          @click="toggleAudioPanel('sfx')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M11 5 6 9H3v6h3l5 4V5z" />
-            <template v-if="!audioStore.muted">
+            <template v-if="audioStore.sfxVolume > 0">
               <path d="M15.5 8.5a5 5 0 0 1 0 7" />
               <path d="M18.5 5.5a9 9 0 0 1 0 13" />
             </template>
             <path v-else d="m16 9 5 6m0-6-5 6" />
           </svg>
         </button>
-        <input
-          class="audio-control__range"
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          :value="audioStore.muted ? 0 : audioStore.volume"
-          :style="{ '--fill': `${(audioStore.muted ? 0 : audioStore.volume) * 100}%` }"
-          aria-label="Volumen"
-          data-tv-skip
-          @input="setVolume"
-        />
+
+        <Transition name="audio-panel">
+          <div
+            v-if="musicPanelOpen || sfxPanelOpen"
+            class="audio-panel"
+            :class="{
+              'audio-panel--music': musicPanelOpen && !sfxPanelOpen,
+              'audio-panel--sfx': !musicPanelOpen && sfxPanelOpen,
+              'audio-panel--both': musicPanelOpen && sfxPanelOpen,
+            }"
+            role="group"
+            aria-label="Volúmenes de audio"
+          >
+            <div v-if="musicPanelOpen" class="audio-mixer audio-mixer--music">
+              <span class="audio-mixer__label">Música</span>
+              <div class="audio-mixer__slider">
+                <input
+                  class="audio-mixer__range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  :value="audioStore.musicVolume"
+                  :style="{ '--fill': `${audioStore.musicVolume * 100}%` }"
+                  aria-label="Volumen de música"
+                  @input="changeMusicVolume"
+                />
+              </div>
+              <span class="audio-mixer__value">{{ volumePercent(audioStore.musicVolume) }}%</span>
+            </div>
+            <div v-if="sfxPanelOpen" class="audio-mixer audio-mixer--sfx">
+              <span class="audio-mixer__label">Efectos</span>
+              <div class="audio-mixer__slider">
+                <input
+                  class="audio-mixer__range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  :value="audioStore.sfxVolume"
+                  :style="{ '--fill': `${audioStore.sfxVolume * 100}%` }"
+                  aria-label="Volumen de efectos"
+                  @input="changeSfxVolume"
+                />
+              </div>
+              <span class="audio-mixer__value">{{ volumePercent(audioStore.sfxVolume) }}%</span>
+            </div>
+          </div>
+        </Transition>
       </div>
 
       <div ref="themeMenuRoot" class="theme-picker">
@@ -462,6 +514,9 @@ socket.io.on('reconnect_attempt', handleReconnectAttempt)
 
 const themeMenuOpen = ref(false)
 const themeMenuRoot = ref<HTMLElement | null>(null)
+const audioControlsRoot = ref<HTMLElement | null>(null)
+const musicPanelOpen = ref(false)
+const sfxPanelOpen = ref(false)
 
 function toggleThemeMenu() {
   audioStore.playSfx('click')
@@ -486,19 +541,50 @@ function closeThemeMenuOnOutside(event: Event) {
   if (!themeMenuRoot.value?.contains(event.target as Node)) themeMenuOpen.value = false
 }
 
-function toggleMusic() {
-  audioStore.toggleMusic()
+function toggleAudioPanel(panel: 'music' | 'sfx') {
   audioStore.playSfx('click')
+  if (panel === 'music') musicPanelOpen.value = !musicPanelOpen.value
+  else sfxPanelOpen.value = !sfxPanelOpen.value
+}
+
+function closeAudioPanels() {
+  musicPanelOpen.value = false
+  sfxPanelOpen.value = false
+}
+
+function closeAudioPanelsOnOutside(event: Event) {
+  if (!musicPanelOpen.value && !sfxPanelOpen.value) return
+  if (event instanceof KeyboardEvent) {
+    if (event.key === 'Escape') closeAudioPanels()
+    return
+  }
+  if (tvStore.enabled && tvStore.inputMode === 'dpad') return
+  if (!audioControlsRoot.value?.contains(event.target as Node)) closeAudioPanels()
+}
+
+function handleAudioFocusOut(event: FocusEvent) {
+  if (!musicPanelOpen.value && !sfxPanelOpen.value) return
+  const next = event.relatedTarget as Node | null
+  if (next && audioControlsRoot.value?.contains(next)) return
+  closeAudioPanels()
+}
+
+function changeMusicVolume(event: Event) {
+  audioStore.setMusicVolume(Number((event.target as HTMLInputElement).value))
+}
+
+function changeSfxVolume(event: Event) {
+  audioStore.setSfxVolume(Number((event.target as HTMLInputElement).value))
+}
+
+function volumePercent(value: number): number {
+  return Math.round(value * 100)
 }
 
 function activateAudio() {
   audioStore.startMusic()
   window.removeEventListener('pointerdown', activateAudio)
   window.removeEventListener('keydown', activateAudio)
-}
-
-function setVolume(event: Event) {
-  audioStore.setVolume(Number((event.target as HTMLInputElement).value))
 }
 
 onMounted(() => {
@@ -517,6 +603,8 @@ onMounted(() => {
   window.addEventListener('keydown', activateAudio)
   document.addEventListener('pointerdown', closeThemeMenuOnOutside)
   document.addEventListener('keydown', closeThemeMenuOnOutside)
+  document.addEventListener('pointerdown', closeAudioPanelsOnOutside)
+  document.addEventListener('keydown', closeAudioPanelsOnOutside)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
@@ -533,6 +621,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', activateAudio)
   document.removeEventListener('pointerdown', closeThemeMenuOnOutside)
   document.removeEventListener('keydown', closeThemeMenuOnOutside)
+  document.removeEventListener('pointerdown', closeAudioPanelsOnOutside)
+  document.removeEventListener('keydown', closeAudioPanelsOnOutside)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
@@ -735,11 +825,12 @@ onUnmounted(() => {
 .tv-hint-enter-from,
 .tv-hint-leave-to { opacity: 0; transform: translate(-50%, 10px); }
 
-.audio-control {
+.audio-controls {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px 10px 3px 3px;
+  padding: 3px;
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   background: var(--surface-muted);
@@ -762,6 +853,112 @@ onUnmounted(() => {
 .icon-btn:hover { background: var(--control-hover); color: var(--text-primary); }
 .icon-btn:active { transform: scale(0.9); }
 .icon-btn--off { color: var(--text-faint); }
+.icon-btn--active {
+  background: var(--control-hover);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+}
+
+.audio-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 11px 10px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card), 0 20px 45px -18px rgba(0, 0, 0, 0.66);
+  transform: translateX(-50%);
+}
+
+.audio-panel--music { left: 27%; }
+.audio-panel--sfx { left: 73%; }
+.audio-panel--both { left: 50%; }
+
+.audio-mixer {
+  --audio-color: var(--accent-primary);
+  display: flex;
+  width: 52px;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.audio-mixer--sfx { --audio-color: var(--accent-secondary); }
+
+.audio-mixer__label {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.audio-mixer__slider {
+  display: grid;
+  width: 44px;
+  height: 112px;
+  place-items: center;
+}
+
+.audio-mixer__range {
+  --fill: 60%;
+  width: 112px;
+  height: 44px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  transform: rotate(-90deg);
+}
+
+.audio-mixer__range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--audio-color) var(--fill), var(--line-strong) var(--fill));
+}
+
+.audio-mixer__range::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  appearance: none;
+  border: 2px solid var(--surface-raised);
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+
+.audio-mixer__range::-moz-range-track {
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--audio-color) var(--fill), var(--line-strong) var(--fill));
+}
+
+.audio-mixer__range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--surface-raised);
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+
+.audio-mixer__value {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.audio-panel-enter-active,
+.audio-panel-leave-active { transition: opacity 0.16s ease; }
+.audio-panel-enter-from,
+.audio-panel-leave-to { opacity: 0; }
 
 .icon-btn svg {
   width: 19px;
@@ -853,39 +1050,10 @@ onUnmounted(() => {
 .theme-menu-enter-active, .theme-menu-leave-active { transition: opacity 0.18s ease, transform 0.25s var(--ease-spring); transform-origin: top right; }
 .theme-menu-enter-from, .theme-menu-leave-to { opacity: 0; transform: translateY(-6px) scale(0.96); }
 
-.audio-control__range {
-  --fill: 60%;
-  width: 72px;
-  height: 4px;
-  margin-left: 4px;
-  appearance: none;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent-primary) var(--fill), var(--line-strong) var(--fill));
-  cursor: pointer;
-}
-
-.audio-control__range::-webkit-slider-thumb {
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--text-primary);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-}
-
-.audio-control__range::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--text-primary);
-}
-
 @media (max-width: 560px) {
   .app-logo__tagline { display: none; }
   .header-tools { gap: 6px; }
-  .audio-control { padding-right: 3px; }
-  .audio-control__range { display: none; }
+  .audio-controls { padding: 3px; }
 }
 
 @media (max-width: 360px) {
