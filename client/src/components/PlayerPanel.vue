@@ -56,6 +56,7 @@
       <button
         v-for="size in SIZE_ORDER"
         :key="size"
+        v-draggable="mobileDragPayload(size)"
         type="button"
         class="mobile-piece"
         :class="[
@@ -68,17 +69,18 @@
         :disabled="!canDrag || countOf(size) === 0"
         :aria-pressed="selectedSize === size"
         :aria-label="`Ficha ${SIZE_LABELS[size].toLowerCase()}, ${countOf(size)} disponibles`"
+        :title="`Toca para seleccionar o arrastra una ficha ${SIZE_LABELS[size].toLowerCase()}`"
+        @pointerup="markTouchButtonTap"
         @click="selectSize(size)"
       >
         <span class="mobile-piece__count">×{{ countOf(size) }}</span>
         <span class="mobile-piece__icon-wrap">
           <span
-            v-draggable="mobileDragPayload(size)"
             class="mobile-piece__icon st-ring"
             :class="[`st-ring--${size}`, `mobile-piece__icon--${size}`]"
             :style="pieceColorStyle"
-            :title="`Arrastra una ficha ${SIZE_LABELS[size].toLowerCase()}`"
-            @pointerup="markTouchIconTap"
+            data-drag-preview
+            aria-hidden="true"
           />
         </span>
         <span class="mobile-piece__label">{{ SIZE_LABELS[size] }}</span>
@@ -156,7 +158,7 @@ const selectedSize = computed(() =>
   store.selectedPiece?.player === props.player ? store.selectedPiece?.size ?? null : null
 )
 
-let lastTouchIconTap = 0
+let lastTouchButtonTap = 0
 
 function firstPieceOf(size: Size): Piece | null {
   return inventory.value.find(piece => piece.size === size) ?? null
@@ -173,8 +175,8 @@ function mobileDragPayload(size: Size): DragPayload {
   }
 }
 
-function markTouchIconTap(event: PointerEvent) {
-  if (event.pointerType !== 'mouse') lastTouchIconTap = Date.now()
+function markTouchButtonTap(event: PointerEvent) {
+  if (event.pointerType !== 'mouse') lastTouchButtonTap = Date.now()
 }
 
 function isSelected(piece: Piece | null): boolean {
@@ -182,8 +184,8 @@ function isSelected(piece: Piece | null): boolean {
 }
 
 function selectSize(size: Size) {
-  // The drag directive already handles taps on the piece itself.
-  if (Date.now() - lastTouchIconTap < 450) return
+  // The drag directive already handles touch taps on the whole button.
+  if (Date.now() - lastTouchButtonTap < 450) return
   if (!canDrag.value) return
   if (selectedSize.value === size) {
     store.clearSelection()
@@ -328,18 +330,23 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--surface-raised) 66%, transparent);
   color: var(--text-secondary);
-  cursor: pointer;
+  cursor: grab;
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s var(--ease-spring);
 }
 
 .mobile-piece__count {
   position: absolute;
   top: 5px;
-  right: 7px;
-  color: var(--text-muted);
+  right: 6px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line-soft));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.15;
 }
 
 .mobile-piece__icon-wrap {
@@ -351,8 +358,8 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 
 .mobile-piece__icon {
   flex: 0 0 auto;
+  pointer-events: none;
   cursor: grab;
-  touch-action: none;
 }
 
 .mobile-piece__icon--large {
@@ -393,6 +400,11 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
 .mobile-piece:disabled {
   cursor: default;
   opacity: 0.68;
+}
+
+.mobile-piece.dragging {
+  cursor: grabbing;
+  opacity: 0.45;
 }
 
 .mobile-piece.mobile-piece--out { opacity: 0.35; }

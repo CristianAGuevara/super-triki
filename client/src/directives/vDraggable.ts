@@ -45,8 +45,9 @@ function syncDraggable(el: HTMLElement, payload: DragPayload): void {
 }
 
 function createPreview(el: HTMLElement, event: PointerEvent): HTMLElement {
-  const bounds = el.getBoundingClientRect()
-  const preview = el.cloneNode(true) as HTMLElement
+  const previewSource = el.querySelector<HTMLElement>('[data-drag-preview]') ?? el
+  const bounds = previewSource.getBoundingClientRect()
+  const preview = previewSource.cloneNode(true) as HTMLElement
   preview.removeAttribute('draggable')
   preview.classList.add('drag-preview')
   preview.style.position = 'fixed'
@@ -125,7 +126,14 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
           return
         }
         e.dataTransfer?.setData('application/json', JSON.stringify(state.payload))
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move'
+          const dragImage = el.querySelector<HTMLElement>('[data-drag-preview]')
+          if (dragImage) {
+            const rect = dragImage.getBoundingClientRect()
+            e.dataTransfer.setDragImage(dragImage, rect.width / 2, rect.height / 2)
+          }
+        }
         requestAnimationFrame(() => el.classList.add('dragging'))
         useGameStore().setDragState(state.payload)
       },
