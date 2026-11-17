@@ -52,6 +52,34 @@
       </div>
     </div>
 
+    <div class="player-panel__mobile-pieces" role="group" aria-label="Fichas disponibles">
+      <button
+        v-for="size in SIZE_ORDER"
+        :key="size"
+        type="button"
+        class="mobile-piece"
+        :class="[
+          `mobile-piece--${size}`,
+          {
+            'mobile-piece--selected': selectedSize === size,
+            'mobile-piece--out': countOf(size) === 0,
+          },
+        ]"
+        :disabled="!canDrag || countOf(size) === 0"
+        :aria-pressed="selectedSize === size"
+        :aria-label="`Ficha ${SIZE_LABELS[size].toLowerCase()}, ${countOf(size)} disponibles`"
+        @click="selectSize(size)"
+      >
+        <span class="mobile-piece__count">×{{ countOf(size) }}</span>
+        <span
+          class="mobile-piece__icon st-ring"
+          :class="[`st-ring--${size}`, `mobile-piece__icon--${size}`]"
+          :style="pieceColorStyle"
+        />
+        <span class="mobile-piece__label">{{ SIZE_LABELS[size] }}</span>
+      </button>
+    </div>
+
     <div v-if="isMe && canDrag && showShortcuts" class="player-panel__keys" aria-hidden="true">
       <span v-for="(size, index) in SIZE_ORDER" :key="size" :class="{ 'is-out': countOf(size) === 0 }">
         <kbd class="st-kbd">{{ index + 1 }}</kbd>
@@ -119,8 +147,28 @@ function isStackEmpty(i: number): boolean {
   return !pieceOfSet('large', i) && !pieceOfSet('medium', i) && !pieceOfSet('small', i)
 }
 
+const selectedSize = computed(() =>
+  store.selectedPiece?.player === props.player ? store.selectedPiece?.size ?? null : null
+)
+
 function isSelected(piece: Piece | null): boolean {
   return Boolean(piece && store.selectedPiece?.pieceId === piece.id)
+}
+
+function selectSize(size: Size) {
+  if (!canDrag.value) return
+  if (selectedSize.value === size) {
+    store.clearSelection()
+    return
+  }
+  const piece = inventory.value.find(candidate => candidate.size === size)
+  if (!piece) return
+  store.selectPiece({
+    pieceId: piece.id,
+    player: piece.player,
+    size: piece.size,
+    source: 'inventory',
+  })
 }
 
 function dragPayload(piece: Piece, setIndex: number): DragPayload {
@@ -228,6 +276,89 @@ function dragPayload(piece: Piece, setIndex: number): DragPayload {
   gap: calc(var(--stack) * 0.16);
   align-items: center;
   justify-content: center;
+}
+
+/* Mobile / portrait: three independent, large touch targets. */
+.player-panel__mobile-pieces {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mobile-piece {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 78px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--surface-raised) 66%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s var(--ease-spring);
+}
+
+.mobile-piece__count {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mobile-piece__icon {
+  flex: 0 0 auto;
+}
+
+.mobile-piece__icon--large { width: 27px; height: 27px; }
+.mobile-piece__icon--medium { width: 19px; height: 19px; }
+.mobile-piece__icon--small { width: 11px; height: 11px; }
+
+.mobile-piece__label {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-piece--selected {
+  border-color: color-mix(in srgb, var(--accent) 75%, var(--line-soft));
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: translateY(-1px);
+}
+
+.mobile-piece--selected .mobile-piece__count { color: var(--text-primary); }
+
+.mobile-piece:disabled {
+  cursor: default;
+  opacity: 0.68;
+}
+
+.mobile-piece.mobile-piece--out { opacity: 0.35; }
+
+.mobile-piece:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.mobile-piece:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line-soft));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-raised));
+}
+
+@media (max-width: 700px), (orientation: portrait), (hover: none) and (pointer: coarse) {
+  .player-panel__sets { display: none; }
+  .player-panel__keys { display: none; }
+  .player-panel__mobile-pieces { display: grid; }
 }
 
 /* Each stack is a fixed square where all rings are absolutely centered */
