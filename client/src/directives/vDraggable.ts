@@ -212,7 +212,9 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
         cleanupPointerDrag(el, state)
       },
       // Mouse: a plain click (no drag) selects the piece, like a tap.
+      // dragOnly targets own their tap/click handling to avoid double toggles.
       onClick: event => {
+        if (binding.modifiers.dragOnly) return
         if (state.lastPointerType !== 'mouse' || !isDragAllowed(state.payload)) return
         const store = useGameStore()
         const payload = resolveTapPayload(el, state.payload, event.clientX, event.clientY)
