@@ -12,18 +12,10 @@
     aria-hidden="true"
     focusable="false"
   >
-    <!-- Things floating around Triki -->
-    <g v-if="emote === 'sleepy'" class="triki__fx triki__zzz">
-      <text x="76" y="30" font-size="16">Z</text>
-      <text x="88" y="18" font-size="11">z</text>
-    </g>
+    <!-- Things floating behind Triki -->
     <g v-if="emote === 'love'" class="triki__fx triki__hearts">
       <path class="triki__heart" transform="translate(80 30) scale(0.5)" :d="HEART" />
       <path class="triki__heart" transform="translate(4 34) scale(0.38)" :d="HEART" />
-    </g>
-    <g v-if="emote === 'angry'" class="triki__fx triki__steam">
-      <path d="M10 44c-5-1-7-6-4-10M6 54c-4 1-7-2-6-6" />
-      <path d="M90 44c5-1 7-6 4-10M94 54c4 1 7-2 6-6" />
     </g>
     <g v-if="emote === 'cool'" class="triki__fx triki__sparkle">
       <path d="M89 30l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
@@ -109,6 +101,16 @@
         <path class="triki__line" d="M38 74l4-4 4 4 4-4 4 4 4-4 4 4" />
       </g>
 
+    </g>
+
+    <!-- Foreground effects: keep the doze and anger effects over the character. -->
+    <g v-if="emote === 'sleepy'" class="triki__fx triki__zzz">
+      <text x="76" y="30" font-size="16">Z</text>
+      <text x="88" y="18" font-size="11">z</text>
+    </g>
+    <g v-if="emote === 'angry'" class="triki__fx triki__steam">
+      <path d="M10 44c-5-1-7-6-4-10M6 54c-4 1-7-2-6-6" />
+      <path d="M90 44c5-1 7-6 4-10M94 54c4 1 7-2 6-6" />
     </g>
   </svg>
 </template>
