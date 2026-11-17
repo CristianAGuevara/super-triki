@@ -12,22 +12,6 @@
     aria-hidden="true"
     focusable="false"
   >
-    <!-- Things floating behind Triki -->
-    <g v-if="emote === 'love'" class="triki__fx triki__hearts">
-      <path class="triki__heart" transform="translate(80 30) scale(0.5)" :d="HEART" />
-      <path class="triki__heart" transform="translate(4 34) scale(0.38)" :d="HEART" />
-    </g>
-    <g v-if="emote === 'cool'" class="triki__fx triki__sparkle">
-      <path d="M89 30l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
-    </g>
-    <g v-if="emote === 'happy'" class="triki__fx triki__sparkle">
-      <path d="M90 34l1.500 4.500 4.500 1.500-4.500 1.500-1.500 4.500-1.500-4.500-4.500-1.500 4.500-1.500z" />
-      <path d="M9 36l1.200 3.600 3.600 1.200-3.600 1.200-1.200 3.600-1.200-3.600-3.600-1.200 3.600-1.200z" />
-    </g>
-    <g v-if="emote === 'buzz'" class="triki__fx triki__waves">
-      <path d="M9 40l-6 6 6 6-6 6 6 6M91 40l6 6-6 6 6 6-6 6" />
-    </g>
-
     <g class="triki__body">
       <!-- Hoodie -->
       <path class="triki__hoodie" d="M31 99c-1-13 6-20 19-20s20 7 19 20z" />
@@ -103,7 +87,21 @@
 
     </g>
 
-    <!-- Foreground effects: keep the doze and anger effects over the character. -->
+    <!-- Foreground effects: every emote's floating effect paints over Triki. -->
+    <g v-if="emote === 'love'" class="triki__fx triki__hearts">
+      <path class="triki__heart" transform="translate(80 30) scale(0.5)" :d="HEART" />
+      <path class="triki__heart" transform="translate(4 34) scale(0.38)" :d="HEART" />
+    </g>
+    <g v-if="emote === 'cool'" class="triki__fx triki__sparkle">
+      <path d="M89 30l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
+    </g>
+    <g v-if="emote === 'happy'" class="triki__fx triki__sparkle">
+      <path d="M90 34l1.500 4.500 4.500 1.500-4.500 1.500-1.500 4.500-1.500-4.500-4.500-1.500 4.500-1.500z" />
+      <path d="M9 36l1.200 3.600 3.600 1.200-3.600 1.200-1.200 3.600-1.200-3.600-3.600-1.200 3.600-1.200z" />
+    </g>
+    <g v-if="emote === 'buzz'" class="triki__fx triki__waves">
+      <path d="M9 40l-6 6 6 6-6 6 6 6M91 40l6 6-6 6 6 6-6 6" />
+    </g>
     <g v-if="emote === 'sleepy'" class="triki__fx triki__zzz">
       <text x="76" y="30" font-size="16">Z</text>
       <text x="88" y="18" font-size="11">z</text>
