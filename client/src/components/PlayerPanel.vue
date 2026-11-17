@@ -168,6 +168,7 @@ interface ButtonPress {
   maxDistance: number
 }
 
+const MOBILE_TAP_SLOP_PX = 32
 let buttonPress: ButtonPress | null = null
 let suppressClickUntil = 0
 
@@ -212,7 +213,7 @@ function finishButtonPress(event: PointerEvent, size: Size) {
   )
   buttonPress = null
   suppressClickUntil = Date.now() + 500
-  if (movement < 8) selectSize(size)
+  if (movement <= MOBILE_TAP_SLOP_PX) selectSize(size)
 }
 
 function cancelButtonPress() {

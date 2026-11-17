@@ -3,7 +3,7 @@ import type { DragPayload } from '@/types/game'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 
-const DRAG_THRESHOLD_PX = 8
+const DRAG_THRESHOLD_PX = 16
 
 function isDragAllowed(payload: DragPayload): boolean {
   const store     = useGameStore()
