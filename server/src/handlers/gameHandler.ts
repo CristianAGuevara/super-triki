@@ -1,7 +1,7 @@
 import type { Server, Socket } from 'socket.io'
 import type { ClientToServerEvents, EmoteId, GameMovePayload, ServerToClientEvents } from '../types/socket.js'
 import { EMOTE_IDS } from '../types/socket.js'
-import type { BotDifficulty, GameSettings, Size } from '../types/game.js'
+import type { GameSettings, Size } from '../types/game.js'
 import { DEFAULT_GAME_SETTINGS, isBotDifficulty, isPlayerColorId } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
 import type { RoomState } from '../rooms/RoomManager.js'
@@ -20,12 +20,15 @@ import {
   skipTurn,
   toSnapshot,
 } from '../engine/GameEngine.js'
-import { chooseBotMove } from '../bots/BotEngine.js'
+import type { RoomGameState } from '../engine/GameEngine.js'
+import { botThinkDelay, chooseBotEmote, chooseBotMove } from '../bots/BotEngine.js'
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>
 const turnTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const botTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const botEmoteLastSentAt = new Map<string, number>()
+const BOT_EMOTE_COOLDOWN_MS = 15_000
 
 function clearTurnTimer(roomId: string) {
   const timer = turnTimers.get(roomId)
@@ -97,16 +100,30 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
   }).catch(error => console.error('[game:timer-load]', error))
 }
 
-function botDelay(difficulty: BotDifficulty): number {
-  const base = difficulty === 'easy' ? 420
-    : difficulty === 'normal' ? 600
-      : difficulty === 'hard' ? 780 : 920
-  return base + Math.floor(Math.random() * 240)
-}
-
 function scheduleRoomAutomation(io: TypedServer, roomId: string) {
   scheduleTurnTimer(io, roomId)
   scheduleBotTurn(io, roomId)
+}
+
+function maybeSendBotEmote(
+  io: TypedServer,
+  roomId: string,
+  state: RoomGameState,
+  botSlot: 1 | 2 | 3 | 4,
+) {
+  const now = Date.now()
+  if (now - (botEmoteLastSentAt.get(roomId) ?? 0) < BOT_EMOTE_COOLDOWN_MS) return
+  const emote = chooseBotEmote(state, botSlot)
+  if (!emote) return
+
+  botEmoteLastSentAt.set(roomId, now)
+  if (botEmoteLastSentAt.size > 2_000) {
+    for (const [key, sentAt] of botEmoteLastSentAt) {
+      if (now - sentAt > 60_000) botEmoteLastSentAt.delete(key)
+    }
+  }
+  void emitRoomEvent(io, roomId, 'emote:show', { slot: botSlot, emote })
+    .catch(error => console.error('[bot:emote]', error))
 }
 
 function scheduleBotTurn(io: TypedServer, roomId: string) {
@@ -123,6 +140,12 @@ function scheduleBotTurn(io: TypedServer, roomId: string) {
     const expectedTurnNumber = game.turnNumber
     const expectedMoveNumber = game.moveNumber
     const difficulty = bot.botDifficulty ?? 'normal'
+    const baseDelay = botThinkDelay(difficulty)
+    const clockRemaining = clockRemainingForPlayer(game, expectedPlayer)
+    const delay = clockRemaining === null
+      ? baseDelay
+      : Math.min(baseDelay, Math.max(150, clockRemaining - 500))
+    maybeSendBotEmote(io, roomId, game, expectedPlayer)
     const timer = setTimeout(() => {
       void RoomManager.withRoomLock(roomId, async () => {
         const currentRoom = await RoomManager.getRoom(roomId)
@@ -175,7 +198,7 @@ function scheduleBotTurn(io: TypedServer, roomId: string) {
           scheduleRoomAutomation(io, roomId)
         }
       }).catch(error => console.error('[bot:move]', error))
-    }, botDelay(difficulty))
+    }, delay)
     botTimers.set(roomId, timer)
   }).catch(error => console.error('[bot:load]', error))
 }

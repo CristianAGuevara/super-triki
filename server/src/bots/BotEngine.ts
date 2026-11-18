@@ -1,6 +1,6 @@
 import type { Board, BotDifficulty, PlayerSlot, Size } from '../types/game.js'
 import { SIZE_ORDER } from '../types/game.js'
-import type { GameMovePayload } from '../types/socket.js'
+import type { EmoteId, GameMovePayload } from '../types/socket.js'
 import { getAllLines } from '../engine/boardUtils.js'
 import { activePlayers, applyMove, type RoomGameState } from '../engine/GameEngine.js'
 
@@ -29,6 +29,22 @@ const WIN_SCORE = 1_000_000
 const SEARCH_DEPTH = 2
 const SEARCH_DEADLINE_MS = 160
 const SEARCH_NODE_LIMIT = 12_000
+
+export const BOT_MAX_THINK_DELAY_MS = 5_000
+const BOT_DELAY_RANGES: Record<BotDifficulty, [number, number]> = {
+  easy: [450, 900],
+  normal: [900, 1_600],
+  hard: [1_600, 2_800],
+  expert: [2_800, 4_800],
+}
+
+export const BOT_EMOTE_BASE_CHANCE = 0.07
+export const BOT_EMOTE_CONFIDENT_CHANCE = 0.2
+export const BOT_EMOTE_STRUGGLING_CHANCE = 0.12
+const BOT_EMOTE_CONFIDENCE_THRESHOLD = 65
+const CONFIDENT_EMOTES: EmoteId[] = ['happy', 'cool', 'love']
+const STRUGGLING_EMOTES: EmoteId[] = ['sleepy', 'crying', 'angry']
+const NEUTRAL_EMOTES: EmoteId[] = ['cool', 'happy', 'sleepy']
 
 type Random = () => number
 
@@ -175,6 +191,40 @@ export function evaluateBotState(state: RoomGameState, bot: PlayerSlot): number 
     strongestOpponent = Math.max(strongestOpponent, scores[player] ?? 0)
   }
   return own - strongestOpponent * 1.12
+}
+
+/** Purely cosmetic timing: it does not influence move selection. */
+export function botThinkDelay(
+  difficulty: BotDifficulty,
+  random: Random = Math.random,
+): number {
+  const [min, max] = BOT_DELAY_RANGES[difficulty]
+  return Math.min(BOT_MAX_THINK_DELAY_MS, Math.round(min + random() * (max - min)))
+}
+
+/**
+ * Purely cosmetic and read-only: confidence never feeds back into move
+ * selection. A clear immediate win counts as "confident" even if the line
+ * evaluator has not fully priced the threat yet.
+ */
+export function chooseBotEmote(
+  state: RoomGameState,
+  bot: PlayerSlot,
+  random: Random = Math.random,
+): EmoteId | null {
+  const score = evaluateBotState(state, bot)
+  const hasImmediateWin = state.currentPlayer === bot && immediateWinningMoves(state, bot).length > 0
+  const confident = hasImmediateWin || score >= BOT_EMOTE_CONFIDENCE_THRESHOLD
+  const struggling = score <= -BOT_EMOTE_CONFIDENCE_THRESHOLD
+  const chance = confident
+    ? BOT_EMOTE_CONFIDENT_CHANCE
+    : struggling ? BOT_EMOTE_STRUGGLING_CHANCE : BOT_EMOTE_BASE_CHANCE
+
+  if (random() >= chance) return null
+  const pool = confident
+    ? CONFIDENT_EMOTES
+    : struggling ? STRUGGLING_EMOTES : NEUTRAL_EMOTES
+  return randomItem(pool, random)
 }
 
 function rankedMoves(

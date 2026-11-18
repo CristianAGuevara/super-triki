@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chooseBotMove } from '../src/bots/BotEngine.js'
+import {
+  BOT_MAX_THINK_DELAY_MS,
+  botThinkDelay,
+  chooseBotEmote,
+  chooseBotMove,
+} from '../src/bots/BotEngine.js'
 import {
   buildInitialGameState,
   validateMove,
@@ -21,6 +26,22 @@ function place(
   const [piece] = game.inventories[player].splice(index, 1)
   game.board[row][col][size] = piece
 }
+
+test('thinking pauses grow with difficulty and never exceed five seconds', () => {
+  const delays = BOT_DIFFICULTIES.map(difficulty => botThinkDelay(difficulty, () => 1))
+  assert.deepEqual(delays, [900, 1_600, 2_800, 4_800])
+  assert.ok(delays.every(delay => delay <= BOT_MAX_THINK_DELAY_MS))
+})
+
+test('bot emotes are sparse and confidence-aware', () => {
+  const game = buildInitialGameState(2)
+  assert.equal(chooseBotEmote(game, 1, () => 1), null)
+
+  place(game, 1, 'large', 0, 0)
+  place(game, 1, 'large', 0, 1)
+  const emote = chooseBotEmote(game, 1, () => 0)
+  assert.ok(emote && ['happy', 'cool', 'love'].includes(emote))
+})
 
 test('every difficulty returns a legal opening move', () => {
   for (const difficulty of BOT_DIFFICULTIES) {
