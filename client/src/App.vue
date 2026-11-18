@@ -901,6 +901,9 @@ onUnmounted(() => {
   position: relative;
   width: 44px;
   height: 112px;
+  /* Keep the page still while a finger drags the vertical volume control. */
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .audio-mixer__range {
@@ -914,6 +917,7 @@ onUnmounted(() => {
   appearance: none;
   background: transparent;
   cursor: pointer;
+  touch-action: none;
   transform: translate(-50%, -50%) rotate(-90deg);
 }
 
