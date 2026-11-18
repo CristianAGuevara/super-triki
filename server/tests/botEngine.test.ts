@@ -27,10 +27,17 @@ function place(
   game.board[row][col][size] = piece
 }
 
-test('thinking pauses grow with difficulty and never exceed five seconds', () => {
-  const delays = BOT_DIFFICULTIES.map(difficulty => botThinkDelay(difficulty, () => 1))
-  assert.deepEqual(delays, [900, 1_600, 2_800, 4_800])
-  assert.ok(delays.every(delay => delay <= BOT_MAX_THINK_DELAY_MS))
+test('thinking pauses grow with difficulty and board occupation', () => {
+  const emptyDelays = BOT_DIFFICULTIES.map(difficulty => botThinkDelay(difficulty, 0, () => 1))
+  const fullDelays = BOT_DIFFICULTIES.map(difficulty => botThinkDelay(difficulty, 27, () => 1))
+  assert.deepEqual(fullDelays, [2_400, 4_000, 6_000, 8_400])
+  assert.ok(fullDelays.every((delay, index) => delay > emptyDelays[index]))
+  assert.ok(fullDelays.every(delay => delay <= BOT_MAX_THINK_DELAY_MS))
+
+  let call = 0
+  const deepThink = [0, 1, 1]
+  const capped = botThinkDelay('expert', 27, () => deepThink[call++] ?? 1)
+  assert.equal(capped, BOT_MAX_THINK_DELAY_MS)
 })
 
 test('bot emotes are sparse and confidence-aware', () => {

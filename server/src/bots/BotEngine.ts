@@ -30,13 +30,22 @@ const SEARCH_DEPTH = 2
 const SEARCH_DEADLINE_MS = 160
 const SEARCH_NODE_LIMIT = 12_000
 
-export const BOT_MAX_THINK_DELAY_MS = 5_000
+export const BOT_MAX_THINK_DELAY_MS = 10_000
 const BOT_DELAY_RANGES: Record<BotDifficulty, [number, number]> = {
-  easy: [450, 900],
-  normal: [900, 1_600],
-  hard: [1_600, 2_800],
-  expert: [2_800, 4_800],
+  easy: [800, 1_600],
+  normal: [1_400, 2_800],
+  hard: [2_200, 4_200],
+  expert: [3_200, 6_000],
 }
+const BOT_BOARD_BONUS: Record<BotDifficulty, number> = {
+  easy: 800,
+  normal: 1_200,
+  hard: 1_800,
+  expert: 2_400,
+}
+const BOT_DEEP_THINK_CHANCE = 0.12
+const BOT_DEEP_THINK_BONUS: [number, number] = [800, 2_000]
+const BOT_BOARD_PIECES_MAX = 27
 
 export const BOT_EMOTE_BASE_CHANCE = 0.07
 export const BOT_EMOTE_CONFIDENT_CHANCE = 0.2
@@ -193,13 +202,36 @@ export function evaluateBotState(state: RoomGameState, bot: PlayerSlot): number 
   return own - strongestOpponent * 1.12
 }
 
+export function countBoardPieces(board: Board): number {
+  let count = 0
+  for (const row of board) {
+    for (const cell of row) {
+      for (const size of SIZE_ORDER) {
+        if (cell[size]) count++
+      }
+    }
+  }
+  return count
+}
+
 /** Purely cosmetic timing: it does not influence move selection. */
 export function botThinkDelay(
   difficulty: BotDifficulty,
+  piecesOnBoard: number,
   random: Random = Math.random,
 ): number {
   const [min, max] = BOT_DELAY_RANGES[difficulty]
-  return Math.min(BOT_MAX_THINK_DELAY_MS, Math.round(min + random() * (max - min)))
+  const progress = Math.max(0, Math.min(1, piecesOnBoard / BOT_BOARD_PIECES_MAX))
+  const deepThink = random() < BOT_DEEP_THINK_CHANCE
+  const base = min + random() * (max - min)
+  const boardBonus = BOT_BOARD_BONUS[difficulty] * progress
+  const extraThink = deepThink
+    ? BOT_DEEP_THINK_BONUS[0] + random() * (BOT_DEEP_THINK_BONUS[1] - BOT_DEEP_THINK_BONUS[0])
+    : 0
+  return Math.min(
+    BOT_MAX_THINK_DELAY_MS,
+    Math.round(base + boardBonus + extraThink),
+  )
 }
 
 /**

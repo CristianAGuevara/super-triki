@@ -21,7 +21,12 @@ import {
   toSnapshot,
 } from '../engine/GameEngine.js'
 import type { RoomGameState } from '../engine/GameEngine.js'
-import { botThinkDelay, chooseBotEmote, chooseBotMove } from '../bots/BotEngine.js'
+import {
+  botThinkDelay,
+  chooseBotEmote,
+  chooseBotMove,
+  countBoardPieces,
+} from '../bots/BotEngine.js'
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>
@@ -113,7 +118,13 @@ function maybeSendBotEmote(
 ) {
   const now = Date.now()
   if (now - (botEmoteLastSentAt.get(roomId) ?? 0) < BOT_EMOTE_COOLDOWN_MS) return
-  const emote = chooseBotEmote(state, botSlot)
+  let emote
+  try {
+    emote = chooseBotEmote(state, botSlot)
+  } catch (error) {
+    console.error('[bot:emote-choice]', error)
+    return
+  }
   if (!emote) return
 
   botEmoteLastSentAt.set(roomId, now)
@@ -140,7 +151,7 @@ function scheduleBotTurn(io: TypedServer, roomId: string) {
     const expectedTurnNumber = game.turnNumber
     const expectedMoveNumber = game.moveNumber
     const difficulty = bot.botDifficulty ?? 'normal'
-    const baseDelay = botThinkDelay(difficulty)
+    const baseDelay = botThinkDelay(difficulty, countBoardPieces(game.board))
     const clockRemaining = clockRemainingForPlayer(game, expectedPlayer)
     const delay = clockRemaining === null
       ? baseDelay

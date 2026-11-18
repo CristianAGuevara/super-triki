@@ -60,28 +60,50 @@
                 'lobby__player--offline': !p.connected && !p.isBot,
                 'lobby__player--bot': p.isBot,
                 'lobby__player--bot-host': p.isBot && isHost,
-                'lobby__player--configurable': p.isBot && isHost,
+                'lobby__player--bot-open': p.isBot && (
+                  isBotEditorOpen(p.slot, 'difficulty') || isBotEditorOpen(p.slot, 'color')
+                ),
               }"
               :style="{ '--piece-color': gameStore.playerMeta[p.slot]?.color }"
-              :role="p.isBot && isHost ? 'button' : undefined"
-              :tabindex="p.isBot && isHost ? 0 : undefined"
-              :title="p.isBot && isHost ? 'Cambiar dificultad del bot' : undefined"
-              @click="p.isBot && isHost ? cycleBotDifficulty(p) : undefined"
-              @keydown.enter.self.prevent="p.isBot && isHost ? cycleBotDifficulty(p) : undefined"
-              @keydown.space.self.prevent="p.isBot && isHost ? cycleBotDifficulty(p) : undefined"
+              @keydown.esc.stop="closeBotEditor(true)"
             >
               <template v-if="p.isBot">
                 <button
                   type="button"
                   class="lobby__avatar lobby__bot-ring st-ring st-ring--large"
-                  :class="{ 'lobby__bot-ring--busy': botBusySlot === p.slot }"
+                  :class="{
+                    'lobby__bot-ring--busy': botBusySlot === p.slot,
+                    'is-open': isBotEditorOpen(p.slot, 'color'),
+                  }"
                   :disabled="!isHost || botBusySlot === p.slot"
-                  :aria-label="`Cambiar color del bot ${botDifficultyLabel(p.botDifficulty)}`"
-                  title="Cambiar color del bot"
-                  @click.stop="cycleBotColor(p)"
-                />
-                <span class="lobby__player-name lobby__bot-name">{{ botDifficultyLabel(p.botDifficulty) }}</span>
-                <span class="lobby__tag lobby__tag--bot">Bot</span>
+                  :aria-label="isHost
+                    ? `Cambiar color del bot ${botDifficultyLabel(p.botDifficulty)}`
+                    : `Color del bot ${botDifficultyLabel(p.botDifficulty)}`"
+                  :aria-expanded="isBotEditorOpen(p.slot, 'color')"
+                  aria-haspopup="dialog"
+                  :title="isHost ? 'Cambiar color' : undefined"
+                  @click.stop="toggleBotEditor(p.slot, 'color', $event)"
+                >
+                  <span v-if="isHost" class="lobby__bot-ring-edit" aria-hidden="true" />
+                </button>
+                <div class="lobby__bot-copy">
+                  <span class="lobby__tag lobby__tag--bot">Bot</span>
+                  <button
+                    type="button"
+                    class="lobby__bot-difficulty"
+                    :class="{ 'is-open': isBotEditorOpen(p.slot, 'difficulty') }"
+                    :disabled="!isHost || botBusySlot === p.slot"
+                    :aria-label="isHost
+                      ? `Dificultad ${botDifficultyLabel(p.botDifficulty)}. Cambiar dificultad`
+                      : `Dificultad ${botDifficultyLabel(p.botDifficulty)}`"
+                    :aria-expanded="isBotEditorOpen(p.slot, 'difficulty')"
+                    aria-haspopup="menu"
+                    @click.stop="toggleBotEditor(p.slot, 'difficulty', $event)"
+                  >
+                    {{ botDifficultyLabel(p.botDifficulty) }}
+                    <span v-if="isHost" class="lobby__bot-chevron" aria-hidden="true">▾</span>
+                  </button>
+                </div>
                 <button
                   v-if="isHost"
                   type="button"
@@ -93,6 +115,65 @@
                 >
                   ×
                 </button>
+                <Transition name="bot-pop">
+                  <div
+                    v-if="isBotEditorOpen(p.slot, 'difficulty')"
+                    class="lobby__bot-popover lobby__bot-popover--difficulty"
+                    role="menu"
+                    aria-label="Dificultad del bot"
+                    @click.stop
+                  >
+                    <span class="lobby__bot-popover-title">Dificultad</span>
+                    <button
+                      v-for="difficulty in BOT_DIFFICULTIES"
+                      :key="difficulty"
+                      type="button"
+                      class="lobby__bot-option"
+                      :class="{ 'is-active': (p.botDifficulty ?? DEFAULT_BOT_DIFFICULTY) === difficulty }"
+                      role="menuitemradio"
+                      :aria-checked="(p.botDifficulty ?? DEFAULT_BOT_DIFFICULTY) === difficulty"
+                      @click.stop="setBotDifficulty(p, difficulty)"
+                    >
+                      <span>{{ BOT_DIFFICULTY_LABELS[difficulty] }}</span>
+                      <span
+                        v-if="(p.botDifficulty ?? DEFAULT_BOT_DIFFICULTY) === difficulty"
+                        class="lobby__bot-option-check"
+                        aria-hidden="true"
+                      >✓</span>
+                    </button>
+                  </div>
+                </Transition>
+                <Transition name="bot-pop">
+                  <div
+                    v-if="isBotEditorOpen(p.slot, 'color')"
+                    class="lobby__bot-popover lobby__bot-popover--color"
+                    role="dialog"
+                    aria-label="Color del bot"
+                    @click.stop
+                  >
+                    <span class="lobby__bot-popover-title">Color del bot</span>
+                    <div class="lobby__bot-swatches">
+                      <button
+                        v-for="color in PLAYER_COLORS"
+                        :key="color.id"
+                        type="button"
+                        class="lobby__bot-swatch"
+                        :class="{
+                          'is-active': botColorId(p) === color.id,
+                          'is-taken': !botColorAvailable(color.id, p.slot),
+                        }"
+                        :style="{ background: `var(${color.cssVar})` }"
+                        :disabled="!botColorAvailable(color.id, p.slot) || botBusySlot === p.slot"
+                        :aria-label="`${color.label}${botColorAvailable(color.id, p.slot) ? '' : ' (ocupado)'}`"
+                        :aria-pressed="botColorId(p) === color.id"
+                        :title="`${color.label}${botColorAvailable(color.id, p.slot) ? '' : ' · ocupado'}`"
+                        @click.stop="setBotColor(p, color.id)"
+                      >
+                        <span v-if="botColorId(p) === color.id" aria-hidden="true">✓</span>
+                      </button>
+                    </div>
+                  </div>
+                </Transition>
               </template>
               <template v-else>
                 <span class="lobby__avatar st-ring st-ring--large" aria-hidden="true" />
@@ -123,6 +204,9 @@
               </button>
             </li>
           </TransitionGroup>
+          <p v-if="isHost && hasBots" class="lobby__bot-hint">
+            Pulsa la dificultad o el aro de color para personalizar cada bot.
+          </p>
         </div>
       </section>
 
@@ -329,7 +413,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { BotDifficulty, PlayerColorId } from '@/types/game'
 import {
@@ -423,7 +507,9 @@ const activePlayerCount = computed(() =>
 const emptySlots = computed(() =>
   ([1, 2, 3, 4] as const).filter(slot => !roomStore.players.some(player => player.slot === slot))
 )
+const hasBots = computed(() => roomStore.players.some(player => player.isBot))
 const botBusySlot = ref<number | null>(null)
+const botEditor = ref<{ slot: number; panel: 'difficulty' | 'color' } | null>(null)
 const myColor = computed<PlayerColorId>(() => {
   const me = roomStore.players.find(player => player.slot === roomStore.mySlot)
   return resolvePlayerColorId(me?.color, roomStore.mySlot ?? 1)
@@ -585,6 +671,7 @@ const turnLabel = computed(() => {
 
 onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibility)
+  document.addEventListener('click', handleDocumentClick)
   const hasSavedSession = !roomStore.mySlot && roomStore.restoreSession(roomId.value)
   connectSocket()
 
@@ -620,6 +707,7 @@ onUnmounted(() => {
   stopResultCountdown()
   if (turnCueTimer) window.clearTimeout(turnCueTimer)
   document.removeEventListener('visibilitychange', handleVisibility)
+  document.removeEventListener('click', handleDocumentClick)
   document.title = BASE_TITLE
 
   const nextRoute = router.currentRoute.value
@@ -686,23 +774,59 @@ function botDifficultyLabel(difficulty?: BotDifficulty): string {
   return BOT_DIFFICULTY_LABELS[difficulty ?? DEFAULT_BOT_DIFFICULTY]
 }
 
-function nextBotColor(bot: PlayerInfo): PlayerColorId {
-  const current = resolvePlayerColorId(bot.color, bot.slot)
-  const taken = new Set(
-    roomStore.players
-      .filter(player => player.slot !== bot.slot)
-      .map(player => resolvePlayerColorId(player.color, player.slot)),
+function botColorId(bot: PlayerInfo): PlayerColorId {
+  return resolvePlayerColorId(bot.color, bot.slot)
+}
+
+function botColorAvailable(color: PlayerColorId, slot: number): boolean {
+  return !roomStore.players.some(player =>
+    player.slot !== slot && resolvePlayerColorId(player.color, player.slot) === color
   )
-  const currentIndex = PLAYER_COLORS.findIndex(color => color.id === current)
-  for (let offset = 1; offset <= PLAYER_COLORS.length; offset++) {
-    const candidate = PLAYER_COLORS[(currentIndex + offset) % PLAYER_COLORS.length]
-    if (!taken.has(candidate.id)) return candidate.id
+}
+
+function isBotEditorOpen(slot: number, panel: 'difficulty' | 'color'): boolean {
+  const editor = botEditor.value
+  return editor !== null && editor.slot === slot && editor.panel === panel
+}
+
+let botEditorTrigger: HTMLElement | null = null
+
+function closeBotEditor(restoreFocus = false) {
+  botEditor.value = null
+  if (restoreFocus) botEditorTrigger?.focus()
+  botEditorTrigger = null
+}
+
+function toggleBotEditor(
+  slot: number,
+  panel: 'difficulty' | 'color',
+  event: MouseEvent,
+) {
+  if (!isHost.value || botBusySlot.value !== null) return
+  if (isBotEditorOpen(slot, panel)) {
+    closeBotEditor(true)
+    return
   }
-  return current
+  const trigger = event.currentTarget
+  botEditorTrigger = trigger instanceof HTMLElement ? trigger : null
+  botEditor.value = { slot, panel }
+  audioStore.playSfx('click')
+  void nextTick(() => {
+    const card = botEditorTrigger?.closest('.lobby__player')
+    const selector = panel === 'difficulty'
+      ? '.lobby__bot-option.is-active'
+      : '.lobby__bot-swatch.is-active'
+    card?.querySelector<HTMLElement>(selector)?.focus()
+  })
+}
+
+function handleDocumentClick() {
+  closeBotEditor()
 }
 
 async function addBot(slot: number) {
   if (!isHost.value || botBusySlot.value !== null) return
+  closeBotEditor()
   botBusySlot.value = slot
   audioStore.playSfx('click')
   try {
@@ -715,6 +839,7 @@ async function addBot(slot: number) {
 
 async function removeBot(slot: number) {
   if (!isHost.value || botBusySlot.value !== null) return
+  closeBotEditor()
   botBusySlot.value = slot
   audioStore.playSfx('click')
   try {
@@ -725,25 +850,25 @@ async function removeBot(slot: number) {
   }
 }
 
-async function cycleBotDifficulty(bot: PlayerInfo) {
+async function setBotDifficulty(bot: PlayerInfo, difficulty: BotDifficulty) {
   if (!isHost.value || botBusySlot.value !== null) return
   const current = bot.botDifficulty ?? DEFAULT_BOT_DIFFICULTY
-  const index = BOT_DIFFICULTIES.indexOf(current)
-  const next = BOT_DIFFICULTIES[(index + 1) % BOT_DIFFICULTIES.length]
+  closeBotEditor(true)
+  if (current === difficulty) return
   botBusySlot.value = bot.slot
   audioStore.playSfx('click')
   try {
-    const result = await emitSetBotDifficulty(roomId.value, bot.slot, next)
+    const result = await emitSetBotDifficulty(roomId.value, bot.slot, difficulty)
     if (!result.ok) roomStore.setError(result.error ?? 'No se pudo cambiar la dificultad')
   } finally {
     botBusySlot.value = null
   }
 }
 
-async function cycleBotColor(bot: PlayerInfo) {
+async function setBotColor(bot: PlayerInfo, color: PlayerColorId) {
   if (!isHost.value || botBusySlot.value !== null) return
-  const color = nextBotColor(bot)
-  if (color === resolvePlayerColorId(bot.color, bot.slot)) return
+  closeBotEditor(true)
+  if (color === botColorId(bot) || !botColorAvailable(color, bot.slot)) return
   botBusySlot.value = bot.slot
   audioStore.playSfx('click')
   try {
@@ -955,6 +1080,13 @@ function closeRules() {
 .lobby__seats-head { display: flex; align-items: baseline; justify-content: space-between; }
 .lobby__count { color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; }
 
+.lobby__bot-hint {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .lobby__players {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -993,23 +1125,19 @@ function closeRules() {
 }
 
 .lobby__player--bot-host { padding-right: 32px; }
-
-.lobby__player--configurable {
-  cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease;
-}
-
-.lobby__player--configurable:hover,
-.lobby__player--configurable:focus-visible {
-  border-color: var(--accent-secondary);
-  background: color-mix(in srgb, var(--accent-secondary) 8%, var(--surface-muted));
-}
+.lobby__player--bot-open { z-index: 20; }
 
 .lobby__bot-ring {
+  position: relative;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
+}
+
+.lobby__bot-ring.is-open {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 3px;
 }
 
 .lobby__bot-ring:disabled {
@@ -1019,12 +1147,159 @@ function closeRules() {
 
 .lobby__bot-ring--busy { opacity: 0.5; }
 
-.lobby__bot-name { color: var(--text-primary); font-weight: 800; }
+.lobby__bot-ring-edit {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--surface-raised);
+  border-radius: 50%;
+  background: conic-gradient(
+    #ff4d6d 0deg 60deg,
+    #ffb84d 60deg 120deg,
+    #39ff88 120deg 180deg,
+    #22e8ff 180deg 240deg,
+    #6a4dff 240deg 300deg,
+    #ff2e97 300deg 360deg
+  );
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.lobby__bot-copy {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lobby__bot-difficulty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.lobby__bot-difficulty:hover,
+.lobby__bot-difficulty.is-open {
+  border-color: var(--accent-secondary);
+  background: color-mix(in srgb, var(--accent-secondary) 12%, var(--control-bg));
+}
+
+.lobby__bot-difficulty:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.lobby__bot-chevron {
+  color: var(--accent-secondary);
+  font-size: 9px;
+  transition: transform 0.18s ease;
+}
+
+.lobby__bot-difficulty.is-open .lobby__bot-chevron { transform: rotate(180deg); }
 
 .lobby__tag--bot {
   background: color-mix(in srgb, var(--accent-secondary) 18%, transparent);
   color: var(--accent-secondary);
 }
+
+.lobby__bot-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 6px;
+  z-index: 60;
+  display: grid;
+  gap: 3px;
+  width: 166px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card), 0 18px 42px -20px rgba(0, 0, 0, 0.95);
+  cursor: default;
+}
+
+.lobby__bot-popover--difficulty { width: 142px; }
+
+.lobby__bot-popover-title {
+  padding: 2px 5px 5px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lobby__bot-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.lobby__bot-option:hover { background: var(--control-hover); color: var(--text-primary); }
+.lobby__bot-option.is-active { color: var(--accent-secondary); font-weight: 800; }
+.lobby__bot-option-check { color: var(--accent-success); font-size: 12px; }
+
+.lobby__bot-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 3px 4px 2px;
+}
+
+.lobby__bot-swatch {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  justify-self: center;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  transition: transform 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.lobby__bot-swatch:hover:not(:disabled) { transform: scale(1.1); }
+.lobby__bot-swatch.is-active { border-color: var(--text-primary); }
+.lobby__bot-swatch.is-taken { opacity: 0.24; }
+.lobby__bot-swatch:disabled { cursor: not-allowed; }
+
+.bot-pop-enter-active,
+.bot-pop-leave-active { transition: opacity 0.14s ease, transform 0.14s ease; }
+.bot-pop-enter-from,
+.bot-pop-leave-to { opacity: 0; transform: translateY(-4px) scale(0.98); }
 
 .lobby__bot-add,
 .lobby__bot-remove {
