@@ -1,8 +1,8 @@
 import type { Server, Socket } from 'socket.io'
 import type { ClientToServerEvents, EmoteId, GameMovePayload, ServerToClientEvents } from '../types/socket.js'
 import { EMOTE_IDS } from '../types/socket.js'
-import type { GameSettings, Size } from '../types/game.js'
-import { DEFAULT_GAME_SETTINGS, isPlayerColorId } from '../types/game.js'
+import type { BotDifficulty, GameSettings, Size } from '../types/game.js'
+import { DEFAULT_GAME_SETTINGS, isBotDifficulty, isPlayerColorId } from '../types/game.js'
 import { RoomManager } from '../rooms/RoomManager.js'
 import type { RoomState } from '../rooms/RoomManager.js'
 import {
@@ -20,15 +20,23 @@ import {
   skipTurn,
   toSnapshot,
 } from '../engine/GameEngine.js'
+import { chooseBotMove } from '../bots/BotEngine.js'
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>
 const turnTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const botTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 function clearTurnTimer(roomId: string) {
   const timer = turnTimers.get(roomId)
   if (timer) clearTimeout(timer)
   turnTimers.delete(roomId)
+}
+
+function clearBotTimer(roomId: string) {
+  const timer = botTimers.get(roomId)
+  if (timer) clearTimeout(timer)
+  botTimers.delete(roomId)
 }
 
 function scheduleTurnTimer(io: TypedServer, roomId: string) {
@@ -72,6 +80,7 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
         await emitRoomEvent(io, roomId, 'game:state', toSnapshot(result.game))
         if (result.finished) {
           clearTurnTimer(roomId)
+          clearBotTimer(roomId)
           await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(result.room))
           await emitRoomEvent(io, roomId, 'game:over', {
             winResult: result.game.winResult,
@@ -80,12 +89,95 @@ function scheduleTurnTimer(io: TypedServer, roomId: string) {
           await completeTournamentGroup(io, result.room, result.game)
           await broadcastRoomList(io)
         } else {
-          scheduleTurnTimer(io, roomId)
+          scheduleRoomAutomation(io, roomId)
         }
       }).catch(error => console.error('[game:turn-timeout]', error))
     }, remaining)
     turnTimers.set(roomId, timer)
   }).catch(error => console.error('[game:timer-load]', error))
+}
+
+function botDelay(difficulty: BotDifficulty): number {
+  const base = difficulty === 'easy' ? 420
+    : difficulty === 'normal' ? 600
+      : difficulty === 'hard' ? 780 : 920
+  return base + Math.floor(Math.random() * 240)
+}
+
+function scheduleRoomAutomation(io: TypedServer, roomId: string) {
+  scheduleTurnTimer(io, roomId)
+  scheduleBotTurn(io, roomId)
+}
+
+function scheduleBotTurn(io: TypedServer, roomId: string) {
+  clearBotTimer(roomId)
+  void RoomManager.getRoom(roomId).then(room => {
+    const game = room?.game
+    if (!room || room.tournament || room.phase !== 'playing' || !game ||
+        game.winResult || game.isDraw) return
+    const bot = room.players.find(player => player.slot === game.currentPlayer && player.isBot)
+    if (!bot) return
+    if (!room.players.some(player => player.socketId && !player.isBot)) return
+
+    const expectedPlayer = game.currentPlayer
+    const expectedTurnNumber = game.turnNumber
+    const expectedMoveNumber = game.moveNumber
+    const difficulty = bot.botDifficulty ?? 'normal'
+    const timer = setTimeout(() => {
+      void RoomManager.withRoomLock(roomId, async () => {
+        const currentRoom = await RoomManager.getRoom(roomId)
+        const currentGame = currentRoom?.game
+        if (!currentRoom || currentRoom.tournament || currentRoom.phase !== 'playing' || !currentGame ||
+            currentGame.currentPlayer !== expectedPlayer ||
+            currentGame.turnNumber !== expectedTurnNumber ||
+            currentGame.moveNumber !== expectedMoveNumber ||
+            !currentRoom.players.some(player => player.socketId && !player.isBot)) {
+          return null
+        }
+        const currentBot = currentRoom.players.find(
+          player => player.slot === expectedPlayer && player.isBot,
+        )
+        if (!currentBot) return null
+
+        const move = chooseBotMove(currentGame, currentBot.botDifficulty ?? 'normal')
+        if (!move) return null
+        const payload = { roomId, ...move }
+        if (!validateMove(currentGame, payload, expectedPlayer).valid) return null
+
+        const game = applyMove(currentGame, payload)
+        if (game.winResult) {
+          currentRoom.scores[game.winResult.winner] =
+            (currentRoom.scores[game.winResult.winner] ?? 0) + 1
+        }
+        const finished = Boolean(game.winResult || game.isDraw)
+        if (finished) {
+          currentRoom.lastGame = game
+          currentRoom.game = null
+          currentRoom.phase = 'waiting'
+        } else {
+          currentRoom.game = game
+        }
+        await RoomManager.persistRoom(currentRoom)
+        return { room: currentRoom, game, finished }
+      }).then(async result => {
+        if (!result) return
+        await emitRoomEvent(io, roomId, 'game:state', toSnapshot(result.game))
+        if (result.finished) {
+          clearTurnTimer(roomId)
+          clearBotTimer(roomId)
+          await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(result.room))
+          await emitRoomEvent(io, roomId, 'game:over', {
+            winResult: result.game.winResult,
+            finalState: toSnapshot(result.game),
+          })
+          await broadcastRoomList(io)
+        } else {
+          scheduleRoomAutomation(io, roomId)
+        }
+      }).catch(error => console.error('[bot:move]', error))
+    }, botDelay(difficulty))
+    botTimers.set(roomId, timer)
+  }).catch(error => console.error('[bot:load]', error))
 }
 
 export async function getPublicListings() {
@@ -141,7 +233,10 @@ async function processDisconnectedSocket(io: TypedServer, socketId: string) {
     void RoomManager.withRoomLock(room.roomId, () =>
       RoomManager.expireDisconnectedPlayer(room.roomId, slot, disconnectEpoch)
     ).then(async updatedRoom => {
-      if (!updatedRoom) clearTurnTimer(room.roomId)
+      if (!updatedRoom) {
+        clearTurnTimer(room.roomId)
+        clearBotTimer(room.roomId)
+      }
       const currentRoom = await RoomManager.getRoom(room.roomId)
       if (currentRoom) await emitRoomEvent(io, currentRoom.roomId, 'room:state', RoomManager.toSnapshot(currentRoom))
       return broadcastRoomList(io)
@@ -170,7 +265,7 @@ async function emitTournamentAssignments(
     }
   }
   for (const roomId of roomIds) {
-    scheduleTurnTimer(io, roomId)
+    scheduleRoomAutomation(io, roomId)
   }
 }
 
@@ -356,7 +451,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     socket.join(roomId)
     ack({ ok: true, roomId, roomState: RoomManager.toSnapshot(joinedRoom) })
     emitCurrentGame(socket, joinedRoom)
-    scheduleTurnTimer(io, roomId)
+    scheduleRoomAutomation(io, roomId)
   })
 
   // ── spectate:leave ──────────────────────────────────────────
@@ -451,7 +546,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     })
     await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(result.room))
     emitCurrentGame(socket, result.room)
-    scheduleTurnTimer(io, roomId)
+    scheduleRoomAutomation(io, roomId)
     await broadcastRoomList(io)
   })
 
@@ -493,7 +588,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         roomState: RoomManager.toSnapshot(existing),
       })
       emitCurrentGame(socket, existing)
-      scheduleTurnTimer(io, roomId)
+      scheduleRoomAutomation(io, roomId)
       return
     }
 
@@ -537,7 +632,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       await emitRoomEvent(io, roomId, 'game:clock', { turnStartedAt: room.game.turnStartedAt })
     }
     emitCurrentGame(socket, room)
-    scheduleTurnTimer(io, roomId)
+    scheduleRoomAutomation(io, roomId)
     await broadcastRoomList(io)
   })
 
@@ -563,6 +658,89 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
 
     ack({ ok: true })
     await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
+  })
+
+  // ── room:bot-* ───────────────────────────────────────────────
+  const botSlot = (payload: unknown): { roomId: string; slot: 1 | 2 | 3 | 4 } | null => {
+    if (!isRecord(payload) || typeof payload.roomId !== 'string' ||
+        !Number.isInteger(payload.slot) || ![1, 2, 3, 4].includes(payload.slot as number)) {
+      return null
+    }
+    return {
+      roomId: payload.roomId.trim().toUpperCase(),
+      slot: payload.slot as 1 | 2 | 3 | 4,
+    }
+  }
+
+  socket.on('room:bot-add', async (payload, ack) => {
+    const data = botSlot(payload)
+    if (!data) {
+      ack({ ok: false, error: 'Datos del bot inválidos' })
+      return
+    }
+    const result = await RoomManager.withRoomLock(data.roomId, () =>
+      RoomManager.addBot(data.roomId, socket.id, data.slot)
+    )
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitRoomEvent(io, data.roomId, 'room:state', RoomManager.toSnapshot(result.room))
+    await broadcastRoomList(io)
+  })
+
+  socket.on('room:bot-remove', async (payload, ack) => {
+    const data = botSlot(payload)
+    if (!data) {
+      ack({ ok: false, error: 'Datos del bot inválidos' })
+      return
+    }
+    const result = await RoomManager.withRoomLock(data.roomId, () =>
+      RoomManager.removeBot(data.roomId, socket.id, data.slot)
+    )
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitRoomEvent(io, data.roomId, 'room:state', RoomManager.toSnapshot(result.room))
+    await broadcastRoomList(io)
+  })
+
+  socket.on('room:bot-difficulty', async (payload, ack) => {
+    const data = botSlot(payload)
+    const difficulty = isRecord(payload) ? payload.difficulty : null
+    if (!data || !isBotDifficulty(difficulty)) {
+      ack({ ok: false, error: 'Dificultad inválida' })
+      return
+    }
+    const result = await RoomManager.withRoomLock(data.roomId, () =>
+      RoomManager.setBotDifficulty(data.roomId, socket.id, data.slot, difficulty)
+    )
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitRoomEvent(io, data.roomId, 'room:state', RoomManager.toSnapshot(result.room))
+  })
+
+  socket.on('room:bot-color', async (payload, ack) => {
+    const data = botSlot(payload)
+    if (!data || !isRecord(payload) || !isPlayerColorId(payload.color)) {
+      ack({ ok: false, error: 'Color inválido' })
+      return
+    }
+    const result = await RoomManager.withRoomLock(data.roomId, () =>
+      RoomManager.setBotColor(data.roomId, socket.id, data.slot, payload.color)
+    )
+    if (!result.ok) {
+      ack({ ok: false, error: result.error })
+      return
+    }
+    ack({ ok: true })
+    await emitRoomEvent(io, data.roomId, 'room:state', RoomManager.toSnapshot(result.room))
   })
 
   // ── emote:send ───────────────────────────────────────────────
@@ -845,13 +1023,13 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
       const hostSlot = await RoomManager.getHostSlot(roomId)
       if (actingSlot !== hostSlot) return { ok: false as const, error: 'Solo el host puede iniciar la partida' }
-      if (room.players.filter(player => player.socketId).length < 2) {
-        return { ok: false as const, error: 'Se necesitan al menos dos jugadores conectados' }
-      }
 
       await RoomManager.removeDisconnectedPlayers(roomId)
       room = await RoomManager.getRoom(roomId)
       if (!room) return { ok: false as const, error: 'Sala no encontrada' }
+      if (room.players.length < 2) {
+        return { ok: false as const, error: 'Se necesitan al menos dos jugadores o bots' }
+      }
       const slots = room.players.map(player => player.slot)
       const settings = normalizeGameSettings(payload.settings, room.gameSettings ?? DEFAULT_GAME_SETTINGS)
       await RoomManager.setGameSettings(roomId, settings)
@@ -874,7 +1052,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(room))
     await emitRoomEvent(io, roomId, 'game:state', toSnapshot(game))
-    scheduleTurnTimer(io, roomId)
+    scheduleRoomAutomation(io, roomId)
     await broadcastRoomList(io)
   })
 
@@ -946,6 +1124,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
         await emitRoomEvent(io, normalizedPayload.roomId, 'game:state', toSnapshot(outcome.game))
         if (outcome.finished) {
           clearTurnTimer(normalizedPayload.roomId)
+          clearBotTimer(normalizedPayload.roomId)
           await emitRoomEvent(io, normalizedPayload.roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
           await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', {
             winResult: outcome.game.winResult,
@@ -954,7 +1133,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
           await completeTournamentGroup(io, outcome.room, outcome.game)
           await broadcastRoomList(io)
         } else {
-          scheduleTurnTimer(io, normalizedPayload.roomId)
+          scheduleRoomAutomation(io, normalizedPayload.roomId)
         }
       }
       return
@@ -964,6 +1143,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     await emitRoomEvent(io, normalizedPayload.roomId, 'game:state', toSnapshot(outcome.game))
     if (outcome.finished) {
       clearTurnTimer(normalizedPayload.roomId)
+      clearBotTimer(normalizedPayload.roomId)
       await emitRoomEvent(io, normalizedPayload.roomId, 'room:state', RoomManager.toSnapshot(outcome.room))
       await emitRoomEvent(io, normalizedPayload.roomId, 'game:over', {
         winResult: outcome.game.winResult,
@@ -972,7 +1152,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       await completeTournamentGroup(io, outcome.room, outcome.game)
       await broadcastRoomList(io)
     } else {
-      scheduleTurnTimer(io, normalizedPayload.roomId)
+      scheduleRoomAutomation(io, normalizedPayload.roomId)
     }
   })
 
@@ -994,12 +1174,12 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
       const hostSlot = await RoomManager.getHostSlot(roomId)
       if (actingSlot !== hostSlot) return { ok: false as const, error: 'Solo el host puede reiniciar la partida' }
-      if (room.players.filter(player => player.socketId).length < 2) {
-        return { ok: false as const, error: 'Se necesitan al menos dos jugadores conectados' }
-      }
       await RoomManager.removeDisconnectedPlayers(roomId)
       room = await RoomManager.getRoom(roomId)
       if (!room) return { ok: false as const, error: 'Sala no encontrada' }
+      if (room.players.length < 2) {
+        return { ok: false as const, error: 'Se necesitan al menos dos jugadores o bots' }
+      }
 
       const startingPlayer = await RoomManager.nextRound(roomId)
       if (!startingPlayer) return { ok: false as const, error: 'No se pudo elegir quién comienza' }
@@ -1018,7 +1198,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
     ack({ ok: true })
     await emitRoomEvent(io, roomId, 'room:state', RoomManager.toSnapshot(room))
     await emitRoomEvent(io, roomId, 'game:state', toSnapshot(game))
-    scheduleTurnTimer(io, roomId)
+    scheduleRoomAutomation(io, roomId)
     await broadcastRoomList(io)
   })
 
@@ -1036,7 +1216,9 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       const actingSlot = await RoomManager.getSlotBySocket(socket.id, roomId)
       const hostSlot = await RoomManager.getHostSlot(roomId)
       if (actingSlot !== hostSlot) return { error: 'Solo el host puede finalizar la partida' }
-      if (!room.players.some(player => !player.socketId)) return { error: 'No hay jugadores desconectados' }
+      if (!room.players.some(player => !player.isBot && !player.socketId)) {
+        return { error: 'No hay jugadores conectados a los que esperar' }
+      }
       return { room: await RoomManager.finishGameForHost(roomId) }
     })
     if ('error' in waitingRoom) {
@@ -1044,6 +1226,7 @@ export function registerGameHandler(io: TypedServer, socket: TypedSocket): void 
       return
     }
     clearTurnTimer(roomId)
+    clearBotTimer(roomId)
     if (!waitingRoom.room) {
       ack({ ok: false, error: 'No se pudo recuperar la sala' })
       return

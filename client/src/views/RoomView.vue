@@ -56,19 +56,71 @@
               v-for="p in roomStore.players"
               :key="p.slot"
               class="lobby__player"
-              :class="{ 'lobby__player--offline': !p.connected }"
+              :class="{
+                'lobby__player--offline': !p.connected && !p.isBot,
+                'lobby__player--bot': p.isBot,
+                'lobby__player--bot-host': p.isBot && isHost,
+                'lobby__player--configurable': p.isBot && isHost,
+              }"
               :style="{ '--piece-color': gameStore.playerMeta[p.slot]?.color }"
+              :role="p.isBot && isHost ? 'button' : undefined"
+              :tabindex="p.isBot && isHost ? 0 : undefined"
+              :title="p.isBot && isHost ? 'Cambiar dificultad del bot' : undefined"
+              @click="p.isBot && isHost ? cycleBotDifficulty(p) : undefined"
+              @keydown.enter.self.prevent="p.isBot && isHost ? cycleBotDifficulty(p) : undefined"
+              @keydown.space.self.prevent="p.isBot && isHost ? cycleBotDifficulty(p) : undefined"
             >
-              <span class="lobby__avatar st-ring st-ring--large" aria-hidden="true" />
-              <span class="lobby__player-name">{{ p.username }}</span>
-              <EmoteAnchor :slot="p.slot" />
-              <span v-if="p.slot === roomStore.hostSlot" class="lobby__tag">Anfitrión</span>
-              <span v-if="p.slot === roomStore.mySlot" class="lobby__tag lobby__tag--me">Tú</span>
-              <span v-if="!p.connected" class="lobby__tag lobby__tag--off">Desconectado</span>
+              <template v-if="p.isBot">
+                <button
+                  type="button"
+                  class="lobby__avatar lobby__bot-ring st-ring st-ring--large"
+                  :class="{ 'lobby__bot-ring--busy': botBusySlot === p.slot }"
+                  :disabled="!isHost || botBusySlot === p.slot"
+                  :aria-label="`Cambiar color del bot ${botDifficultyLabel(p.botDifficulty)}`"
+                  title="Cambiar color del bot"
+                  @click.stop="cycleBotColor(p)"
+                />
+                <span class="lobby__player-name lobby__bot-name">{{ botDifficultyLabel(p.botDifficulty) }}</span>
+                <span class="lobby__tag lobby__tag--bot">Bot</span>
+                <button
+                  v-if="isHost"
+                  type="button"
+                  class="lobby__bot-remove"
+                  :disabled="botBusySlot === p.slot"
+                  :aria-label="`Quitar ${botDifficultyLabel(p.botDifficulty)}`"
+                  title="Quitar bot"
+                  @click.stop="removeBot(p.slot)"
+                >
+                  ×
+                </button>
+              </template>
+              <template v-else>
+                <span class="lobby__avatar st-ring st-ring--large" aria-hidden="true" />
+                <span class="lobby__player-name">{{ p.username }}</span>
+                <EmoteAnchor :slot="p.slot" />
+                <span v-if="p.slot === roomStore.hostSlot" class="lobby__tag">Anfitrión</span>
+                <span v-if="p.slot === roomStore.mySlot" class="lobby__tag lobby__tag--me">Tú</span>
+                <span v-if="!p.connected" class="lobby__tag lobby__tag--off">Desconectado</span>
+              </template>
             </li>
-            <li v-for="n in (4 - roomStore.playerCount)" :key="'empty-' + n" class="lobby__player lobby__player--empty">
+            <li
+              v-for="slot in emptySlots"
+              :key="'empty-' + slot"
+              class="lobby__player lobby__player--empty"
+              :class="{ 'lobby__player--empty-host': isHost }"
+            >
               <span class="lobby__avatar lobby__avatar--empty" aria-hidden="true" />
               <span class="lobby__player-name">Asiento libre</span>
+              <button
+                v-if="isHost"
+                type="button"
+                class="lobby__bot-add"
+                :disabled="botBusySlot !== null"
+                title="Añadir bot en este asiento"
+                @click.stop="addBot(slot)"
+              >
+                {{ botBusySlot === slot ? '…' : 'Bot' }}
+              </button>
             </li>
           </TransitionGroup>
         </div>
@@ -116,7 +168,7 @@
         </details>
 
         <button
-          v-if="roomStore.mySlot === roomStore.hostSlot && connectedPlayerCount >= 2"
+          v-if="isHost && activePlayerCount >= 2"
           class="st-btn lobby__start-btn"
           :disabled="!roomStore.connected"
           @click="handleStart"
@@ -279,10 +331,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { PlayerColorId } from '@/types/game'
+import type { BotDifficulty, PlayerColorId } from '@/types/game'
 import {
+  BOT_DIFFICULTIES,
+  BOT_DIFFICULTY_LABELS,
+  DEFAULT_BOT_DIFFICULTY,
   DEFAULT_PLAYER_CLOCK_SECONDS,
   PLAYER_CLOCK_OPTIONS as playerClockOptions,
+  PLAYER_COLORS,
   resolvePlayerColorId,
 } from '@/types/game'
 import { useRoomStore } from '@/stores/roomStore'
@@ -291,7 +347,7 @@ import { useUserStore } from '@/stores/userStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useTvModeStore } from '@/stores/tvStore'
 import { useSocket } from '@/composables/useSocket'
-import type { EmoteId } from '@/types/socket'
+import type { EmoteId, PlayerInfo } from '@/types/socket'
 import EmoteWheel from '@/components/EmoteWheel.vue'
 import EmoteAnchor from '@/components/EmoteAnchor.vue'
 import EmoteStage from '@/components/EmoteStage.vue'
@@ -315,7 +371,19 @@ const gameStore = useGameStore()
 const userStore = useUserStore()
 const audioStore = useAudioStore()
 const tvStore = useTvModeStore()
-const { emitJoinRoom, emitReconnectRoom, emitRematch, emitStart, emitFinishGame, emitSetColor, emitEmote } = useSocket()
+const {
+  emitJoinRoom,
+  emitReconnectRoom,
+  emitRematch,
+  emitStart,
+  emitFinishGame,
+  emitSetColor,
+  emitAddBot,
+  emitRemoveBot,
+  emitSetBotDifficulty,
+  emitSetBotColor,
+  emitEmote,
+} = useSocket()
 
 function sendEmote(emote: EmoteId) {
   return emitEmote(roomId.value, emote)
@@ -348,7 +416,14 @@ const rulesShownCount = ref(getRulesShownCount())
 const disconnectedName = computed(() => roomStore.disconnectedPlayer?.username ?? 'Un jugador')
 const disconnectedTurn = computed(() => roomStore.disconnectedPlayer?.slot === gameStore.currentPlayer)
 const showDisconnectNotice = computed(() => roomStore.opponentLeft && roomStore.phase === 'playing')
-const connectedPlayerCount = computed(() => roomStore.players.filter(player => player.connected).length)
+const isHost = computed(() => roomStore.mySlot !== null && roomStore.mySlot === roomStore.hostSlot)
+const activePlayerCount = computed(() =>
+  roomStore.players.filter(player => player.connected || player.isBot).length
+)
+const emptySlots = computed(() =>
+  ([1, 2, 3, 4] as const).filter(slot => !roomStore.players.some(player => player.slot === slot))
+)
+const botBusySlot = ref<number | null>(null)
 const myColor = computed<PlayerColorId>(() => {
   const me = roomStore.players.find(player => player.slot === roomStore.mySlot)
   return resolvePlayerColorId(me?.color, roomStore.mySlot ?? 1)
@@ -366,8 +441,8 @@ const orderedPlayers = computed(() => {
   ]
 })
 const canFinishGameForHost = computed(() =>
-  roomStore.mySlot === roomStore.hostSlot && roomStore.phase === 'playing' &&
-  roomStore.players.some(player => !player.connected)
+  isHost.value && roomStore.phase === 'playing' &&
+  roomStore.players.some(player => !player.isBot && !player.connected)
 )
 const playerClockEnabled = computed(() =>
   (roomStore.gameSettings.playerClockSeconds ?? 0) > 0
@@ -607,6 +682,78 @@ function handleStart() {
   }
 }
 
+function botDifficultyLabel(difficulty?: BotDifficulty): string {
+  return BOT_DIFFICULTY_LABELS[difficulty ?? DEFAULT_BOT_DIFFICULTY]
+}
+
+function nextBotColor(bot: PlayerInfo): PlayerColorId {
+  const current = resolvePlayerColorId(bot.color, bot.slot)
+  const taken = new Set(
+    roomStore.players
+      .filter(player => player.slot !== bot.slot)
+      .map(player => resolvePlayerColorId(player.color, player.slot)),
+  )
+  const currentIndex = PLAYER_COLORS.findIndex(color => color.id === current)
+  for (let offset = 1; offset <= PLAYER_COLORS.length; offset++) {
+    const candidate = PLAYER_COLORS[(currentIndex + offset) % PLAYER_COLORS.length]
+    if (!taken.has(candidate.id)) return candidate.id
+  }
+  return current
+}
+
+async function addBot(slot: number) {
+  if (!isHost.value || botBusySlot.value !== null) return
+  botBusySlot.value = slot
+  audioStore.playSfx('click')
+  try {
+    const result = await emitAddBot(roomId.value, slot)
+    if (!result.ok) roomStore.setError(result.error ?? 'No se pudo añadir el bot')
+  } finally {
+    botBusySlot.value = null
+  }
+}
+
+async function removeBot(slot: number) {
+  if (!isHost.value || botBusySlot.value !== null) return
+  botBusySlot.value = slot
+  audioStore.playSfx('click')
+  try {
+    const result = await emitRemoveBot(roomId.value, slot)
+    if (!result.ok) roomStore.setError(result.error ?? 'No se pudo quitar el bot')
+  } finally {
+    botBusySlot.value = null
+  }
+}
+
+async function cycleBotDifficulty(bot: PlayerInfo) {
+  if (!isHost.value || botBusySlot.value !== null) return
+  const current = bot.botDifficulty ?? DEFAULT_BOT_DIFFICULTY
+  const index = BOT_DIFFICULTIES.indexOf(current)
+  const next = BOT_DIFFICULTIES[(index + 1) % BOT_DIFFICULTIES.length]
+  botBusySlot.value = bot.slot
+  audioStore.playSfx('click')
+  try {
+    const result = await emitSetBotDifficulty(roomId.value, bot.slot, next)
+    if (!result.ok) roomStore.setError(result.error ?? 'No se pudo cambiar la dificultad')
+  } finally {
+    botBusySlot.value = null
+  }
+}
+
+async function cycleBotColor(bot: PlayerInfo) {
+  if (!isHost.value || botBusySlot.value !== null) return
+  const color = nextBotColor(bot)
+  if (color === resolvePlayerColorId(bot.color, bot.slot)) return
+  botBusySlot.value = bot.slot
+  audioStore.playSfx('click')
+  try {
+    const result = await emitSetBotColor(roomId.value, bot.slot, color)
+    if (!result.ok) roomStore.setError(result.error ?? 'No se pudo cambiar el color del bot')
+  } finally {
+    botBusySlot.value = null
+  }
+}
+
 async function chooseColor(color: PlayerColorId) {
   if (!roomStore.roomId || choosingColor.value || color === myColor.value) return
   choosingColor.value = color
@@ -835,6 +982,90 @@ function closeRules() {
   background: transparent;
   color: var(--text-faint);
 }
+
+.lobby__player--empty-host { padding-right: 56px; }
+
+.lobby__player--bot {
+  border-color: color-mix(in srgb, var(--accent-secondary) 42%, var(--line-soft));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-secondary) 10%, transparent), transparent 58%),
+    var(--surface-muted);
+}
+
+.lobby__player--bot-host { padding-right: 32px; }
+
+.lobby__player--configurable {
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.lobby__player--configurable:hover,
+.lobby__player--configurable:focus-visible {
+  border-color: var(--accent-secondary);
+  background: color-mix(in srgb, var(--accent-secondary) 8%, var(--surface-muted));
+}
+
+.lobby__bot-ring {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lobby__bot-ring:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.lobby__bot-ring--busy { opacity: 0.5; }
+
+.lobby__bot-name { color: var(--text-primary); font-weight: 800; }
+
+.lobby__tag--bot {
+  background: color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+  color: var(--accent-secondary);
+}
+
+.lobby__bot-add,
+.lobby__bot-remove {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  z-index: 1;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.lobby__bot-add {
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--accent-secondary);
+  background: var(--control-bg);
+  color: var(--accent-secondary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lobby__bot-add:hover { background: var(--control-hover); }
+.lobby__bot-add:disabled { cursor: wait; opacity: 0.55; }
+
+.lobby__bot-remove {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.lobby__bot-remove:hover { background: var(--control-hover); color: var(--accent-danger); }
+.lobby__bot-remove:disabled { cursor: wait; opacity: 0.5; }
 
 .lobby__avatar {
   width: 26px;

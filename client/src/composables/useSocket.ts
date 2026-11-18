@@ -8,7 +8,7 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useUserStore } from '@/stores/userStore'
 import { useTournamentStore } from '@/stores/tournamentStore'
 import { useEmoteStore } from '@/stores/emoteStore'
-import type { GameSettings, PlayerColorId } from '@/types/game'
+import type { BotDifficulty, GameSettings, PlayerColorId } from '@/types/game'
 import type { TournamentFormat } from '@/types/tournament'
 import type {
   EmoteId,
@@ -394,6 +394,50 @@ export function useSocket() {
     })
   }
 
+  function emitAddBot(roomId: string, slot: number): Promise<GameControlAck> {
+    return ackRequest<GameControlAck>(
+      'El servidor no respondió al añadir el bot',
+      done => socket.emit('room:bot-add', { roomId, slot: slot as 1 | 2 | 3 | 4 }, done),
+    )
+  }
+
+  function emitRemoveBot(roomId: string, slot: number): Promise<GameControlAck> {
+    return ackRequest<GameControlAck>(
+      'El servidor no respondió al quitar el bot',
+      done => socket.emit('room:bot-remove', { roomId, slot: slot as 1 | 2 | 3 | 4 }, done),
+    )
+  }
+
+  function emitSetBotDifficulty(
+    roomId: string,
+    slot: number,
+    difficulty: BotDifficulty,
+  ): Promise<GameControlAck> {
+    return ackRequest<GameControlAck>(
+      'El servidor no respondió al cambiar la dificultad',
+      done => socket.emit('room:bot-difficulty', {
+        roomId,
+        slot: slot as 1 | 2 | 3 | 4,
+        difficulty,
+      }, done),
+    )
+  }
+
+  function emitSetBotColor(
+    roomId: string,
+    slot: number,
+    color: PlayerColorId,
+  ): Promise<GameControlAck> {
+    return ackRequest<GameControlAck>(
+      'El servidor no respondió al cambiar el color del bot',
+      done => socket.emit('room:bot-color', {
+        roomId,
+        slot: slot as 1 | 2 | 3 | 4,
+        color,
+      }, done),
+    )
+  }
+
   async function emitSetColor(roomId: string, color: PlayerColorId): Promise<GameControlAck> {
     if (!await waitForSocketConnection()) {
       return { ok: false, error: 'No se pudo conectar con el servidor' }
@@ -473,6 +517,10 @@ export function useSocket() {
     emitLeaveSpectator,
     emitMove,
     emitSetColor,
+    emitAddBot,
+    emitRemoveBot,
+    emitSetBotDifficulty,
+    emitSetBotColor,
     emitEmote,
     emitRematch,
     emitStart,

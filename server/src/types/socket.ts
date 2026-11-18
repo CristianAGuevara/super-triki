@@ -1,5 +1,6 @@
 import type {
   Board,
+  BotDifficulty,
   GameSettings,
   LastMove,
   Piece,
@@ -74,6 +75,19 @@ export interface RoomSetColorPayload {
   color: PlayerColorId
 }
 
+export interface RoomBotSlotPayload {
+  roomId: string
+  slot: PlayerSlot
+}
+
+export interface RoomBotDifficultyPayload extends RoomBotSlotPayload {
+  difficulty: BotDifficulty
+}
+
+export interface RoomBotColorPayload extends RoomBotSlotPayload {
+  color: PlayerColorId
+}
+
 export interface TournamentCreatePayload {
   username: string
   userId: string
@@ -131,6 +145,10 @@ export interface ClientToServerEvents {
   'room:join':   (payload: RoomJoinPayload,   ack: (res: RoomJoinAck)   => void) => void
   'room:reconnect': (payload: { roomId: string; reconnectToken: string }, ack: (res: RoomReconnectAck) => void) => void
   'room:set-color': (payload: RoomSetColorPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-add': (payload: RoomBotSlotPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-remove': (payload: RoomBotSlotPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-difficulty': (payload: RoomBotDifficultyPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-color': (payload: RoomBotColorPayload, ack: (res: GameControlAck) => void) => void
   'emote:send': (payload: EmoteSendPayload, ack: (res: GameControlAck) => void) => void
   'tournament:create': (payload: TournamentCreatePayload, ack: (res: TournamentCreateAck) => void) => void
   'tournament:join': (payload: TournamentJoinPayload, ack: (res: TournamentJoinAck) => void) => void
@@ -158,6 +176,8 @@ export interface PlayerInfo {
   socketId: string
   userId?:  string
   color?:   PlayerColorId
+  isBot?:   boolean
+  botDifficulty?: BotDifficulty
 }
 
 export interface PublicPlayerInfo {
@@ -165,6 +185,8 @@ export interface PublicPlayerInfo {
   username:  string
   connected: boolean
   color:     PlayerColorId
+  isBot?:    boolean
+  botDifficulty?: BotDifficulty
 }
 
 export interface RoomTournamentInfo {

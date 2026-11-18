@@ -1,10 +1,13 @@
-import type { GameSettings, PlayerColorId, PlayerSlot } from '../types/game.js'
+import type { BotDifficulty, GameSettings, PlayerColorId, PlayerSlot } from '../types/game.js'
 import type { PlayerInfo, PublicRoomInfo, RoomStateSnapshot } from '../types/socket.js'
 import type { RoomGameState } from '../engine/GameEngine.js'
 import {
+  BOT_DIFFICULTY_LABELS,
+  DEFAULT_BOT_DIFFICULTY,
   DEFAULT_GAME_SETTINGS,
   DEFAULT_PLAYER_COLOR_IDS,
   PLAYER_COLOR_IDS,
+  isBotDifficulty,
   isPlayerColorId,
 } from '../types/game.js'
 import { generateRoomCode } from './roomUtils.js'
@@ -74,6 +77,10 @@ function pickAvailablePlayerColor(room: RoomState, slot: PlayerSlot): PlayerColo
   return PLAYER_COLOR_IDS.find(color => !used.has(color)) ?? preferred
 }
 
+function botUsername(difficulty: BotDifficulty): string {
+  return `Bot ${BOT_DIFFICULTY_LABELS[difficulty]}`
+}
+
 function roomKey(roomId: string) {
   return `${redisPrefix}:room:${roomId}`
 }
@@ -112,14 +119,16 @@ function pruneExpiredDisconnects(room: RoomState, now = Date.now()): boolean {
 
     if (room.game) {
       if (room.hostSlot === player.slot) {
-        room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.hostSlot
+        room.hostSlot = room.players.find(candidate => candidate.socketId && !candidate.isBot)?.slot ?? room.hostSlot
       }
       continue
     }
 
     room.players = room.players.filter(candidate => candidate.slot !== player.slot)
     if (room.hostSlot === player.slot) {
-      room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.players[0]?.slot ?? 1
+      room.hostSlot = room.players.find(candidate => candidate.socketId && !candidate.isBot)?.slot
+        ?? room.players.find(candidate => !candidate.isBot)?.slot
+        ?? 1
     }
   }
   return changed
@@ -483,7 +492,7 @@ export const RoomManager = {
       delete room.disconnectUntil[slot]
       room.disconnectEpoch[slot] = disconnectEpoch + 1
       if (room.hostSlot === slot) {
-        room.hostSlot = room.players.find(candidate => candidate.socketId)?.slot ?? room.hostSlot
+        room.hostSlot = room.players.find(candidate => candidate.socketId && !candidate.isBot)?.slot ?? room.hostSlot
       }
       await saveRoom(room)
       return room
@@ -493,12 +502,15 @@ export const RoomManager = {
     delete room.reconnectTokens[slot]
     delete room.disconnectEpoch[slot]
     delete room.disconnectUntil[slot]
-    if (room.hostSlot === slot) {
-      room.hostSlot = room.players.find(p => p.socketId)?.slot ?? room.players[0]?.slot ?? 1
+    if (!room.players.some(p => !p.isBot)) {
+      room.players = []
     }
     if (room.players.length === 0 && !this.hasSpectators(roomId) && !redis) {
       await deleteRoom(roomId)
       return null
+    }
+    if (room.hostSlot === slot) {
+      room.hostSlot = room.players.find(p => p.socketId && !p.isBot)?.slot ?? room.players.find(p => !p.isBot)?.slot ?? 1
     }
     await saveRoom(room)
     return room
@@ -508,13 +520,14 @@ export const RoomManager = {
     const room = await loadRoom(roomId)
     if (!room) return
     for (const player of room.players) {
+      if (player.isBot) continue
       if (!player.socketId) {
         room.disconnectEpoch[player.slot] = (room.disconnectEpoch[player.slot] ?? 0) + 1
         delete room.reconnectTokens[player.slot]
         delete room.disconnectUntil[player.slot]
       }
     }
-    room.players = room.players.filter(player => player.socketId !== '')
+    room.players = room.players.filter(player => player.socketId !== '' || player.isBot)
     await saveRoom(room)
   },
 
@@ -556,6 +569,107 @@ export const RoomManager = {
     if (taken) return { ok: false, error: 'Ese color ya está ocupado' }
 
     player.color = color
+    await saveRoom(room)
+    return { ok: true, room }
+  },
+
+  async addBot(
+    roomId: string,
+    socketId: string,
+    slot: PlayerSlot,
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
+    if (!room) return { ok: false, error: 'Sala no encontrada' }
+    if (room.tournament) return { ok: false, error: 'Los bots solo están disponibles en salas normales' }
+    if (room.phase !== 'waiting') return { ok: false, error: 'La partida ya comenzó' }
+    if (room.hostSlot !== (room.players.find(player => player.socketId === socketId)?.slot ?? 0)) {
+      return { ok: false, error: 'Solo el anfitrión puede añadir bots' }
+    }
+    if (![1, 2, 3, 4].includes(slot)) return { ok: false, error: 'Asiento inválido' }
+    if (room.players.some(player => player.slot === slot)) {
+      return { ok: false, error: 'Ese asiento ya está ocupado' }
+    }
+
+    const difficulty = DEFAULT_BOT_DIFFICULTY
+    room.players.push({
+      slot,
+      username: botUsername(difficulty),
+      socketId: '',
+      color: pickAvailablePlayerColor(room, slot),
+      isBot: true,
+      botDifficulty: difficulty,
+    })
+    delete room.reconnectTokens[slot]
+    delete room.disconnectUntil[slot]
+    delete room.disconnectEpoch[slot]
+    await saveRoom(room)
+    return { ok: true, room }
+  },
+
+  async removeBot(
+    roomId: string,
+    socketId: string,
+    slot: PlayerSlot,
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
+    if (!room) return { ok: false, error: 'Sala no encontrada' }
+    if (room.phase !== 'waiting') return { ok: false, error: 'La partida ya comenzó' }
+    if (room.hostSlot !== (room.players.find(player => player.socketId === socketId)?.slot ?? 0)) {
+      return { ok: false, error: 'Solo el anfitrión puede quitar bots' }
+    }
+    const bot = room.players.find(player => player.slot === slot && player.isBot)
+    if (!bot) return { ok: false, error: 'Ese asiento no tiene un bot' }
+
+    room.players = room.players.filter(player => player.slot !== slot)
+    delete room.reconnectTokens[slot]
+    delete room.disconnectUntil[slot]
+    delete room.disconnectEpoch[slot]
+    await saveRoom(room)
+    return { ok: true, room }
+  },
+
+  async setBotDifficulty(
+    roomId: string,
+    socketId: string,
+    slot: PlayerSlot,
+    difficulty: BotDifficulty,
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
+    if (!room) return { ok: false, error: 'Sala no encontrada' }
+    if (room.phase !== 'waiting') return { ok: false, error: 'La partida ya comenzó' }
+    if (room.hostSlot !== (room.players.find(player => player.socketId === socketId)?.slot ?? 0)) {
+      return { ok: false, error: 'Solo el anfitrión puede configurar bots' }
+    }
+    if (!isBotDifficulty(difficulty)) return { ok: false, error: 'Dificultad inválida' }
+    const bot = room.players.find(player => player.slot === slot && player.isBot)
+    if (!bot) return { ok: false, error: 'Ese asiento no tiene un bot' }
+
+    bot.botDifficulty = difficulty
+    bot.username = botUsername(difficulty)
+    await saveRoom(room)
+    return { ok: true, room }
+  },
+
+  async setBotColor(
+    roomId: string,
+    socketId: string,
+    slot: PlayerSlot,
+    color: PlayerColorId,
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; error: string }> {
+    const room = await loadRoom(roomId)
+    if (!room) return { ok: false, error: 'Sala no encontrada' }
+    if (room.phase !== 'waiting') return { ok: false, error: 'La partida ya comenzó' }
+    if (room.hostSlot !== (room.players.find(player => player.socketId === socketId)?.slot ?? 0)) {
+      return { ok: false, error: 'Solo el anfitrión puede configurar bots' }
+    }
+    if (!isPlayerColorId(color)) return { ok: false, error: 'Color inválido' }
+    const bot = room.players.find(player => player.slot === slot && player.isBot)
+    if (!bot) return { ok: false, error: 'Ese asiento no tiene un bot' }
+    if (room.players.some(player => player.slot !== slot && resolvePlayerColor(player) === color)) {
+      return { ok: false, error: 'Ese color ya está ocupado' }
+    }
+
+    bot.color = color
     await saveRoom(room)
     return { ok: true, room }
   },
@@ -648,7 +762,7 @@ export const RoomManager = {
                 kind: 'room' as const,
                 roomId: room.roomId,
                 name: room.name,
-                playerCount: room.players.filter(player => player.socketId !== '').length,
+                playerCount: room.players.filter(player => player.socketId !== '' || player.isBot).length,
                 maxPlayers: 4,
                 phase: room.phase as 'waiting' | 'playing',
               }]
@@ -668,7 +782,7 @@ export const RoomManager = {
         kind:        'room' as const,
         roomId:      room.roomId,
         name:        room.name,
-        playerCount: room.players.filter(player => player.socketId !== '').length,
+        playerCount: room.players.filter(player => player.socketId !== '' || player.isBot).length,
         maxPlayers:  4,
         phase:       room.phase as 'waiting' | 'playing',
       }))
@@ -684,6 +798,8 @@ export const RoomManager = {
         username: player.username,
         connected: Boolean(player.socketId),
         color: resolvePlayerColor(player),
+        isBot: Boolean(player.isBot),
+        botDifficulty: player.botDifficulty,
       })),
       phase:       room.phase,
       playerCount: room.players.length,

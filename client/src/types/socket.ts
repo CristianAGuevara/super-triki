@@ -1,5 +1,6 @@
 import type {
   Board,
+  BotDifficulty,
   GameSettings,
   LastMove,
   Piece,
@@ -63,6 +64,19 @@ export interface RoomSetColorPayload {
   color: PlayerColorId
 }
 
+export interface RoomBotSlotPayload {
+  roomId: string
+  slot: PlayerSlot
+}
+
+export interface RoomBotDifficultyPayload extends RoomBotSlotPayload {
+  difficulty: BotDifficulty
+}
+
+export interface RoomBotColorPayload extends RoomBotSlotPayload {
+  color: PlayerColorId
+}
+
 export interface TournamentCreateAck {
   ok: boolean
   tournamentId?: string
@@ -103,6 +117,10 @@ export interface ClientToServerEvents {
   'room:join':   (payload: { roomId: string; username: string; userId: string; password?: string }, ack: (res: RoomJoinAck) => void) => void
   'room:reconnect': (payload: { roomId: string; reconnectToken: string }, ack: (res: RoomReconnectAck) => void) => void
   'room:set-color': (payload: RoomSetColorPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-add': (payload: RoomBotSlotPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-remove': (payload: RoomBotSlotPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-difficulty': (payload: RoomBotDifficultyPayload, ack: (res: GameControlAck) => void) => void
+  'room:bot-color': (payload: RoomBotColorPayload, ack: (res: GameControlAck) => void) => void
   'emote:send': (payload: EmoteSendPayload, ack: (res: GameControlAck) => void) => void
   'tournament:create': (payload: { username: string; userId: string; name: string }, ack: (res: TournamentCreateAck) => void) => void
   'tournament:join': (payload: { tournamentId: string; username: string; userId: string }, ack: (res: TournamentJoinAck) => void) => void
@@ -129,6 +147,8 @@ export interface PlayerInfo {
   username:  string
   connected: boolean
   color?:    PlayerColorId
+  isBot?:    boolean
+  botDifficulty?: BotDifficulty
 }
 
 export interface RoomTournamentInfo {

@@ -6,6 +6,20 @@ export type Player = number
 
 export type PlayerSlot = 1 | 2 | 3 | 4
 
+export const BOT_DIFFICULTIES = ['easy', 'normal', 'hard', 'expert'] as const
+export type BotDifficulty = typeof BOT_DIFFICULTIES[number]
+export const DEFAULT_BOT_DIFFICULTY: BotDifficulty = 'normal'
+export const BOT_DIFFICULTY_LABELS: Record<BotDifficulty, string> = {
+  easy: 'Fácil',
+  normal: 'Normal',
+  hard: 'Difícil',
+  expert: 'Experto',
+}
+
+export function isBotDifficulty(value: unknown): value is BotDifficulty {
+  return typeof value === 'string' && (BOT_DIFFICULTIES as readonly string[]).includes(value)
+}
+
 // Keep these ids in sync with client/src/types/game.ts.
 export const PLAYER_COLOR_IDS = [
   'coral',

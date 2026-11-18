@@ -48,6 +48,20 @@ export function playerColorCss(id: PlayerColorId | undefined, slot: number): str
 // Numeric so expanding to 3 or 4 players requires zero type changes
 export type Player = number
 
+export const BOT_DIFFICULTIES = ['easy', 'normal', 'hard', 'expert'] as const
+export type BotDifficulty = typeof BOT_DIFFICULTIES[number]
+export const DEFAULT_BOT_DIFFICULTY: BotDifficulty = 'normal'
+export const BOT_DIFFICULTY_LABELS: Record<BotDifficulty, string> = {
+  easy: 'Fácil',
+  normal: 'Normal',
+  hard: 'Difícil',
+  expert: 'Experto',
+}
+
+export function isBotDifficulty(value: unknown): value is BotDifficulty {
+  return typeof value === 'string' && (BOT_DIFFICULTIES as readonly string[]).includes(value)
+}
+
 export interface GameSettings {
   turnTimerEnabled: boolean
   turnDurationSeconds: number
