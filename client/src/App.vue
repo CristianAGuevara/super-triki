@@ -829,7 +829,7 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 12px;
   padding: 3px;
   border: 1px solid var(--line-soft);
   border-radius: 999px;
@@ -865,8 +865,8 @@ onUnmounted(() => {
   z-index: 70;
   display: flex;
   align-items: flex-end;
-  gap: 12px;
-  padding: 11px 10px 9px;
+  gap: 4px;
+  padding: 11px 6px 9px;
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: var(--surface-raised);
@@ -874,14 +874,14 @@ onUnmounted(() => {
   transform: translateX(-50%);
 }
 
-.audio-panel--music { left: 27%; }
-.audio-panel--sfx { left: 73%; }
+.audio-panel--music { left: 23.33%; }
+.audio-panel--sfx { left: 76.67%; }
 .audio-panel--both { left: 50%; }
 
 .audio-mixer {
   --audio-color: var(--accent-primary);
   display: flex;
-  width: 52px;
+  width: 44px;
   flex-direction: column;
   align-items: center;
   gap: 7px;
@@ -893,26 +893,28 @@ onUnmounted(() => {
   color: var(--text-muted);
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .audio-mixer__slider {
-  display: grid;
+  position: relative;
   width: 44px;
   height: 112px;
-  place-items: center;
 }
 
 .audio-mixer__range {
   --fill: 60%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 112px;
   height: 44px;
   margin: 0;
   appearance: none;
   background: transparent;
   cursor: pointer;
-  transform: rotate(-90deg);
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
 .audio-mixer__range::-webkit-slider-runnable-track {
