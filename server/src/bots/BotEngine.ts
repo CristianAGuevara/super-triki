@@ -47,9 +47,9 @@ const BOT_DEEP_THINK_CHANCE = 0.12
 const BOT_DEEP_THINK_BONUS: [number, number] = [800, 2_000]
 const BOT_BOARD_PIECES_MAX = 27
 
-export const BOT_EMOTE_BASE_CHANCE = 0.07
-export const BOT_EMOTE_CONFIDENT_CHANCE = 0.2
-export const BOT_EMOTE_STRUGGLING_CHANCE = 0.12
+export const BOT_EMOTE_BASE_CHANCE = 0.3
+export const BOT_EMOTE_CONFIDENT_CHANCE = 0.6
+export const BOT_EMOTE_STRUGGLING_CHANCE = 0.45
 const BOT_EMOTE_CONFIDENCE_THRESHOLD = 65
 const CONFIDENT_EMOTES: EmoteId[] = ['happy', 'cool', 'love']
 const STRUGGLING_EMOTES: EmoteId[] = ['sleepy', 'crying', 'angry']
