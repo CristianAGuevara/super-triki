@@ -307,7 +307,7 @@
           </div>
         </Transition>
 
-        <button type="button" class="room__help" aria-label="Ver cómo se gana" title="Cómo se gana" @click="openRules">?</button>
+        <button type="button" class="room__help" aria-label="Ver reglas" title="Reglas" @click="openRules">Reglas</button>
       </header>
 
       <TvGameControls v-if="tvStore.enabled && !gameStore.isGameOver" />
@@ -1570,20 +1570,22 @@ function closeRules() {
 
 .room__help {
   justify-self: end;
-  width: 38px;
+  min-width: 72px;
   height: 38px;
+  padding: 0 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--control-bg);
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 12px;
   font-weight: 800;
+  letter-spacing: 0.02em;
   transition: background 0.2s, color 0.2s, transform 0.25s var(--ease-spring);
 }
 
-.room__help:hover { background: var(--control-hover); color: var(--text-primary); transform: rotate(-12deg); }
+.room__help:hover { background: var(--control-hover); color: var(--text-primary); transform: translateY(-1px); }
 
 .room__main {
   display: flex;
