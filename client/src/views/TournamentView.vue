@@ -284,8 +284,6 @@
           </article>
         </div>
 
-        <TournamentLastGame v-if="showLastGame" :result="store.lastCompletedGame!" />
-
         <div v-if="store.canAdvance" class="t-ready">
           <div class="t-ready__head">
             <span class="st-eyebrow">Avance de ronda</span>
@@ -343,6 +341,8 @@
         <p>se lleva {{ store.name }}</p>
         <button type="button" class="st-btn" @click="goHome">Volver al inicio</button>
       </section>
+
+      <TournamentLastGame v-if="showLastGame" :result="store.lastCompletedGame!" />
 
       <!-- ── League standings ── -->
       <section v-if="store.format === 'league' && store.phase !== 'waiting'" class="t-standings">
@@ -550,7 +550,9 @@ const myCurrentGroup = computed(() => {
   return store.groups.find(group => group.id === participant.groupId) ?? null
 })
 const showLastGame = computed(() =>
-  Boolean(store.lastCompletedGame) && myCurrentGroup.value?.status !== 'playing'
+  store.phase !== 'waiting' &&
+  Boolean(store.lastCompletedGame) &&
+  myCurrentGroup.value?.status !== 'playing'
 )
 const readyCount = computed(() =>
   store.readyRequiredIds.filter(participantId => store.readyIds.includes(participantId)).length
