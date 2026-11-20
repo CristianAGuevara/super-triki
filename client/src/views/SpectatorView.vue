@@ -1,7 +1,6 @@
 <template>
   <div class="spectator">
     <WinCinematic v-if="gameStore.cinematicActive" @done="gameStore.finishCinematic()" />
-    <EmoteStage />
     <header class="spectator__header">
       <div class="spectator__identity">
         <span class="spectator__eyebrow">
@@ -18,6 +17,10 @@
         <span class="spectator__status" :class="`spectator__status--${roomStore.phase}`">{{ statusLabel }}</span>
       </div>
     </header>
+
+    <div class="spectator__emote-slot">
+      <EmoteStage always-visible />
+    </div>
 
     <div v-if="joining" class="spectator__message">
       <span class="spectator__loader" />
@@ -38,8 +41,8 @@
 
     <main v-else class="spectator__main">
       <aside class="spectator__side spectator__side--left">
-        <PlayerPanel v-if="roomStore.players[0]" :player="roomStore.players[0].slot" :my-slot="null" />
-        <PlayerPanel v-if="roomStore.players[2]" :player="roomStore.players[2].slot" :my-slot="null" />
+        <PlayerPanel v-if="roomStore.players[0]" :player="roomStore.players[0].slot" :my-slot="null" :show-emote="false" />
+        <PlayerPanel v-if="roomStore.players[2]" :player="roomStore.players[2].slot" :my-slot="null" :show-emote="false" />
       </aside>
 
       <section class="spectator__center">
@@ -63,8 +66,8 @@
       </section>
 
       <aside class="spectator__side spectator__side--right">
-        <PlayerPanel v-if="roomStore.players[1]" :player="roomStore.players[1].slot" :my-slot="null" />
-        <PlayerPanel v-if="roomStore.players[3]" :player="roomStore.players[3].slot" :my-slot="null" />
+        <PlayerPanel v-if="roomStore.players[1]" :player="roomStore.players[1].slot" :my-slot="null" :show-emote="false" />
+        <PlayerPanel v-if="roomStore.players[3]" :player="roomStore.players[3].slot" :my-slot="null" :show-emote="false" />
       </aside>
     </main>
   </div>
@@ -148,6 +151,8 @@ function goHome() {
 }
 
 .spectator__header {
+  position: relative;
+  z-index: 60;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -219,6 +224,23 @@ function goHome() {
   gap: 12px;
   padding-top: 2px;
   white-space: nowrap;
+}
+
+.spectator__emote-slot {
+  position: relative;
+  z-index: 55;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+}
+
+.spectator__emote-slot :deep(.emote-stage--always) {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  left: 0;
+  width: auto;
+  padding: 0 12px;
 }
 
 .spectator__turn-inline {
@@ -348,15 +370,18 @@ function goHome() {
 
 @media (orientation: landscape) and (min-width: 700px) {
   .spectator {
+    display: flex;
     height: calc(100vh - 42px);
     min-height: 0;
+    flex-direction: column;
     overflow: hidden;
     padding: 8px 24px;
   }
 
   .spectator__header {
     width: min(100%, 1040px);
-    height: 44px;
+    min-height: 44px;
+    flex: 0 0 auto;
     margin-bottom: 7px;
   }
 
@@ -367,12 +392,14 @@ function goHome() {
   .spectator__main {
     --spectator-cell: clamp(72px, 18vh, 110px);
     --spectator-side-width: clamp(165px, 20vw, 270px);
+    flex: 1 1 auto;
     grid-template-columns: var(--spectator-side-width) auto var(--spectator-side-width);
     gap: 24px;
     width: fit-content;
     max-width: 100%;
-    height: calc(100vh - 106px);
+    height: auto;
     margin: 0 auto;
+    min-height: 0;
   }
 
 }

@@ -8,7 +8,7 @@
     }"
     :style="{ '--accent': meta.color, '--piece-color': meta.color }"
   >
-    <EmoteAnchor :slot="(player as PlayerSlot)" />
+    <EmoteAnchor v-if="showEmote" :slot="(player as PlayerSlot)" />
     <div class="player-panel__header">
       <span class="player-panel__dot st-ring st-ring--medium" aria-hidden="true" />
       <span class="player-panel__name">{{ displayName }}</span>
@@ -111,7 +111,13 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { vDraggable } from '@/directives/vDraggable'
 
-const props = defineProps<{ player: Player; mySlot?: PlayerSlot | null }>()
+const props = withDefaults(defineProps<{
+  player: Player
+  mySlot?: PlayerSlot | null
+  showEmote?: boolean
+}>(), {
+  showEmote: true,
+})
 
 const store     = useGameStore()
 const roomStore = useRoomStore()

@@ -4,7 +4,13 @@
   each with its sender's name. Several at once sit side by side.
 -->
 <template>
-  <TransitionGroup name="emote-stage" tag="div" class="emote-stage" aria-live="polite">
+  <TransitionGroup
+    name="emote-stage"
+    tag="div"
+    class="emote-stage"
+    :class="{ 'emote-stage--always': alwaysVisible }"
+    aria-live="polite"
+  >
     <EmoteBubble
       v-for="entry in entries"
       :key="entry.key"
@@ -20,6 +26,10 @@ import { computed } from 'vue'
 import type { PlayerSlot } from '@/types/socket'
 import { useEmoteStore } from '@/stores/emoteStore'
 import EmoteBubble from './EmoteBubble.vue'
+
+withDefaults(defineProps<{ alwaysVisible?: boolean }>(), {
+  alwaysVisible: false,
+})
 
 const store = useEmoteStore()
 
@@ -47,6 +57,14 @@ const entries = computed(() =>
 
 @media (max-width: 760px), (orientation: portrait) {
   .emote-stage { display: flex; }
+}
+
+/* Spectator mode has no card-anchored reactions, so this layer is always
+   visible. Its parent in SpectatorView places it below the header. */
+.emote-stage--always {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .emote-stage :deep(.emote-bubble) { width: 84px; }
