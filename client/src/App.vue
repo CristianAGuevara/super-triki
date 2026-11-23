@@ -503,10 +503,6 @@ function handleOffline() {
   socket.disconnect()
 }
 
-function handlePageHide() {
-  audioStore.suspendForBackground()
-}
-
 function handlePageShow() {
   audioStore.resumeFromBackground()
   if (connectionStore.blocked || socketIdle()) return
@@ -593,9 +589,15 @@ function volumePercent(value: number): number {
 }
 
 function activateAudio() {
+  audioStore.resumeFromBackground()
   audioStore.startMusic()
   window.removeEventListener('pointerdown', activateAudio)
   window.removeEventListener('keydown', activateAudio)
+}
+
+/** A real gesture always recovers audio if a visibility event was missed. */
+function wakeAudio() {
+  audioStore.resumeFromBackground()
 }
 
 onMounted(() => {
@@ -612,6 +614,8 @@ onMounted(() => {
   window.addEventListener('pointerdown', activateAudio)
   // A remote that sends real keys never produces a pointerdown.
   window.addEventListener('keydown', activateAudio)
+  window.addEventListener('pointerdown', wakeAudio)
+  window.addEventListener('keydown', wakeAudio)
   document.addEventListener('pointerdown', closeThemeMenuOnOutside)
   document.addEventListener('keydown', closeThemeMenuOnOutside)
   document.addEventListener('pointerdown', closeAudioPanelsOnOutside)
@@ -619,7 +623,6 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
-  window.addEventListener('pagehide', handlePageHide)
   window.addEventListener('pageshow', handlePageShow)
   connectionStore.setConnected(socket.connected)
   connectedAt = socket.connected ? Date.now() : 0
@@ -631,6 +634,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('pointerdown', activateAudio)
   window.removeEventListener('keydown', activateAudio)
+  window.removeEventListener('pointerdown', wakeAudio)
+  window.removeEventListener('keydown', wakeAudio)
   document.removeEventListener('pointerdown', closeThemeMenuOnOutside)
   document.removeEventListener('keydown', closeThemeMenuOnOutside)
   document.removeEventListener('pointerdown', closeAudioPanelsOnOutside)
@@ -638,7 +643,6 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
-  window.removeEventListener('pagehide', handlePageHide)
   window.removeEventListener('pageshow', handlePageShow)
   if (healthTimer !== undefined) window.clearInterval(healthTimer)
   rotationTimer = clearTimer(rotationTimer)

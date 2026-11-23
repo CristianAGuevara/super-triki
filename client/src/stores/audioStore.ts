@@ -328,8 +328,11 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function startMusic() {
-    if (musicVolume.value <= 0 || backgroundSuspended) return
-    if (typeof document !== 'undefined' && document.hidden) return
+    if (musicVolume.value <= 0) return
+    if (backgroundSuspended) {
+      backgroundSuspended = false
+      resumeMusicAfterBackground = false
+    }
     const audio = ensureAudio()
     if (!audio) return
     void audio.resume()
@@ -395,20 +398,24 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function resumeFromBackground() {
-    if (!backgroundSuspended) return
+    const shouldResumeMusic = resumeMusicAfterBackground
     backgroundSuspended = false
-    if (context?.state === 'suspended') void context.resume()
-    if (resumeMusicAfterBackground) {
-      resumeMusicAfterBackground = false
-      startMusic()
+    resumeMusicAfterBackground = false
+    // iOS can report 'interrupted' instead of 'suspended'; resume unless running.
+    if (context && context.state !== 'running' && context.state !== 'closed') {
+      void context.resume()
     }
+    if (shouldResumeMusic) startMusic()
   }
 
   /* ── Effects ───────────────────────────────────────────────────── */
 
   function playSfx(name: SfxName, options: SfxOptions = {}) {
-    if (sfxVolume.value <= 0 || backgroundSuspended) return
-    if (typeof document !== 'undefined' && document.hidden) return
+    if (sfxVolume.value <= 0) return
+    if (backgroundSuspended) {
+      backgroundSuspended = false
+      resumeMusicAfterBackground = false
+    }
     const audio = ensureAudio()
     if (!audio || !sfxGain) return
     const dest = sfxGain
