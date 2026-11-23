@@ -49,9 +49,13 @@
         <template v-else>
           <span class="cell__groove" :class="`cell__groove--${size}`" />
           <span
-            v-if="canDropAny && armedSize === size"
             class="cell__ghost st-ring"
-            :class="[`st-ring--${size}`, `cell__ghost--${size}`]"
+            :class="[
+              `st-ring--${size}`,
+              `cell__ghost--${size}`,
+              { 'cell__ghost--active': canDropAny && armedSize === size },
+            ]"
+            aria-hidden="true"
           />
         </template>
       </div>
@@ -91,9 +95,15 @@ const isHovered = ref(false)
 
 const activePiece = computed(() => store.dragState ?? store.selectedPiece)
 const armedSize = computed<Size | null>(() => activePiece.value?.size ?? null)
-const armedColor = computed(() =>
-  activePiece.value ? store.playerMeta[activePiece.value.player]?.color : null
-)
+// Keep the target colour warm before the drag starts. In a room the local
+// player's colour never changes between turns, so the filtered ghosts can stay
+// cached. Cells only use this variable while they are armed.
+const armedColor = computed(() => {
+  const colorSlot = roomStore.roomId && roomStore.mySlot
+    ? roomStore.mySlot
+    : store.currentPlayer
+  return store.playerMeta[colorSlot]?.color ?? null
+})
 
 const canDropAny = computed(() => {
   const size = armedSize.value
@@ -295,13 +305,21 @@ function handleCellClick() {
 .cell__ghost--medium { width: 86%; height: 86%; }
 .cell__ghost--small  { width: 78%; height: 78%; }
 
-.cell--hover .cell__ghost {
+.cell--hover .cell__ghost--active {
   opacity: 0.55;
   transform: scale(1);
 }
 
 @media (hover: none) {
-  .cell__ghost { opacity: 0.22; transform: scale(1); }
+  /* Nearly invisible, but painted: the theme filters and masks are warmed
+     before the first drag instead of being rasterised mid-gesture. */
+  .cell__ghost {
+    opacity: 0.001;
+    transform: scale(1);
+    will-change: opacity, transform;
+  }
+
+  .cell__ghost--active { opacity: 0.22; }
 }
 
 /* Win highlight */
