@@ -32,6 +32,11 @@ interface DragState {
   pointerId: number | null
   startX: number
   startY: number
+  previewX: number
+  previewY: number
+  previewWidth: number
+  previewHeight: number
+  previewFrame: number | null
   dragging: boolean
   preview: HTMLElement | null
 }
@@ -44,23 +49,41 @@ function syncDraggable(el: HTMLElement, payload: DragPayload): void {
   el.style.touchAction = allowed ? 'none' : 'auto'
 }
 
-function createPreview(el: HTMLElement, event: PointerEvent): HTMLElement {
+function previewTransform(x: number, y: number): string {
+  return `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(1.08)`
+}
+
+function createPreview(
+  el: HTMLElement,
+  event: PointerEvent,
+  width: number,
+  height: number,
+): HTMLElement {
   const previewSource = el.querySelector<HTMLElement>('[data-drag-preview]') ?? el
-  const bounds = previewSource.getBoundingClientRect()
   const preview = previewSource.cloneNode(true) as HTMLElement
   preview.removeAttribute('draggable')
   preview.classList.add('drag-preview')
   preview.style.position = 'fixed'
-  preview.style.left = `${event.clientX}px`
-  preview.style.top = `${event.clientY}px`
-  preview.style.width = `${bounds.width}px`
-  preview.style.height = `${bounds.height}px`
+  preview.style.left = '0'
+  preview.style.top = '0'
+  preview.style.width = `${width}px`
+  preview.style.height = `${height}px`
   preview.style.margin = '0'
   preview.style.pointerEvents = 'none'
   preview.style.zIndex = '9999'
-  preview.style.transform = 'translate(-50%, -50%) scale(1.08)'
+  preview.style.transform = previewTransform(event.clientX, event.clientY)
   document.body.appendChild(preview)
   return preview
+}
+
+/** Coalesce pointer events into one compositor-friendly transform per frame. */
+function schedulePreviewPosition(state: DragState): void {
+  if (state.previewFrame !== null) return
+  state.previewFrame = requestAnimationFrame(() => {
+    state.previewFrame = null
+    if (!state.preview) return
+    state.preview.style.transform = previewTransform(state.previewX, state.previewY)
+  })
 }
 
 function resolveTapPayload(
@@ -99,6 +122,8 @@ function cleanupPointerDrag(el: HTMLElement, state: DragState): void {
   document.removeEventListener('pointermove', state.onPointerMove)
   document.removeEventListener('pointerup', state.onPointerUp)
   document.removeEventListener('pointercancel', state.onPointerCancel)
+  if (state.previewFrame !== null) cancelAnimationFrame(state.previewFrame)
+  state.previewFrame = null
   state.preview?.remove()
   state.preview = null
   state.pointerId = null
@@ -117,6 +142,11 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
       pointerId: null,
       startX: 0,
       startY: 0,
+      previewX: 0,
+      previewY: 0,
+      previewWidth: 0,
+      previewHeight: 0,
+      previewFrame: null,
       dragging: false,
       preview: null,
       onDragStart: event => {
@@ -150,6 +180,10 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
         state.startX = event.clientX
         state.startY = event.clientY
         state.dragging = false
+        const previewSource = el.querySelector<HTMLElement>('[data-drag-preview]') ?? el
+        const bounds = previewSource.getBoundingClientRect()
+        state.previewWidth = bounds.width
+        state.previewHeight = bounds.height
 
         document.addEventListener('pointermove', state.onPointerMove, { passive: false })
         document.addEventListener('pointerup', state.onPointerUp)
@@ -158,6 +192,8 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
       onPointerMove: event => {
         if (state.pointerId !== event.pointerId) return
 
+        state.previewX = event.clientX
+        state.previewY = event.clientY
         if (!state.dragging) {
           const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
           if (distance < DRAG_THRESHOLD_PX) return
@@ -165,14 +201,11 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
           state.dragging = true
           el.classList.add('dragging')
           useGameStore().setDragState(state.payload)
-          state.preview = createPreview(el, event)
+          state.preview = createPreview(el, event, state.previewWidth, state.previewHeight)
         }
 
         event.preventDefault()
-        if (state.preview) {
-          state.preview.style.left = `${event.clientX}px`
-          state.preview.style.top = `${event.clientY}px`
-        }
+        schedulePreviewPosition(state)
       },
       onPointerUp: event => {
         if (state.pointerId !== event.pointerId) return

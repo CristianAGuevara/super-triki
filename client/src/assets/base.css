@@ -260,6 +260,16 @@ html.st-buzzing #app { animation: st-buzz 0.75s linear; }
 .page-enter-from { opacity: 0; transform: translateY(12px); }
 .page-leave-to { opacity: 0; }
 
+/* Ghost element dragged by vDraggable. Keep it on its own compositor layer
+   and skip the expensive neon filters while it follows the finger. */
+.drag-preview {
+  filter: none !important;
+  will-change: transform;
+  contain: layout style;
+  backface-visibility: hidden;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
