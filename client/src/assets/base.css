@@ -261,19 +261,12 @@ html.st-buzzing #app { animation: st-buzz 0.75s linear; }
 .page-leave-to { opacity: 0; }
 
 /* Ghost element dragged by vDraggable. Keep it on its own compositor layer
-   and skip the expensive neon filters while it follows the finger. */
+   while it follows the finger. */
 .drag-preview {
-  filter: none !important;
   will-change: transform;
   contain: layout style;
   backface-visibility: hidden;
   pointer-events: none;
-}
-
-/* The real piece uses a masked gradient ring. The ghost keeps the same
-   silhouette with a cheap border so the first drag does not rasterise masks. */
-.drag-preview::before {
-  display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
