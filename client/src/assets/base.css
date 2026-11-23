@@ -270,6 +270,12 @@ html.st-buzzing #app { animation: st-buzz 0.75s linear; }
   pointer-events: none;
 }
 
+/* The real piece uses a masked gradient ring. The ghost keeps the same
+   silhouette with a cheap border so the first drag does not rasterise masks. */
+.drag-preview::before {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

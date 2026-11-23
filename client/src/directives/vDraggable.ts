@@ -71,6 +71,9 @@ function createPreview(
   preview.style.margin = '0'
   preview.style.pointerEvents = 'none'
   preview.style.zIndex = '9999'
+  preview.style.boxSizing = 'border-box'
+  preview.style.border = `${Math.max(3, Math.round(Math.min(width, height) * 0.13))}px solid var(--ring-color)`
+  preview.style.boxShadow = '0 0 16px -2px var(--ring-color), 0 8px 18px rgba(0, 0, 0, 0.4)'
   preview.style.transform = previewTransform(event.clientX, event.clientY)
   document.body.appendChild(preview)
   return preview
@@ -184,6 +187,11 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
         const bounds = previewSource.getBoundingClientRect()
         state.previewWidth = bounds.width
         state.previewHeight = bounds.height
+        // Build the ghost while the finger is still stationary. It stays
+        // invisible until the drag threshold is crossed, so the first frame
+        // of the gesture does not pay for cloning and layer creation.
+        state.preview = createPreview(el, event, state.previewWidth, state.previewHeight)
+        state.preview.style.opacity = '0'
 
         document.addEventListener('pointermove', state.onPointerMove, { passive: false })
         document.addEventListener('pointerup', state.onPointerUp)
@@ -201,7 +209,10 @@ export const vDraggable: Directive<HTMLElement, DragPayload> = {
           state.dragging = true
           el.classList.add('dragging')
           useGameStore().setDragState(state.payload)
-          state.preview = createPreview(el, event, state.previewWidth, state.previewHeight)
+          if (!state.preview) {
+            state.preview = createPreview(el, event, state.previewWidth, state.previewHeight)
+          }
+          state.preview.style.opacity = '1'
         }
 
         event.preventDefault()
