@@ -436,7 +436,13 @@ function checkConnection() {
 }
 
 function handleVisibilityChange() {
-  if (document.hidden || connectionStore.blocked || socketIdle()) return
+  if (document.hidden) {
+    audioStore.suspendForBackground()
+    return
+  }
+
+  audioStore.resumeFromBackground()
+  if (connectionStore.blocked || socketIdle()) return
 
   if (connectionStore.rotating) {
     if (!socket.connected) {
@@ -497,7 +503,12 @@ function handleOffline() {
   socket.disconnect()
 }
 
+function handlePageHide() {
+  audioStore.suspendForBackground()
+}
+
 function handlePageShow() {
+  audioStore.resumeFromBackground()
   if (connectionStore.blocked || socketIdle()) return
   if (!socket.connected) {
     connectionStore.setReconnecting()
@@ -608,6 +619,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
+  window.addEventListener('pagehide', handlePageHide)
   window.addEventListener('pageshow', handlePageShow)
   connectionStore.setConnected(socket.connected)
   connectedAt = socket.connected ? Date.now() : 0
@@ -626,6 +638,7 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
+  window.removeEventListener('pagehide', handlePageHide)
   window.removeEventListener('pageshow', handlePageShow)
   if (healthTimer !== undefined) window.clearInterval(healthTimer)
   rotationTimer = clearTimer(rotationTimer)

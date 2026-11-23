@@ -119,6 +119,25 @@ export const useAudioStore = defineStore('audio', () => {
   let musicBar = 0
   let nextBarTime = 0
   let musicDucked = false
+  let backgroundSuspended = false
+  let resumeMusicAfterBackground = false
+  const activeSources = new Set<AudioScheduledSourceNode>()
+
+  function trackSource(source: AudioScheduledSourceNode) {
+    activeSources.add(source)
+    source.addEventListener('ended', () => activeSources.delete(source), { once: true })
+  }
+
+  function stopActiveSources() {
+    for (const source of [...activeSources]) {
+      try {
+        source.stop()
+      } catch {
+        // The source may have ended between the check and the stop call.
+      }
+    }
+    activeSources.clear()
+  }
 
   function ensureAudio(): AudioContext | null {
     if (typeof window === 'undefined') return null
@@ -225,6 +244,7 @@ export const useAudioStore = defineStore('audio', () => {
     env.gain.exponentialRampToValueAtTime(0.0001, end)
     osc.connect(env)
     env.connect(dest)
+    trackSource(osc)
     osc.start(start)
     osc.stop(end + 0.05)
   }
@@ -260,6 +280,7 @@ export const useAudioStore = defineStore('audio', () => {
     src.connect(filter)
     filter.connect(env)
     env.connect(dest ?? sfxGain!)
+    trackSource(src)
     src.start(start, Math.random() * 0.3)
     src.stop(start + dur + 0.02)
   }
@@ -307,7 +328,8 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function startMusic() {
-    if (musicVolume.value <= 0) return
+    if (musicVolume.value <= 0 || backgroundSuspended) return
+    if (typeof document !== 'undefined' && document.hidden) return
     const audio = ensureAudio()
     if (!audio) return
     void audio.resume()
@@ -348,6 +370,7 @@ export const useAudioStore = defineStore('audio', () => {
       env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
       osc.connect(env)
       env.connect(filter)
+      trackSource(osc)
       osc.start(start)
       osc.stop(start + dur + 0.05)
     })
@@ -361,10 +384,31 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
 
+  /** Mobile browsers keep Web Audio alive in background tabs; silence it. */
+  function suspendForBackground() {
+    if (backgroundSuspended) return
+    backgroundSuspended = true
+    resumeMusicAfterBackground = musicPlaying.value && musicVolume.value > 0
+    stopMusic()
+    stopActiveSources()
+    if (context?.state === 'running') void context.suspend()
+  }
+
+  function resumeFromBackground() {
+    if (!backgroundSuspended) return
+    backgroundSuspended = false
+    if (context?.state === 'suspended') void context.resume()
+    if (resumeMusicAfterBackground) {
+      resumeMusicAfterBackground = false
+      startMusic()
+    }
+  }
+
   /* ── Effects ───────────────────────────────────────────────────── */
 
   function playSfx(name: SfxName, options: SfxOptions = {}) {
-    if (sfxVolume.value <= 0) return
+    if (sfxVolume.value <= 0 || backgroundSuspended) return
+    if (typeof document !== 'undefined' && document.hidden) return
     const audio = ensureAudio()
     if (!audio || !sfxGain) return
     const dest = sfxGain
@@ -529,6 +573,8 @@ export const useAudioStore = defineStore('audio', () => {
     setSfxVolume,
     startMusic,
     stopMusic,
+    suspendForBackground,
+    resumeFromBackground,
     duckMusic,
     playSfx,
   }
